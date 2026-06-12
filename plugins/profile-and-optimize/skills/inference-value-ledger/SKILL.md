@@ -102,7 +102,7 @@ size, reasoning-vs-not, quant, parallelism (incl. any TP>1-specific behavior), w
 concurrency regime; state what it does NOT apply to. **Keep it tight (no AI-slop):** lead with
 SoL%/roofline% and matched numbers; cut hedging, redundancy, and decorative charts (infra PRs don't embed
 images). De-slop checklist: no em-dashes (#1 AI-slop tell), minimal bold, plain punctuation, inline code
-out of narrow table cells. Source: `docs/METHODOLOGY.md` "Value proposition".
+out of narrow table cells. Source: `docs/METHODOLOGY.md` "Value proposition" + "De-slop".
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
 

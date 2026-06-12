@@ -137,6 +137,8 @@ Start from the template at [`plugins/profile-and-optimize/skills/_template/SKILL
 
 Keep the body under 500 lines. Use progressive disclosure (link to sibling files for deep reference content).
 
+If the skill emits human-facing prose (a report, PR body, or summary), keep the template's "Keep it tight (no AI-slop)" block; the de-slop checklist is canon in [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) ("De-slop").
+
 ### 4. Update the README
 
 Add the skill to the appropriate family list in the root [`README.md`](/README.md) "What this is" section, and update the skill-count line if the total changed.

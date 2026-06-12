@@ -1,7 +1,8 @@
 # Measurement methodology
 
 The canon every skill in this repo cites. Skills reference this file wherever they
-say "Verdict rigor", "Full-context reporting", "Grind Mandate", or "Asset validation".
+say "Verdict rigor", "Full-context reporting", "Grind Mandate", "Asset validation",
+or "Keep it tight (no AI-slop)".
 
 ## Verdict rigor: DRAFT vs VERDICT
 
@@ -71,3 +72,19 @@ that ends "done" is a report that ends the engagement; a report that ends
 Every change states what it buys: tokens/s/GPU, $/M-tokens, time-to-train, or
 joules/token — before-vs-after, with the workload it was measured on. Work that
 cannot state its value proposition is exploration (fine — label it as such).
+
+## De-slop (writing style)
+
+Every human-facing artifact this repo emits (reports, PR bodies, ledger rows,
+summaries, commit messages) is written plain. The checklist:
+
+- no em-dashes (the #1 AI-slop tell); plain punctuation,
+- minimal bold; no bold-lead bullets,
+- verb-led sentences; no fragments posing as findings,
+- numbers over adjectives: "2.1x at C=32" beats "significantly faster",
+- no marketing language ("blazing", "powerful", "seamless", "robust"),
+- cut hedging and redundancy; inline code stays out of narrow table cells,
+- no decorative visuals (infra PRs do not embed charts).
+
+A sentence that carries no number, decision, or caveat gets deleted. Skills
+cite this section wherever they say "Keep it tight (no AI-slop)".

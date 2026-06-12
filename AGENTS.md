@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for AI coding agents working in this repository — the canonical copy.
+Guidance for AI coding agents working in this repository (the canonical copy).
 AGENTS.md-aware tools (Codex CLI, Gemini CLI, Cursor, ...) read it natively;
 Claude Code loads it via the one-line `@AGENTS.md` import in
 [`CLAUDE.md`](CLAUDE.md); Cursor additionally pins it always-on via
@@ -70,7 +70,7 @@ require constant clarification.
 
 ## Working in this repo
 
-- Run `make all` before committing — smoke-test, MCP runtime smoke, doc-link
+- Run `make all` before committing: smoke-test, MCP runtime smoke, doc-link
   check, skill-arg lint, and pytest in one pass (`make -j5 all` runs them in
   parallel).
 - Skill / tool / library counts are canonical in
@@ -79,3 +79,7 @@ require constant clarification.
   number. Never hardcode a count in a doc.
 - Measurement rigor rules live in [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md)
   (DRAFT-vs-VERDICT labeling, full-context perf numbers, asset validation).
+- De-slop writing rules live in [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md)
+  ("De-slop"): every human-facing artifact (report, PR body, ledger row,
+  commit message) is written plain. No em-dashes, minimal bold, plain
+  punctuation, numbers over adjectives, no marketing language.

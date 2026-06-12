@@ -208,7 +208,7 @@ redundancy, and decorative visuals (infra PRs do NOT embed charts). De-slop chec
 em-dashes (the #1 AI-slop tell), minimal bold (no bold-lead bullets), plain punctuation, inline
 code out of narrow table cells.
 Source: [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) "Value proposition" + "Full-context
-reporting"; PR-facing surface of
+reporting" + "De-slop"; PR-facing surface of
 [`inference-value-ledger`](/plugins/profile-and-optimize/skills/inference-value-ledger/SKILL.md).
 Delete this section ONLY if the skill never feeds a PR / shareable artifact.
 

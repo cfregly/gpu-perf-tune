@@ -1,0 +1,13 @@
+{
+  "name": "profile-and-optimize-plugins",
+  "owner": {
+    "name": "Project contributors"
+  },
+  "plugins": [
+    {
+      "name": "profile-and-optimize",
+      "source": "./plugins/profile-and-optimize",
+      "description": "GPU inference profiling and optimization skills + bundled MCP server (benchmark sweeps, nsys/ncu/DCGM profiling, roofline analysis, spec-decode tuning, PDF perf-tune reports)."
+    }
+  ]
+}

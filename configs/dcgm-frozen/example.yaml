@@ -1,0 +1,74 @@
+# ============================================================================
+# SYNTHETIC EXAMPLE -- frozen DCGM measurement snapshot (schema: dcgm_frozen_v1)
+#
+# Every measurement here is fabricated for documentation (model
+# `example-llm-8b`, cluster placeholder `<cluster>`). Copy into your private
+# workspace (e.g. `perf-tune-report/configs/dcgm-frozen/<name>.yaml`) and
+# replace the numbers with values you actually captured.
+#
+# Consumer: tools/perf_tune_report/dcgm_correlate.py `correlate_from_frozen()`,
+# surfaced as the `perf_tune_report_dcgm_correlate` verb:
+#
+#   perftunereport dcgm_correlate --campaign <slug> --cell-id <cell> \
+#     --frozen-yaml configs/dcgm-frozen/example.yaml
+#
+# This is the OFFLINE path for the L3 byte/FLOP Speed-of-Light grounding: when
+# DCGM measurements were captured interactively over the bench window (instead
+# of via the live Prometheus client), this YAML folds them into the cell's
+# `dcgm_correlation.json` (renderer pages 6/6b; sets dcgm_grounded=true).
+#
+# Required keys: hw_key, n_gpus, sweep_start_utc, sweep_end_utc, resources.
+# `hw_key` must exist in configs/sol-ceilings.yaml; each resources[].peak_key
+# should name a ceiling under that hardware key.
+# Resource units:
+#   ratio        -- measured_avg is a 0..1 fraction-of-peak (time-weighted mean
+#                   of a DCGM_FI_PROF_* activity ratio over the window)
+#   bytes_per_s  -- measured_avg is mean bytes/s PER GPU (e.g. NVLink TX+RX rate)
+# ============================================================================
+
+schema_version: 1
+hw_key: b200_sm100            # must be a hardware key in configs/sol-ceilings.yaml
+n_gpus: 8
+sweep_start_utc: "2026-01-01T00:00:00Z"
+sweep_end_utc: "2026-01-01T00:23:00Z"
+captured_at: "2026-01-01T01:00:00Z"
+captured_by: "example-operator@example-workstation"
+data_tier: prof               # prof | counter (which DCGM metric group was used)
+scrape_interval_s: 30.0
+
+# Optional: mean per-GPU power (watts) over the window -> tokens-per-watt.
+power_watts_per_gpu: 850.0
+
+# Optional re-query provenance: node(s) + pod scope the series carried.
+nodes:
+  - example-node-001
+namespace: example-namespace
+pod_label_selector: "app=example-llm-8b-serve"
+
+notes: |
+  SYNTHETIC EXAMPLE -- all numbers fabricated.
+  Cluster: <cluster>. Workload: example-llm-8b ISL=1K/OSL=1K sweep, c=64,
+  TP=1 x 8 replicas (one per GPU). Captured interactively over the bench
+  window declared above; partial-success caveats would go here.
+
+resources:
+  # HBM bandwidth: DRAM_ACTIVE ratio (0..1). %SoL = measured_avg * 100.
+  - peak_key: hbm3e_tbps
+    metric: DCGM_FI_PROF_DRAM_ACTIVE
+    unit: ratio
+    measured_avg: 0.155
+    promql: 'avg by (gpu) (DCGM_FI_PROF_DRAM_ACTIVE{namespace="example-namespace",pod=~"example-llm-8b-serve-.*"})'
+
+  # Tensor-pipe compute: ratio against the NVFP4 dense ceiling.
+  - peak_key: nvfp4_dense_pflops
+    metric: DCGM_FI_PROF_PIPE_TENSOR_ACTIVE
+    unit: ratio
+    measured_avg: 0.018
+    promql: 'avg by (gpu) (DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{namespace="example-namespace",pod=~"example-llm-8b-serve-.*"})'
+
+  # NVLink traffic: TX+RX byte rate, mean bytes/s per GPU.
+  - peak_key: nvlink5_tbps
+    metric: "sum(DCGM_FI_PROF_NVLINK_TX_BYTES, DCGM_FI_PROF_NVLINK_RX_BYTES)"
+    unit: bytes_per_s
+    measured_avg: 400000000.0   # 400 MB/s per GPU (synthetic)
+    promql: 'sum by (gpu) (rate(DCGM_FI_PROF_NVLINK_TX_BYTES{namespace="example-namespace"}[1m]) + rate(DCGM_FI_PROF_NVLINK_RX_BYTES{namespace="example-namespace"}[1m]))'

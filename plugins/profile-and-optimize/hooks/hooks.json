@@ -1,0 +1,20 @@
+{
+  "description": "profile-and-optimize safety guards. Claude Code wires the runtime-agnostic guard scripts as PreToolUse(Bash) hooks via claude-hook-adapter.sh (bridges Claude's tool_input/permissionDecision I/O to the scripts' Cursor command/permission contract). Cursor registers the same scripts directly via ./cursor-hooks.json (beforeShellExecution).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/claude-hook-adapter.sh ${CLAUDE_PLUGIN_ROOT}/hooks/perflake-teardown-gate.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/claude-hook-adapter.sh ${CLAUDE_PLUGIN_ROOT}/hooks/provenance-commit-gate.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "./hooks/perflake-teardown-gate.sh",
+        "matcher": "delete|scancel|uninstall"
+      },
+      {
+        "command": "./hooks/provenance-commit-gate.sh",
+        "matcher": "commit"
+      }
+    ]
+  }
+}

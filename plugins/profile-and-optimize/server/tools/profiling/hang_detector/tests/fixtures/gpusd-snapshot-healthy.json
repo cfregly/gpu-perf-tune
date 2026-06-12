@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-05-13T19:38:00Z",
+  "jobid": "healthy-baseline",
+  "stride": 32,
+  "_provenance": "Synthetic healthy-baseline fixture. All ranks advance synchronously to seq_num=150. The stride detector should produce zero alerts.",
+  "ranks": [
+    {"rank": 0, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 1, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 31, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 32, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 63, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 64, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 95, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 127, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"}
+  ]
+}

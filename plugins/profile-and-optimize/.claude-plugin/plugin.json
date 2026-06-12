@@ -1,0 +1,18 @@
+{
+  "name": "profile-and-optimize",
+  "version": "0.1.0",
+  "description": "GPU inference profiling and optimization skills for Claude Code, backed by a bundled MCP server: benchmark sweeps, kernel/nsys/ncu/DCGM profiling, speed-of-light roofline analysis, spec-decode tuning, and a multi-page PDF perf-tune report renderer.",
+  "author": {
+    "name": "Project contributors"
+  },
+  "keywords": [
+    "gpu",
+    "performance",
+    "profiling",
+    "inference",
+    "vllm",
+    "benchmarking",
+    "roofline",
+    "claude-code"
+  ]
+}

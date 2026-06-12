@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-05-13T19:38:00Z",
+  "jobid": "11523",
+  "stride": 32,
+  "_provenance": "Synthetic fixture reproducing the 2048N MOD-32 hang signature from docs/learnings/slack/<team-channel>/2026-05-13-2048n-optimized-node-list-rerun.md. Ranks 31, 63, 95, 127, ... stagnate at seq_num=100; all other ranks advance to seq_num=150. The stride detector at default stride=32 should flag bucket 31 as lagging.",
+  "ranks": [
+    {"rank": 0, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 1, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 16, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 30, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 31, "seq_num": 100, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 32, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 33, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 48, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 62, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 63, "seq_num": 100, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 64, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 80, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 94, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 95, "seq_num": 100, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 96, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 126, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 127, "seq_num": 100, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"},
+    {"rank": 128, "seq_num": 150, "timestamp": 1747166280.0, "op_type": "ALLREDUCE"}
+  ]
+}

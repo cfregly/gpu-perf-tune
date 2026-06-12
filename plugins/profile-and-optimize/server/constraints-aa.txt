@@ -1,0 +1,18 @@
+# AA workload deps, exact-pinned so every operator resolves identical versions.
+#
+# The pyproject.toml `perf_tune_report` extra carries the abstract `>=` floors
+# (tiktoken>=0.7, etc.); this constraints file pins the concrete versions the
+# inference-aa-workload skill was validated against (profile-and-optimize v1.27.0), so a
+# team install is reproducible without over-constraining the whole environment.
+#
+# Usage (from plugins/profile-and-optimize/server/):
+#   pip install -e ".[perf_tune_report]" -c constraints-aa.txt
+#
+# Closure of tiktoken 0.13.0 as resolved on the validating venv (Python 3.14).
+tiktoken==0.13.0
+regex==2026.5.9
+charset-normalizer==3.4.7
+requests==2.34.2
+certifi==2026.5.20
+idna==3.16
+urllib3==2.7.0

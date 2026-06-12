@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "profile-and-optimize-mcp"
+version = "0.1.0"
+description = "MLPerf and performance MCP tools"
+requires-python = ">=3.11"
+# `pyyaml` is required because the campaign library
+# (`tools/pipeline/submission/campaign/campaign_dag.py`) imports yaml at
+# module-load time. Loading the campaign shim under the FastMCP runtime
+# would otherwise raise ModuleNotFoundError before any verb dispatches.
+dependencies = ["mcp[cli]>=1.2.0", "pyyaml>=6"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+profile-and-optimize-mcp = "profile_and_optimize_mcp.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,169 @@
+# ============================================================================
+# SYNTHETIC EXAMPLE -- perf-report campaign matrix config
+#
+# Everything here is fabricated for documentation: the model `example-llm-8b`,
+# the cluster placeholder `<cluster>`, the helm release/chart paths, and all
+# commands. Copy into your private workspace and replace before running.
+#
+# Consumers (tools/perf_tune_report/):
+#   - `perf_tune_report_campaign_init --config <this file>` scaffolds
+#     `campaigns/<experiment_id or UTC-slug>/`, freezes this config as
+#     `config.yaml`, and lifts the `provenance:` block into provenance.json.
+#     It reads: name, description, experiment_id, family, evidence_bundle_path,
+#     provenance, and cells[].cell_id / cells[].backend.
+#   - `perf_tune_report_campaign_run --config <this file> --campaign <dir>`
+#     (orchestrator/campaign_run.py) loops over cells[] running the 10-step
+#     pipeline per cell (drain -> helm -> warmup -> bench -> zymtrace ->
+#     import -> aggregate -> dcgm_correlate -> render -> baseline record/diff).
+#     It reads: campaign.{target_release,target_namespace,chart_dir,base_values,
+#     drain_nodes,comparator_baseline} and cells[].{id,backend,
+#     concurrencies,helm_overrides,profile,notes,aa,aiperf}.
+#   - `perf_tune_report_cell_run --campaign <dir> --cell <cell_id>` reads the
+#     frozen copy and uses cells[].{cell_id,model,hardware,quant,
+#     tensor_parallel,parallel_strategy,max_num_batched_tokens,concurrencies,
+#     extras} plus the per-backend block (vllm_sweep / aiperf / aa).
+#   - `perf_tune_report_tpm_summary` reads the optional `tpm:` block for SLA
+#     thresholds + node size, and `description:` for the ISL/OSL context line.
+#
+# NOTE: each cell carries BOTH `id` (campaign_run) and `cell_id`
+# (campaign_init / cell_run) -- keep them identical.
+# ============================================================================
+
+name: example-campaign
+description: "SYNTHETIC EXAMPLE: ISL=1K/OSL=1K backend A/B of example-llm-8b on <cluster>"
+
+# Optional: pre-link this campaign to an evidence-bundle run-id. Must contain a
+# YYYYMMDDTHHMMSSZ stamp; the campaign dir is then named exactly this.
+experiment_id: example-campaign-20260101T000000Z
+family: example-family
+# evidence_bundle_path: /path/to/evidence-bundles/example-campaign-20260101T000000Z
+
+# Orchestrator block (campaign_run only; ignored by campaign_init).
+campaign:
+  target_release: example-llm-8b-serve     # helm release upgraded per cell
+  target_namespace: example-namespace      # defaults to "inference" when omitted
+  chart_dir: ./charts/example-serve        # path to the helm chart directory
+  base_values: ./values/example-llm-8b-values.yaml
+  # Slurm-on-K8s co-tenant nodes to drain before each cell (always resumed in
+  # a finally block, even on Ctrl-C). Empty = no drain step.
+  drain_nodes: []
+  # Baseline the per-cell verdict diffs against ("" = previous cell).
+  comparator_baseline: ""
+
+# Optional SLA/node block read by tpm_summary (code defaults shown).
+tpm:
+  ttft_sla_ms: 2000
+  tpot_sla_ms: 50
+  gpus_per_node: 8
+
+# Optional source-code attribution (experiment_provenance_v1 shape).
+# campaign_init persists it as provenance.json + SOURCE.md bullets so the
+# campaign rows in the lake carry the code-under-test lineage.
+provenance:
+  schema: experiment_provenance_v1
+  identity:
+    run_id: example-campaign-20260101T000000Z
+    title: "SYNTHETIC EXAMPLE: prefill backend A/B for example-llm-8b"
+    hypothesis: "pinning the example prefill backend beats engine-default auto"
+    family: example-family
+    tags: [example, synthetic]
+    status: active
+  source:
+    - repo: example-org/example-engine
+      branch: example/pin-prefill-backend
+      commit: "0000000abcd"
+      dirty: false
+      delivery: overlay
+      image: "registry.example.com/example/example-engine:v0.0.0-example"
+  verdict:
+    tier: draft
+    claim: "TBD after the run"
+    baseline: "engine-default auto backend, same image"
+    metric: output_tok_s_per_gpu
+
+cells:
+  # ---------------------------------------------------------------- cell 1
+  - id: baseline-c64            # campaign_run key (alphanumeric + - _)
+    cell_id: baseline-c64       # campaign_init / cell_run key (keep == id)
+    backend: vllm-sweep         # vllm-sweep | aiperf | aa | trtllm
+    concurrencies: [1, 16, 64]
+    notes: "engine-default auto prefill backend (the baseline arm)"
+    # Cell metadata consumed by cell_run / the importers (full-context rows).
+    model: example-org/example-llm-8b
+    hardware: example-gpu       # atlas hardware key (also used by tpm cost table)
+    quant: nvfp4
+    tensor_parallel: 1
+    parallel_strategy: tp1
+    max_num_batched_tokens: 2048
+    extras: {}
+    # Per-cell helm value overrides, merged on top of campaign.base_values.
+    helm_overrides: {}
+    # Per-cell profiling knobs. QUOTE the values: bare on/off are YAML booleans.
+    profile:
+      zymtrace: "on"
+      nsys: "off"               # off | short | long
+    # vllm-sweep backend block (cell_run): the serve + bench commands.
+    vllm_sweep:
+      serve_cmd: >-
+        example-engine serve example-org/example-llm-8b
+        --tensor-parallel-size 1 --max-num-batched-tokens 2048
+      bench_cmd: >-
+        example-bench --url http://127.0.0.1:8000 --model example-org/example-llm-8b
+        --input-len 1024 --output-len 1024 --concurrency {concurrency}
+
+  # ---------------------------------------------------------------- cell 2
+  - id: pinned-prefill-c64
+    cell_id: pinned-prefill-c64
+    backend: vllm-sweep
+    concurrencies: [1, 16, 64]
+    notes: "candidate arm: pinned example prefill backend (the known-good flag)"
+    model: example-org/example-llm-8b
+    hardware: example-gpu
+    quant: nvfp4
+    tensor_parallel: 1
+    parallel_strategy: tp1
+    max_num_batched_tokens: 8192
+    extras: {}
+    helm_overrides:
+      engineArgs:
+        examplePrefillBackend: triton
+        maxNumBatchedTokens: 8192
+    profile:
+      zymtrace: "on"
+      nsys: "short"
+    vllm_sweep:
+      serve_cmd: >-
+        example-engine serve example-org/example-llm-8b
+        --tensor-parallel-size 1 --example-prefill-backend triton
+        --max-num-batched-tokens 8192
+      bench_cmd: >-
+        example-bench --url http://127.0.0.1:8000 --model example-org/example-llm-8b
+        --input-len 1024 --output-len 1024 --concurrency {concurrency}
+
+  # ------------------------------------------------- cell 3 (endpoint-only)
+  # aiperf / aa backends target an ALREADY-RUNNING endpoint URL: campaign_run
+  # skips the helm-upgrade + warmup steps for them.
+  - id: endpoint-aiperf-c16
+    cell_id: endpoint-aiperf-c16
+    backend: aiperf
+    concurrencies: [16]
+    notes: "endpoint-only arm driven by the aiperf bench pod"
+    model: example-org/example-llm-8b
+    hardware: example-gpu
+    quant: nvfp4
+    tensor_parallel: 1
+    parallel_strategy: tp1
+    max_num_batched_tokens: 8192
+    extras: {}
+    helm_overrides: {}
+    profile:
+      zymtrace: "off"
+      nsys: "off"
+    aiperf:
+      namespace: example-namespace
+      bench_pod: example-bench-pod
+      kube_context: example-context
+      endpoint_url: "http://example-llm-8b-serve.example-namespace.svc:8000"
+      served_model: example-org/example-llm-8b
+      dataset_split: "2025_07"
+      conversation_count: 64

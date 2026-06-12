@@ -1,0 +1,53 @@
+{
+  "_comment": "MCP servers the profile-and-optimize plugin can launch directly. The profile_and_optimize server is bundled at ${CLAUDE_PLUGIN_ROOT}/server/. The other 2 (`grafana`, `github`) are external (operator-configured); tokens / URLs come from env vars so the manifest is safe to check in. Two further external servers used by some skills (`prometheus_mcp` for the observability-anchored skills, `zymtrace` for the zymtrace skills) are NOT declared here: unguarded ${VAR} placeholders show as red `Connection closed` in Cursor whenever the operator hasn't pre-exported the env var (Claude Code skips servers whose env vars are unset; Cursor does not). Add them to your own ~/.claude/settings.json or ~/.cursor/mcp.json if you have access \u2014 see `Operator-side optional MCPs` in plugins/profile-and-optimize/README.md.",
+  "mcpServers": {
+    "profile_and_optimize": {
+      "type": "stdio",
+      "command": "${CLAUDE_PLUGIN_ROOT}/server/.venv/bin/python",
+      "args": [
+        "-m",
+        "profile_and_optimize_mcp",
+        "serve"
+      ],
+      "env": {
+        "PROFILE_AND_OPTIMIZE_REPO_ROOT": "${CLAUDE_PLUGIN_ROOT}/server",
+        "PROFILE_AND_OPTIMIZE_LOGIN_HOST": "${PROFILE_AND_OPTIMIZE_LOGIN_HOST}"
+      }
+    },
+    "grafana": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e",
+        "GRAFANA_URL",
+        "-e",
+        "GRAFANA_SERVICE_ACCOUNT_TOKEN",
+        "grafana/mcp-grafana:latest",
+        "-t",
+        "stdio"
+      ],
+      "env": {
+        "GRAFANA_URL": "${GRAFANA_URL}",
+        "GRAFANA_SERVICE_ACCOUNT_TOKEN": "${GRAFANA_SERVICE_ACCOUNT_TOKEN}"
+      }
+    },
+    "github": {
+      "type": "stdio",
+      "command": "${GITHUB_MCP_COMMAND:-docker}",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server:latest"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

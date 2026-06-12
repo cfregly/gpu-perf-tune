@@ -1,0 +1,112 @@
+# ============================================================================
+# SYNTHETIC EXAMPLE -- value-findings registry (the leadership value ledger)
+#
+# Every number, model, campaign id, and repo in this file is fabricated for
+# documentation (model `example-llm-8b`, cluster placeholder `<cluster>`).
+# Copy to your private workspace as `perf-tune-report/configs/value-findings.yaml`
+# (a sibling of your `campaigns/` dir) and replace with human-verified findings.
+#
+# Consumer: tools/perf_tune_report/value_view.py (`perf_tune_report_value_view`).
+# The renderer joins each finding with its LIVE backing campaign(s) under the
+# campaigns root: report_status.json (sol_rigor / dcgm_grounded / focus) and
+# verdict.json (tier / baseline_named). Win numbers here are NOT recomputed --
+# they are human-verified and traced to the named campaigns.
+#
+# Top-level schema:
+#   baseline_context: one-line description of what all wins are measured against
+#   findings:         list of finding entries (schema below)
+#
+# Per-finding schema:
+#   id:               short stable key (used in the GRIND FRONTIER ranking)
+#   title:            human title for the ledger row
+#   lifecycle:        done | in_progress | not_done | closed_negative
+#   win:              human-verified headline (state BOTH absolute values)
+#   baseline:         what the win is measured against
+#   hardware:         hardware + topology context
+#   deploy_readiness: free text (e.g. deployable | fork-local | n/a)
+#   campaign_ids:     backing perf-lake campaign dir names (REQUIRED for
+#                     done/in_progress; value_view flags missing/ungrounded ones)
+#   evidence_ids:     optional supporting (non-primary) campaign ids
+#   source_refs:      code-under-test attribution (REQUIRED for done/in_progress):
+#                     list of {repo, branch, commit, delivery, image} -- must match
+#                     the cited campaign's provenance (rigor principle p)
+#   gain:             optional quantified block for frontier ranking + economics:
+#                     {tier: throughput|latency|capacity|enablement,
+#                      speedup, tps_gpu_peak, baseline_tps_gpu}
+#   next_lever:       REQUIRED (performance ratchet): the next thing to grind,
+#                     or "frontier-exhausted: <evidence>" to bank the lever
+#   next_value:       high | med | low (frontier rank for non-quantified levers)
+#   finding_baseline_check: optional bool (default true) -- set false to skip
+#                     the baseline_named verdict.json check for this finding
+# ============================================================================
+
+baseline_context: >
+  SYNTHETIC EXAMPLE: example-llm-8b served with engine defaults on one
+  example GPU node of <cluster> (TP=1, NVFP4 weights), ISL=1K/OSL=1K.
+
+findings:
+  # ---------------------------------------------------------------- A. DONE
+  - id: example-win-prefill
+    title: "Example: pinned prefill backend"
+    lifecycle: done
+    win: "1.25x output tok/s/GPU (450 -> 562) at c=64"
+    baseline: "engine-default (auto) prefill backend, same image + flags"
+    hardware: "1x example GPU node on <cluster>, TP=1, NVFP4"
+    deploy_readiness: deployable
+    campaign_ids: ["20260101T000000Z-example-campaign"]
+    evidence_ids: []
+    source_refs:
+      - repo: example-org/example-engine
+        branch: example/pin-prefill-backend
+        commit: "0000000abcd"
+        delivery: overlay
+    gain:
+      tier: throughput
+      speedup: 1.25
+      tps_gpu_peak: 562.0
+      baseline_tps_gpu: 450.0
+    next_lever: "sweep --max-num-batched-tokens 4k..16k on the pinned backend"
+    next_value: high
+
+  # --------------------------------------------------------- B. IN-PROGRESS
+  - id: example-wip-kvcache
+    title: "Example: fp8 KV cache"
+    lifecycle: in_progress
+    win: "TBD (draft shows ~1.1x decode TPOT; revalidating with 3 trials)"
+    baseline: "bf16 KV cache, pinned prefill backend"
+    hardware: "1x example GPU node on <cluster>, TP=1"
+    deploy_readiness: fork-local
+    campaign_ids: ["20260102T000000Z-example-kvcache"]
+    source_refs:
+      - repo: example-org/example-engine
+        delivery: image
+        image: "registry.example.com/example/example-engine:v0.0.0-example"
+    gain:
+      tier: latency
+      speedup: 1.1
+    next_lever: "finish 3-trial same-node revalidation; add accuracy gate"
+    next_value: med
+
+  # ------------------------------------------------------------ C. NOT-DONE
+  - id: example-idea-specdecode
+    title: "Example: speculative decoding for example-llm-8b"
+    lifecycle: not_done
+    win: "unmeasured (research; expected 1.3-1.8x decode at low c)"
+    baseline: "pinned prefill backend champion"
+    hardware: "1x example GPU node on <cluster>"
+    deploy_readiness: research
+    campaign_ids: []
+    next_lever: "train an example draft model; A/B at c in {1, 4, 16}"
+    next_value: med
+
+  # ----------------------------------------------------- D. CLOSED NEGATIVE
+  - id: example-neg-tp2
+    title: "Example: TP=2 for an 8B model"
+    lifecycle: closed_negative
+    win: "negative: 0.7x tok/s/GPU vs TP=1 (interconnect overhead dominates)"
+    baseline: "TP=1 champion config"
+    hardware: "2x example GPUs on <cluster>, TP=2"
+    deploy_readiness: n/a
+    campaign_ids: []
+    next_lever: "frontier-exhausted: 8B fits one GPU; TP>1 only buys capacity, not speed"
+    next_value: low

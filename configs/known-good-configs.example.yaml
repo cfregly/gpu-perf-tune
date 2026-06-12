@@ -1,0 +1,82 @@
+# ============================================================================
+# SYNTHETIC EXAMPLE -- known-good config registry (schema: known_good_config_v1)
+#
+# Every value in this file is fabricated for documentation: the model
+# `example-llm-8b`, the cluster placeholder `<cluster>`, and all flags,
+# campaign ids, and evidence pointers are invented. Copy this file to your
+# private workspace as `perf-tune-report/configs/known-good-configs.yaml`
+# (or point `--registry` / `$KNOWN_GOOD_CONFIG_REGISTRY` at it) and replace
+# the entries with your own hard-won serving configs.
+#
+# Consumers (tools/known_good_config/known_good_config_cli.py):
+#   - `known_good_config_check`  -- verifies a deploy's serve args contain every
+#     `required_flags[].match` regex for a model. FAIL-CLOSED (nonzero exit)
+#     when a flag with severity boot-blocker | crash-high-c | deploy-correctness
+#     is missing; a missing `perf` flag is a warning only.
+#   - `known_good_config_record` -- appends a NEW model entry at EOF
+#     (comment-preserving; existing entries are edited by hand).
+#
+# Per-entry schema:
+#   model:          (required) HF id / served-model-name -- the registry key
+#   slug:           deploy-bundle slug (<slug>-deploy)
+#   arch:           short architecture note (why the quirk exists)
+#   hardware:       hardware the entry was validated on
+#   engine:         vllm | sglang
+#   required_flags: list of {flag, match, severity, why, affected, evidence}
+#                   severity: boot-blocker | crash-high-c | deploy-correctness | perf
+#                   match defaults to re.escape(flag) when omitted
+#   champion:       {config_ref, verdict, campaign} -- the best known config + evidence
+#   fallback:       a known-working alternative when the champion cannot be used
+#   grind_frontier: cross-ref into value-findings.yaml `next_lever`
+#   notes:          free text
+# ============================================================================
+
+schema: known_good_config_v1
+
+models:
+  # --------------------------------------------------------------------------
+  # example-llm-8b -- fully synthetic entry showing every field.
+  # --------------------------------------------------------------------------
+  - model: example-org/example-llm-8b
+    slug: example-llm-8b
+    arch: >
+      Synthetic example architecture: interleaved-attention 8B dense model whose
+      upstream `auto` prefill-backend selection is (fictionally) broken.
+    hardware: "B200 TP=1 NVFP4 (validated on <cluster>)"
+    engine: vllm
+    required_flags:
+      # A boot-blocker: the deploy will not come up without this flag.
+      - flag: "--example-prefill-backend triton"
+        match: 'example-prefill-backend[\"\:= ]+triton'
+        severity: boot-blocker
+        why: >
+          (Synthetic) The default `auto` prefill backend wedges during engine
+          warmup on this architecture; pinning the triton path boots cleanly.
+        affected: "example-engine 0.x series"
+        evidence: "campaigns/20260101T000000Z-example-campaign (cell baseline-c64)"
+      # A crash-at-high-concurrency workaround.
+      - flag: "--example-moe-backend cutlass"
+        match: 'example-moe-backend[ =]+cutlass'
+        severity: crash-high-c
+        why: "(Synthetic) the default MoE kernel aborts at concurrency >= 64."
+        affected: "example-engine 0.x on B200"
+        evidence: "campaigns/20260101T000000Z-example-campaign (cell pinned-c64)"
+      # A perf-only flag: missing -> warning, not failure.
+      - flag: "--max-num-batched-tokens 8192"
+        match: 'max-num-batched-tokens[ =]+8192'
+        severity: perf
+        why: "(Synthetic) +12% output tok/s/GPU at c=64 vs the 2048 default."
+        affected: "all example-llm-8b deploys"
+        evidence: "campaigns/20260101T000000Z-example-campaign (cell sweep-mnbt)"
+    champion:
+      config_ref: "configs/campaigns/example-campaign.yaml"
+      verdict: "VERDICT 1.25x output tok/s/GPU vs engine-default baseline"
+      campaign: "20260101T000000Z-example-campaign"
+    fallback: >
+      (Synthetic) Engine-default backend with --max-num-batched-tokens 2048:
+      boots and serves correctly, ~20% slower at c=64.
+    grind_frontier: "example-win-prefill (see configs/value-findings.example.yaml next_lever)"
+    notes: >
+      SYNTHETIC EXAMPLE ENTRY -- replace with a real model before use. The
+      `check` verb is exercised in CI against this entry to keep the example
+      schema-true.

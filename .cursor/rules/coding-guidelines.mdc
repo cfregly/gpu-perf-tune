@@ -1,0 +1,14 @@
+---
+description: Behavioral guidelines to reduce common LLM coding mistakes. Use when writing, reviewing, or refactoring code to avoid overcomplication, make surgical changes, surface assumptions, and define verifiable success criteria.
+alwaysApply: true
+---
+
+Follow the agent behavioral guidelines in @AGENTS.md — think before coding
+(surface assumptions and tradeoffs), simplicity first (minimum code, nothing
+speculative), surgical changes (every changed line traces to the request),
+and goal-driven execution (verifiable success criteria) — plus its
+"Working in this repo" gates (`make all`, canonical counts in
+`mcp_surface.py`, `docs/METHODOLOGY.md` rigor rules).
+
+AGENTS.md is the canonical copy (Claude Code imports it via CLAUDE.md);
+keep edits there.

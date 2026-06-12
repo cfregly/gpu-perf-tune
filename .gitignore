@@ -1,0 +1,41 @@
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.venv-test/
+*.egg-info/
+.env
+.env.local
+.idea/
+.vscode/
+*.swp
+*.swo
+.pytest_cache/
+.ruff_cache/
+# Validate-cached cache (one file per manifest SHA; safe to wipe).
+.cache/
+
+# Bundled server: the .venv is created on-demand by install.sh; never commit it.
+plugins/profile-and-optimize/server/.venv/
+plugins/profile-and-optimize/server/**/__pycache__/
+
+# Generated bundles by skills (operator artifacts; not source).
+plugins/profile-and-optimize/server/experiments/artifacts/contention/
+plugins/profile-and-optimize/server/experiments/artifacts/preflight/
+plugins/profile-and-optimize/server/experiments/artifacts/leaderboard/
+plugins/profile-and-optimize/server/experiments/artifacts/campaign/
+plugins/profile-and-optimize/server/experiments/artifacts/submission/
+plugins/profile-and-optimize/server/experiments/artifacts/cluster-health/
+plugins/profile-and-optimize/server/experiments/artifacts/gb300-cohort-selection/
+plugins/profile-and-optimize/server/experiments/artifacts/research/
+
+# Operator-side raw Slurm-cluster-side logs + per-rank heartbeat snapshots
+# under learnings/<bundle>/. Analyses are distilled in each bundle's
+# summary.md / findings.yaml / commands/ four-file tuples; the raw inputs
+# are rough input and would bloat git history (the first v1.14.0 commit
+# attempt landed 56MB in a single W3-cohort-rotation .err log + ~120MB
+# total across the v1.6.x DSv3 bisection bundles). Added in v1.14.0.
+plugins/profile-and-optimize/server/experiments/artifacts/learnings/**/raw/
+plugins/profile-and-optimize/server/experiments/artifacts/learnings/**/heartbeats/
+

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Convenience launcher: run the Artificial Analysis (AA) workload reproducer
+# under the profile_and_optimize server venv's python (which has tiktoken + the package),
+# from any directory. Forwards all args to repro_artificialanalysis.py.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+VENV_PY="${REPO_ROOT}/plugins/profile-and-optimize/server/.venv/bin/python"
+REPRO="${REPO_ROOT}/plugins/profile-and-optimize/skills/inference-aa-workload/assets/repro_artificialanalysis.py"
+
+if [[ ! -x "${VENV_PY}" ]]; then
+  echo "error: server venv python not found at ${VENV_PY}" >&2
+  echo "Install it first:  bash ${REPO_ROOT}/plugins/profile-and-optimize/server/install.sh --with-dev" >&2
+  echo "For dataset-replay (exact o200k_base sizing) also:  ${VENV_PY%/python} -m pip install -e \"${REPO_ROOT}/plugins/profile-and-optimize/server[perf_tune_report]\" -c \"${REPO_ROOT}/plugins/profile-and-optimize/server/constraints-aa.txt\"" >&2
+  exit 1
+fi
+
+exec "${VENV_PY}" "${REPRO}" "$@"

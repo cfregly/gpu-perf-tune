@@ -54,4 +54,4 @@ The skills share a common rigor discipline — DRAFT-vs-VERDICT result labeling,
 
 ## License
 
-[Apache-2.0](LICENSE)
+[MIT](LICENSE)

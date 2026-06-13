@@ -78,13 +78,26 @@ cannot state its value proposition is exploration (fine — label it as such).
 Every human-facing artifact this repo emits (reports, PR bodies, ledger rows,
 summaries, commit messages) is written plain. The checklist:
 
-- no em-dashes (the #1 AI-slop tell); plain punctuation,
+- no em-dashes or en-dashes (the #1 AI-slop tell); plain punctuation,
 - minimal bold; no bold-lead bullets,
 - verb-led sentences; no fragments posing as findings,
 - numbers over adjectives: "2.1x at C=32" beats "significantly faster",
-- no marketing language ("blazing", "powerful", "seamless", "robust"),
+- no marketing language: blazing, powerful, seamless, robust, leverage,
+  cutting-edge, game-changing, world-class, supercharge,
+- no AI vocabulary: delve, crucial, comprehensive, nuanced, multifaceted,
+  furthermore, moreover, additionally, pivotal, landscape, tapestry,
+  underscore, foster, showcase, intricate, vibrant, fundamental, interplay,
+- no filler phrases: "here's the thing", "let me break this down", "the bottom
+  line", "make no mistake",
+- no "it's not X, it's Y" framing; say the Y,
 - cut hedging and redundancy; inline code stays out of narrow table cells,
 - no decorative visuals (infra PRs do not embed charts).
 
+For anything rendered (HTML, slides, dashboards), the same discipline covers
+visual slop: no purple/indigo gradients, no symmetric 3-column feature grid, no
+centered-everything, no emoji as decoration, no decorative blobs.
+
 A sentence that carries no number, decision, or caveat gets deleted. Skills
-cite this section wherever they say "Keep it tight (no AI-slop)".
+cite this section wherever they say "Keep it tight (no AI-slop)". The word and
+phrase lists merge this repo's canon with the gstack writing rules
+(github.com/garrytan/gstack, MIT) and the visual-slop tells it cites.

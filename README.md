@@ -1,5 +1,8 @@
 # claude-perf-tune
 
+[![ci](https://github.com/cfregly/claude-perf-tune/actions/workflows/ci.yml/badge.svg)](https://github.com/cfregly/claude-perf-tune/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 GPU inference profiling and optimization skills for [Claude Code](https://claude.com/claude-code), backed by a bundled MCP server: shipped as the `profile-and-optimize` plugin. 31 task-oriented workflows covering benchmark sweeps, kernel-level profiling (nsys / ncu / DCGM / zymtrace), speed-of-light roofline analysis, quantization and speculative-decode tuning, and a multi-page PDF perf-tune report renderer. Each skill is a `SKILL.md` following the open [Agent Skills standard](https://agentskills.io/).
 
 Born from real GPU-fleet performance engineering work, genericized so any team running GPU inference can use it. This is the cost-of-intelligence work: make inference faster and cheaper, measured not asserted.
@@ -16,8 +19,8 @@ The bundled MCP server (`plugins/profile-and-optimize/server/`) exposes the tool
 ## Quickstart
 
 ```bash
-# 1. Add the marketplace (once this repo has a remote).
-claude plugin marketplace add <your-org>/claude-perf-tune
+# 1. Add the marketplace.
+claude plugin marketplace add cfregly/claude-perf-tune
 
 # 2. Install the plugin.
 claude plugin install --scope user profile-and-optimize@profile-and-optimize-plugins
@@ -51,6 +54,14 @@ The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, fu
 - Add a skill: copy [`plugins/profile-and-optimize/skills/_template/SKILL.md`](plugins/profile-and-optimize/skills/_template/SKILL.md).
 - Add an MCP verb: add a CLI library under [`plugins/profile-and-optimize/server/`](plugins/profile-and-optimize/server) and update `mcp_surface.py` `LIBRARIES`.
 - Common commands: `make help`.
+
+## Limitations
+
+The skills measure and report; they do not tune the cluster for you. Every
+number depends on hardware, precision, and engine version, which the skills
+record next to the result. The speed-of-light ceilings are datasheet values, an
+upper bound rather than a promise. The bundled MCP server is optional; the
+documented bash-tool path is the fallback.
 
 ## License
 

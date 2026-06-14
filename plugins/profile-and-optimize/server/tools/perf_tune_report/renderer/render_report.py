@@ -700,6 +700,8 @@ def render_report(
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
 
+    if out_pdf.is_dir():
+        raise ValueError(f"--out must be a file path, not a directory: {out_pdf}")
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
 
     with PdfPages(out_pdf) as pdf:

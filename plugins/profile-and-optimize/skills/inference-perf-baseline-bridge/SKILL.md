@@ -9,7 +9,7 @@ description: >-
   records it under inference_perfbench_v1 schema, and on diff applies
   per-metric tolerances tuned for inference workloads (TTFT regressions
   <5 percent, throughput <3 percent, cache hit rate <2 absolute points).
-  Wraps the existing perf-baseline-record and perf-baseline-diff MCP verbs;
+  Wraps the existing perf-baseline-record and perf-baseline-diff MCP verbs,
   no new MCP verbs introduced. Triggers on "register inference baseline",
   "inference perf-baseline", "diff inference perf", "is this inference
   regression real", "perf-bench baseline", "ai-bench baseline", or any
@@ -129,7 +129,7 @@ Field shapes and origins:
   `moe_routing_finalize`, `per_token_group_quant`. Classes outside this
   set go under arbitrary `<other-class>` keys (free-form). The map is
   derived from a GPU-side `event_kind = 'cuda'` zymtrace query grouped
-  by kernel-name regex; the source bucket-rules live in the
+  by kernel-name regex. The source bucket-rules live in the
   [zymtrace-anchored-query](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) skill's
   "Kernel-class bucketing" appendix.
 - **`cpu_spinpoll_pct`** is a single scalar: the percent of CPU on-cpu
@@ -154,21 +154,21 @@ When a true breaking change is needed (e.g. metric-shape restructure of
 
 | Metric | Default tolerance | Direction | Rationale |
 | --- | --- | --- | --- |
-| `throughput_toks_per_s` | 3% | regression = current < baseline | Throughput is the headline metric; small regressions are real |
-| `ttft_p50_ms` | 5% | regression = current > baseline | TTFT is sensitive to scheduler / cache cold-start; 5% is the usual signal floor |
+| `throughput_toks_per_s` | 3% | regression = current < baseline | Throughput is the headline metric. Small regressions are real |
+| `ttft_p50_ms` | 5% | regression = current > baseline | TTFT is sensitive to scheduler / cache cold-start, 5% is the usual signal floor |
 | `ttft_p95_ms` | 10% | regression = current > baseline | Tail latency wider band - outlier-prone |
 | `ttft_p99_ms` | 15% | regression = current > baseline | Same |
-| `itl_p50_ms` | 3% | regression = current > baseline | ITL is decode-bound; small regressions are real |
-| `tps_per_user` | 3% | regression = current < baseline | Per-user throughput; same band as overall throughput |
+| `itl_p50_ms` | 3% | regression = current > baseline | ITL is decode-bound. Small regressions are real |
+| `tps_per_user` | 3% | regression = current < baseline | Per-user throughput. Same band as overall throughput |
 | `request_latency_p50_ms` | 5% | regression = current > baseline | Same as TTFT p50 |
 | `prefix_cache_hit_rate_post` | 2 absolute pts | regression = current < baseline | Cache hit rate moves in absolute pts, not percent-of-percent |
 | `gpu_cache_usage_perc_peak` | 5 absolute pts | regression = current > baseline | Capacity ceiling proxy |
-| `kernel_class_gpu_pct.<any>` | 3 absolute pts | regression = current > baseline | Kernel-class %-of-GPU drift; 3pp is the usual signal floor for hot kernels (e.g. TP all-reduce drifting from an expected ~10% to an observed ~15% is an actionable 5pp delta) |
-| `cpu_spinpoll_pct` | 5 absolute pts | regression = current > baseline | CPU spin-poll waste; >5pp jump indicates `VLLM_USE_SHM_BROADCAST_BLOCKING=1` regressed off, or a new vLLM release re-introduced busy-wait IPC |
+| `kernel_class_gpu_pct.<any>` | 3 absolute pts | regression = current > baseline | Kernel-class %-of-GPU drift, 3pp is the usual signal floor for hot kernels (e.g. TP all-reduce drifting from an expected ~10% to an observed ~15% is an actionable 5pp delta) |
+| `cpu_spinpoll_pct` | 5 absolute pts | regression = current > baseline | CPU spin-poll waste, >5pp jump indicates `VLLM_USE_SHM_BROADCAST_BLOCKING=1` regressed off, or a new vLLM release re-introduced busy-wait IPC |
 
 Operator can override any of these via `--tolerance.<metric> <value>`
 on the command line. The two optional fields' tolerances are only
-evaluated when both sides of the diff have non-null values; otherwise
+evaluated when both sides of the diff have non-null values. Otherwise
 the metric is reported as `NULL_LEGACY_BASELINE` and skipped (see
 "Optional fields" above).
 
@@ -181,7 +181,7 @@ the metric is reported as `NULL_LEGACY_BASELINE` and skipped (see
 - Pre-promotion gate - block staging or prod promotion if the diff
   verdict is RED.
 - Pairing perf vs quality - register the baseline with `--notes
-  "GPQA=<score>; MMLU-Pro=<score>"` from the
+  "GPQA=<score>. MMLU-Pro=<score>"` from the
   [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md) run so
   future diffs can confirm the regression is not masked by a quality
   gain (or vice versa).
@@ -232,9 +232,9 @@ If the operator also captured a paired profile bundle (zymtrace or
 Nsight) against the same window, source the two optional fields:
 
 - `experiments/artifacts/zymtrace-bundles/<run-id>/response.json` (or any sibling bundle that follows the [zymtrace-anchored-query](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) layout) - derive `kernel_class_gpu_pct` from the GPU-side `event_kind = 'cuda'` query response, bucketed per the kernel-class regex appendix in that skill. Derive `cpu_spinpoll_pct` from the CPU-side `event_kind = 'on_cpu'` response by summing samples whose `py_file` matches `shm_broadcast.py` or `utils.py::sched_yield`.
-- If no paired profile bundle exists, emit `null` for both optional fields. The diff verb will skip them per the "Optional fields" rule above; the registry record stays valid.
+- If no paired profile bundle exists, emit `null` for both optional fields. The diff verb will skip them per the "Optional fields" rule above. The registry record stays valid.
 
-Emit `inference_perfbench_v1.json` to a scratch path; `sha256sum` it.
+Emit `inference_perfbench_v1.json` to a scratch path, `sha256sum` it.
 
 #### Phase 2: register
 
@@ -286,7 +286,7 @@ For every concurrency cell in `metrics.<concurrency>`, compute:
 
 For `server_metrics_delta`, apply the tolerances at the absolute
 level: a `prefix_cache_hit_rate_post` drop of more than 2 percentage
-points is RED; a peak `gpu_cache_usage_perc` rise of more than 5
+points is RED. A peak `gpu_cache_usage_perc` rise of more than 5
 percentage points is RED.
 
 #### Phase 3: overall verdict
@@ -313,13 +313,13 @@ mcp__profile_and_optimize__perf_baseline_diff with:
 ```
 
 The wrapper supplies `5` as the umbrella tolerance for the underlying
-verb's structured-JSON shape; the per-metric verdict above is the
+verb's structured-JSON shape. The per-metric verdict above is the
 authoritative classification this skill returns.
 
 #### Phase 5: recommend
 
-- GREEN: "no inference perf regression detected; safe to promote."
-- YELLOW: "spot regression on N metrics; recommend re-running the
+- GREEN: "no inference perf regression detected. Safe to promote."
+- YELLOW: "spot regression on N metrics. Recommend re-running the
   perf-bench against the same dev cluster cohort to rule out noise,
   then re-diff."
 - RED:
@@ -342,7 +342,7 @@ authoritative classification this skill returns.
   `experiments/artifacts/perf-baseline-diffs/`.
 - **No new MCP verbs.** This skill wraps existing
   `mcp__profile_and_optimize__perf_baseline_record` and
-  `mcp__profile_and_optimize__perf_baseline_diff` verbs; the bundled MCP
+  `mcp__profile_and_optimize__perf_baseline_diff` verbs. The bundled MCP
   surface tool count stays unchanged.
 - **Schema mismatch fails fast.** If the baseline's `schema` field
   is not `inference_perfbench_v1`, diff mode stops and asks. No
@@ -362,7 +362,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, **delivery** (image|overlay|patchedVllm|infr-patch), bench backend, serving engine. A number is evidence only for its own `delivery` -- never cite cross-tier.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -384,7 +384,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

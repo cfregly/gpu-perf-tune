@@ -15,7 +15,7 @@ Nsight-Systems-discovered race. The goal is to find that class of
 issue yourself, on your own cluster, without waiting on the upstream
 release cadence.
 
-This doc is the cross-runbook strategy for that discovery process; the
+This doc is the cross-runbook strategy for that discovery process. The
 per-target operator SOPs (B200 8B, GB300 405B, DSv3 671B regression
 profiling) belong under [`runbooks/`](/plugins/profile-and-optimize/server/runbooks).
 
@@ -25,7 +25,7 @@ The symptom-to-culprit decision tree lives in
 ## What NVIDIA almost certainly does
 
 Recent upstream fixes fall into four buckets that each suggest a discovery
-technique. Two of them rely on tools most operators already have access to;
+technique. Two of them rely on tools most operators already have access to,
 the other two are practices most teams already follow, but inconsistently.
 
 ### 1. Nsight Systems + NVTX timelines (GPU-side, multi-stream)
@@ -76,12 +76,12 @@ fixes like:
 - TE `264da2b99fa5` - reduced padding kernel
   compilation time.
 - TE `5d947a037757` - dbias race in MXFP8
-  group quantize (correctness, not throughput; both surfaces show up
+  group quantize (correctness, not throughput. Both surfaces show up
   here).
 
 The discovery surface is `ncu --set full <kernel>` plus the C++ test
 harness in `TransformerEngine/tests/cpp/operator/`.
-`ncu` is not automated in this pass; the manual SOP is documented and
+`ncu` is not automated in this pass. The manual SOP is documented and
 automation is gated behind evidence that a hot kernel actually moved.
 
 ### 3. Integration tests as regression detectors
@@ -114,7 +114,7 @@ Throughput tuning lives here:
   for DDP.
 
 Per-run step-time / MFU comes from the scaling-efficiency gate and the
-goodput recorder; a per-step live MFU tail (an mllog `tracked_stats`
+goodput recorder. A per-step live MFU tail (an mllog `tracked_stats`
 tailer emitting per-step MFU JSONL) is a useful optional sidecar.
 
 ## Default capture window
@@ -130,7 +130,7 @@ warmup:
 --nvtx_ranges
 ```
 
-Rationale: warmup ends ~iter 5 in the 8B / 405B / 671B configs; the
+Rationale: warmup ends ~iter 5 in the 8B / 405B / 671B configs. The
 3-iter window (10, 11, 12) is wide enough to capture three full
 compute+comm cycles and narrow enough to keep the `.nsys-rep` under a few
 GB on rank 0. For the GB300 405B + DSv3 671B paths, widen `profile_ranks`
@@ -140,7 +140,7 @@ per-runbook SOPs.
 When the operator wants Python-side rather than CUDA-side profiling,
 the same flags select the PyTorch profiler instead via
 `--use-pytorch-profiler`. The Chakra `ExecutionTraceObserver` is wired
-in `Megatron-LM/megatron/training/training.py`; it activates
+in `Megatron-LM/megatron/training/training.py`. It activates
 automatically when the PyTorch profiler does.
 
 ## What "steady state" means
@@ -194,7 +194,7 @@ workstation-only artifact directories.
 | Tool | Path | Role |
 | --- | --- | --- |
 | Capture wrapper | [`tools/pipeline/submission/profile/profile_run.sh`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/profile_run.sh) | Slurm-aware nsys + NVTX launcher with operator-gate. Reuses the standard `NSYSCMD` / `NVTX_FLAG` / `NSYS_PREFIX` / `NSYS_SUFFIX` scaffolding. |
-| Diff harness | [`tools/pipeline/submission/profile/profile_diff.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/profile_diff.py) | `nsys stats` over baseline + candidate; emits NVTX / kernel / NCCL delta tables to `profile-diff.md`. |
+| Diff harness | [`tools/pipeline/submission/profile/profile_diff.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/profile_diff.py) | `nsys stats` over baseline + candidate. Emits NVTX / kernel / NCCL delta tables to `profile-diff.md`. |
 | Host-side probe | [`tools/pipeline/submission/profile/host_overhead.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/host_overhead.py) | py-spy rank-0 sampler for CPU/Python host bottleneck detection. |
 | Bisection SOP | [`tools/pipeline/submission/profile/regression_bisect.md`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/regression_bisect.md) | Symptom -> culprit decision tree, anchored on concrete recent NVIDIA fixes. |
 
@@ -217,11 +217,11 @@ flowchart LR
 
 - We do not add new model-side instrumentation. The NVTX hooks NVIDIA
   already added are sufficient.
-- We do not automate `ncu` in this pass; manual SOP only.
-- We do not wire profiling into CI; the wrapper is operator-driven and
+- We do not automate `ncu` in this pass. Manual SOP only.
+- We do not wire profiling into CI. The wrapper is operator-driven and
   gated by `--ack-cluster-cost`.
 - We do not change capture-window defaults across targets. Rank lists
-  differ per target (8B: rank 0; 405B: rank 0 + 1 NVLink peer; 671B:
+  differ per target (8B: rank 0, 405B: rank 0 + 1 NVLink peer, 671B:
   rank 0 + 1 NVLink peer + 1 MoE-expert rank), but the iteration window
   (`profile_step_start=10`, `profile_step_end=12`) is shared.
 
@@ -231,7 +231,7 @@ The baseline that this tooling replaces is "wait for NVIDIA to land a fix
 upstream" - a delay measured in days to weeks. The first deliverable from
 this tooling is "operator captures a steady-state profile and a diff vs
 the best-of-record baseline in <30 min on B200 8B". Whether that
-discovers a real inefficiency on the first try is a downstream question;
+discovers a real inefficiency on the first try is a downstream question,
 the tooling exists so we have the option.
 
 ## Fleet-wide profiling and hang-detection stack
@@ -262,7 +262,7 @@ and the matching launcher-side hooks.
 
 **Cost note:** nsys profiling adds ~5-10% to step time and produces
 ~50 MB per rank per minute of captured window. For an 8192-GPU
-2-minute window that is ~80 GB of artifacts; the operator must
+2-minute window that is ~80 GB of artifacts. The operator must
 constrain the capture window via `--capture-range=cudaProfilerApi`
 and a `--duration` cap in the launcher recipe.
 
@@ -278,13 +278,13 @@ typically lives at `/opt/gpusd/libnccl-profiler-gpusd.so` on the compute
 nodes and is enabled by setting `NCCL_PROFILER_PLUGIN` in the launcher env.
 
 **Design:** a small fleet-wide poller under
-`tools/profiling/hang_detector/` (Python or Go; Python preferred for
+`tools/profiling/hang_detector/` (Python or Go. Python preferred for
 in-tree consistency with `tools/shared/`). The poller:
 
 1. Reads the active job's NodeList from `sacct -j ${JOBID} --format=NodeList%2000`.
 2. Spawns one async HTTP scraper per node, polling the GPUSD endpoint
    on `${node}:${gpusd_port}/metrics` every N seconds (default N=5).
-3. Tracks the `(rank, collective, SeqNum)` time series; emits a
+3. Tracks the `(rank, collective, SeqNum)` time series. Emits a
    structured alert when SeqNum stagnates across **a subset** of ranks
    - a "rank 31, 63, 95, 127, ..." MOD-32 stride pattern is the
    canonical detection target.
@@ -302,10 +302,10 @@ no more than 1 FD per rack regardless of node count.
 
 - Poller cannot reach a node's GPUSD endpoint -> emit alert with
   `reason=unreachable`, do NOT crash. The poller is a passive
-  observer; the operator's training job is the ground truth.
+  observer. The operator's training job is the ground truth.
 - GPUSD plugin not loaded on a node -> `reason=plugin-missing`. The
   cluster-side fix is to ensure `NCCL_PROFILER_PLUGIN` is set in the
-  launcher env; the in-repo selector should consume this signal.
+  launcher env. The in-repo selector should consume this signal.
 
 ### Piece (c): Per-rank stdout/stderr copy-out
 
@@ -328,7 +328,7 @@ per-rank task ID) on `srun --output=...` and `srun --error=...`.
 stagnated rank's `.out` and `.err` files without SSH-ing into the
 specific node. Per-rank logs that land in a single operator's home
 directory are unreadable from other operator accounts exactly when an
-investigation needs them most; a shared copy-out path avoids that.
+investigation needs them most. A shared copy-out path avoids that.
 
 ### Implementation cadence
 

@@ -29,7 +29,7 @@ allowed-tools:
 Capture per-kernel CUDA **timeline + absolute-duration** profile data
 from a **live vLLM inference pod** without rebuilding the production
 image. Uses `kubectl debug --share-processes` to attach an nsys-enabled
-sidecar to an existing pod; the sidecar profiles the running vllm
+sidecar to an existing pod. The sidecar profiles the running vllm
 engine PID and writes `.nsys-rep` + `summary.csv` into a sidecar
 emptyDir that the operator extracts via `kubectl cp`.
 
@@ -47,7 +47,7 @@ question is "where does c=1 decode time go", use
 [`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md) - it
 drives vLLM's `/start_profile` + `/stop_profile` HTTP endpoints so you capture
 restart-free in seconds, and it bakes in the correctness gates (clean
-single-stream driver; GPU-busy must include CUDA-graph execution; reconcile
+single-stream driver. GPU-busy must include CUDA-graph execution. Reconcile
 against driver TPOT). This skill (nsys sidecar/timeline) is for prefill /
 throughput-tier hot-spots and the deep CUDA-graph timeline.
 
@@ -81,7 +81,7 @@ Two paths:
 
 - **Path A (recommended)**: pre-built
   `ghcr.io/cfregly/nsys-sidecar:0.1.0` (publicly
-  readable; manifest digest
+  readable. Manifest digest
   `sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d`).
 - **Path B (zero-build)**: `nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04`
   with `apt install nsight-systems-cli` at attach time
@@ -152,7 +152,7 @@ for the endpoint-triggered recipe.
 **Gotcha 3 - `--attach-pid` caveats.** Attaching to a running PID for CUDA
 tracing works only when the process has no conflicting CUDA injection
 (production zymtrace-instrumented pods set `CUDA_INJECTION64_PATH` and block it -
-see the ncu skill's "Blocker 1"; latency canaries usually have none). For the
+see the ncu skill's "Blocker 1". Latency canaries usually have none). For the
 *decode* tier prefer the profiler-endpoint path over attach.
 
 **Capture-quality gate (decode captures).** Before trusting a decode trace,
@@ -165,42 +165,42 @@ contaminated - drive a CLEAN single-stream workload (tiny prompt + long gen +
 a CUDA 12.9 serving image against the node's CUDA 13.0 driver makes CUPTI fail to init
 (`CUPTI_ERROR_INVALID_DEVICE`), so EVERY CUPTI client (nsys, ncu, vLLM `--profiler-config.profiler=torch`)
 records **0 kernels REGARDLESS of the four gates below**. This is NOT capture hygiene and the gates won't
-fix it - it is a CUDA major-version toolkit-vs-driver skew (NOT permission: `RmProfilingAdminOnly:0`; NOT
-missing-lib: `libcupti.so.12` present + linked; NOT wrong-process). If you get 0 kernels on GB300,
+fix it - it is a CUDA major-version toolkit-vs-driver skew (NOT permission: `RmProfilingAdminOnly:0`. NOT
+missing-lib: `libcupti.so.12` present + linked. NOT wrong-process). If you get 0 kernels on GB300,
 grep the kineto/nsys log for `CUDA versions. CUPTI/Runtime/Driver` FIRST: a 12.x-toolkit / 13.x-driver
 split needs a CUDA-13-aligned image or zymtrace (non-CUPTI), not more capture tuning.
 **SOLVED PATH (GB300 default):** use launch-wrap templates that copy a Blackwell-capable nsys
 2026.x (CUDA-13) from an NGC CUDA image into the serve container - the model-bringup template
 ships `nsys-ngc.yaml` for vLLM and `nsys-sglang.yaml` for SGLang
-(`sglang.launch_server`). These are the GB300 default; the in-image / apt nsys is superseded there.
+(`sglang.launch_server`). These are the GB300 default. The in-image / apt nsys is superseded there.
 
 **An EMPTY `cuda_gpu_kern_sum` is a CAPTURE-HYGIENE bug, NOT a "cudagraph blind
 spot" - DO NOT conclude the stack is unprofilable until you validate four
 things** (only after Gate 0 passes). A single empty rep has been wrongly declared a
-"CUDA-graph blind spot" before; a re-capture on the same production cudagraph stack with
+"CUDA-graph blind spot" before. A re-capture on the same production cudagraph stack with
 fixed capture hygiene returned **tens of millions of kernel rows**:
-1. **Flag** - `--cuda-graph-trace=node` is in the nsys argv (Gotcha 1 above);
+1. **Flag** - `--cuda-graph-trace=node` is in the nsys argv (Gotcha 1 above),
    without it graph-resident kernels are opaque `GRAPH_TRACE` and `kern_sum` is
    empty at c>=64.
 2. **Traffic** - a bench is DRIVING load during the capture window. At the
    **throughput tier (c>=64)** drive continuous `--max-concurrency >=64` traffic
-   during `[delay, delay+duration]`; an idle/untrafficked window yields an empty
+   during `[delay, delay+duration]`. An idle/untrafficked window yields an empty
    rep. (At the decode/c=1 tier this is the CLEAN single-stream workload above.)
 3. **Rep-size** - a real c>=64 rep is hundreds of MB to GB (421 MB @ c=128,
-   1.0 GB @ c=192). `.nsys-rep << ~10 MB` => idle/failed capture, RETRY; never run
+   1.0 GB @ c=192). `.nsys-rep << ~10 MB` => idle/failed capture, RETRY. Never run
    stats on a tiny rep.
 4. **Sqlite probe** - `nsys export --type sqlite` then
    `SELECT count(*) FROM CUPTI_ACTIVITY_KIND_KERNEL`. A `kern_sum SKIPPED` message
-   ALONE is not proof; it fires on a near-empty rep. Only after all four hold and
+   ALONE is not proof. It fires on a near-empty rep. Only after all four hold and
    it is STILL empty may you escalate to a genuine tooling limit.
 Mechanical gate: `scripts/nsys-validate-capture.sh`
-(checks the flag, rep-size, and KERNEL row count; PASS/RETRY).
+(checks the flag, rep-size, and KERNEL row count. PASS/RETRY).
 
 **Two launch-wrap gotchas that also hit nsys (canon: the ncu capture-hygiene section of
 [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) +
 `docs/METHODOLOGY.md`):** (1) `-- env VAR=v python3` makes the profiler
 target the `env` process not its python child - set the env on the profiler process itself
-(`VAR=v nsys … -- python3 …`); (2) profiler-start-based scoping is unreliable when the harness
+(`VAR=v nsys … -- python3 …`), (2) profiler-start-based scoping is unreliable when the harness
 imports a vLLM `direct_register_custom_op` module - prefer launch-index/delay scoping.
 
 ### 4. Extract artifacts
@@ -309,7 +309,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -324,7 +324,7 @@ family is bound by, sourced from
 - FMHA → `hbm3e_tbps` (8 TB/s on B200)
 - cuBLAS / Triton-fused → `bf16_dense_pflops` (2.25 PFLOPS on B200)
 
-nsys gpu_kern_sum gives wall-clock time per kernel; the %SoL conversion
+nsys gpu_kern_sum gives wall-clock time per kernel. The %SoL conversion
 needs FLOPS / bytes per kernel which **ncu** captures, not nsys. When
 a nsys finding flags a hot kernel that needs proper %SoL interpretation,
 the next step is
@@ -340,7 +340,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -360,5 +360,5 @@ beating generic Triton when production runs the `sm100f` tensor-core library) is
 **DRAFT, never a VERDICT** - it fails the "Fair baseline" clause. When the campaign
 reaches L4 (an ncu roofline renders), the structured `krhpa:` block in `config.yaml`
 is **required** by `publish_to_lake` (see the YAML example in
-[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)); prose in
+[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)). Prose in
 `SOURCE.md`/`summary.md` alone no longer satisfies the gate.

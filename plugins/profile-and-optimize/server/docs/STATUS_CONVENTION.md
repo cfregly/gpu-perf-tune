@@ -14,7 +14,7 @@ historical evidence at a glance.
 | --- | --- | --- |
 | `Active` | Authoritative, current. Edit deliberately and keep links honest. | [`start-here.md`](/plugins/profile-and-optimize/server/docs/start-here.md), [`first-hour.md`](/plugins/profile-and-optimize/server/docs/first-hour.md). |
 | `Reference` | Authoritative but slow-changing background context that reviewers consult on demand. | [`grace-blackwell-deltas.md`](/plugins/profile-and-optimize/server/docs/grace-blackwell-deltas.md). |
-| `Append-only ADR log` | Architecture Decision Records; superseded entries link forward, never get rewritten. | An `architecture-decisions.md` log. |
+| `Append-only ADR log` | Architecture Decision Records. Superseded entries link forward, never get rewritten. | An `architecture-decisions.md` log. |
 | `Captured evidence` | Snapshot of an external thread, audit, or post-mortem. Read for audit, do not edit retroactively. | A captured incident post-mortem. |
 | `Historical` | Superseded narrative kept for reviewer context. Pointers in the file route the reader to the current source of truth. | A dated operator handoff. |
 | `Generated` | Recomputed from a source-of-truth manifest. Do not hand-edit. | A generated index under [`../experiments/artifacts/`](/plugins/profile-and-optimize/server/experiments/artifacts). |
@@ -38,7 +38,7 @@ immediately routed to the current authoritative one.
 
 ## Drift gate
 
-There is no automated status-header linter in this repo today; the
+There is no automated status-header linter in this repo today. The
 header is enforced in review. Two related gates do run:
 
 - `python3 tools/shared/audit/audit_repo.py` - the repo-layout audit

@@ -33,15 +33,15 @@ Three benchmark families:
 
 - **GPQA** - graduate-level Q&A; runs inside the model pod via
   [lm-eval-harness](https://github.com/EleutherAI/lm-evaluation-harness).
-- **MMLU-Pro** - broad multi-task understanding; runs inside the model
+- **MMLU-Pro** - broad multi-task understanding. Runs inside the model
   pod via lm-eval-harness.
-- **ExternalEval** - externally operated; cockpit surfaces contact info
+- **ExternalEval** - externally operated. Cockpit surfaces contact info
   and endpoint details, operator coordinates with the ExternalEval
   operator out-of-band.
 
 The eval workflow itself (task selection, in-pod lm-eval-harness
 invocation, monitoring, results download, ExternalEval handoff) is
-summarized under "Workflow" below; this skill's main job is the
+summarized under "Workflow" below. This skill's main job is the
 cockpit-specific glue - the evidence bundle and the perf-baseline
 tie-in.
 
@@ -61,7 +61,7 @@ Do **not** use this skill for:
 - Inference performance measurement - that is
   [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md).
 - Terminal-Bench 2.0 / SWE-Bench Verified at scale - those are larger
-  evaluation-harness runs driven by a dedicated eval pipeline; this
+  evaluation-harness runs driven by a dedicated eval pipeline. This
   skill covers the in-pod lm-eval-harness path only.
 
 ## Example prompts
@@ -121,12 +121,12 @@ diff confirm that a perf regression isn't masked by a quality gain
 ## Safety
 
 - **Read-only on the cluster.** lm-eval-harness runs inside the
-  existing model pod; the workflow does not create or delete pods.
+  existing model pod. The workflow does not create or delete pods.
 - **No customer-data leakage.** GPQA / MMLU-Pro datasets are public.
   Any in-pod intermediate artifacts should be cleared before the
   bundle is shared externally.
 - **ExternalEval is operator-mediated.** The cockpit only displays
-  contact info; do not auto-DM the ExternalEval operator from any agent surface.
+  contact info. Do not auto-DM the ExternalEval operator from any agent surface.
 
 ## Full-context reporting (no bare numbers)
 
@@ -139,7 +139,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -162,7 +162,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

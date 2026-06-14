@@ -70,7 +70,7 @@ When adding a new perf-lake consumer:
   unit, time range, and provenance.
 - Make schema changes as strict supersets and update readers in the same
   change.
-- Keep query examples narrow and reproducible; never introduce a broad global
+- Keep query examples narrow and reproducible. Never introduce a broad global
   query as a default.
 - Document whether the data is authoritative for launch gating, advisory for
   ranking, or diagnostic-only.
@@ -85,7 +85,7 @@ A longer-term perf lake typically evolves the same way: ClickHouse snapshots
 or live extracts land in object storage, become Parquet/Iceberg objects, are
 exposed through Spark / Trino / StarRocks-style query engines, and then feed
 saved query components and MCP tools. This repo must not depend on any such
-runtime directly; it depends only on the normalized artifact and
+runtime directly. It depends only on the normalized artifact and
 `mlperf-perf-lake.v1` provenance shape.
 
 ## Worked Example: Backend Sweep Outliers

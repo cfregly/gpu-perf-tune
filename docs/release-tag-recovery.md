@@ -61,9 +61,9 @@ Three conflict patterns recur:
 2. **README.md "Status:" banner**: Both versions update the same banner line
    with different content. Resolution: **merge both summaries into one
    banner**, mentioning the new version's headline first and the previous
-   version's contribution second ("vX.Y.(Z+1) ships A + B; vX.Y.Z shipped C").
+   version's contribution second ("vX.Y.(Z+1) ships A + B. VX.Y.Z shipped C").
 3. **plugin.json `"version"`**: The merged commit set it to the old version
-   (X.Y.Z); your cherry-pick was prepared for the same version. Resolution:
+   (X.Y.Z). Your cherry-pick was prepared for the same version. Resolution:
    bump to the new patch version (X.Y.Z+1).
 
 ### 4. Re-run gates BEFORE tagging
@@ -77,7 +77,7 @@ make all
 A common late-surfacing failure is `lint-skill-mcp-args` going RED because
 the merge composed two unrelated changes (e.g., one removes servers from
 `.mcp.json`, another updates the lint script to detect optional servers
-*from* `.mcp.json`). Fix the composed bug as part of the recovery commit;
+*from* `.mcp.json`). Fix the composed bug as part of the recovery commit,
 do NOT defer.
 
 ### 5. Tag the new version + push
@@ -113,7 +113,7 @@ coordinate with the other workstream owner on how to merge.
 - Backward compat: any deprecation aliases in the cherry-picked work survive
   the recovery (keep legacy env vars as deprecation warnings, not hard
   removals).
-- Evidence bundles ship intact under their original names; only the release
+- Evidence bundles ship intact under their original names. Only the release
   tag name shifts.
 
 ## Cross-references

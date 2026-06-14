@@ -40,12 +40,12 @@ Output:
 Handles three measurement shapes:
 
 1. **Scalar** - single number (e.g. step-time-ms). Delta is `current - baseline`, delta-% is `100 * (current - baseline) / baseline`.
-2. **Structured key->value** (e.g. per-pair NCCL BW). Computes delta per key; reports worst-N regressions.
+2. **Structured key->value** (e.g. per-pair NCCL BW). Computes delta per key. Reports worst-N regressions.
 3. **Nsys-rep** - delegates to `mcp__profile_and_optimize__profile_profile_diff` (the profile-diff harness shipped with the `profile_and_optimize` MCP server).
 
 ### Inference-perf use
 
-For inference perf-bench output specifically, prefer the [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) skill. It is a structured-shape diff (Phase 2b below) keyed on the `inference_perfbench_v1` schema, with per-metric tolerances tuned for inference workloads (TTFT 5%, throughput 3%, cache-hit-rate 2 absolute pts) and a verdict-classification step that knows the headline metric is `throughput_toks_per_s` at concurrency 16. No new MCP verb is introduced; the bridge wraps `perf_baseline_diff` directly.
+For inference perf-bench output specifically, prefer the [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) skill. It is a structured-shape diff (Phase 2b below) keyed on the `inference_perfbench_v1` schema, with per-metric tolerances tuned for inference workloads (TTFT 5%, throughput 3%, cache-hit-rate 2 absolute pts) and a verdict-classification step that knows the headline metric is `throughput_toks_per_s` at concurrency 16. No new MCP verb is introduced. The bridge wraps `perf_baseline_diff` directly.
 
 ## When to use
 
@@ -71,7 +71,7 @@ Do **not** use this skill for:
 
 1. **Baseline path** - `--baseline <registry-path>` (directory from `perf-baseline-record`).
 2. **Current measurement** - `--current <path>` (file or directory).
-3. **Tolerance** - `--tolerance-percent <N>` for scalar measurements; `--tolerance-absolute <N>` for structured. Default: `5%`.
+3. **Tolerance** - `--tolerance-percent <N>` for scalar measurements, `--tolerance-absolute <N>` for structured. Default: `5%`.
 4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for writing the diff bundle.
 
 ## Interaction style
@@ -157,8 +157,8 @@ ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/perf-baseline-diffs/<fam
 
 Based on verdict:
 
-- **GREEN**: "no regression detected; no action needed."
-- **YELLOW**: "spot regression on N keys; recommend re-running the measurement on the same cohort to rule out noise, then re-diff."
+- **GREEN**: "no regression detected. No action needed."
+- **YELLOW**: "spot regression on N keys. Recommend re-running the measurement on the same cohort to rule out noise, then re-diff."
 - **RED**:
   - If shape == `nsys-rep`: drill into the `profile_profile_diff` per-kernel bucket output to name the regressed bucket.
   - If shape == `structured` and the regressions cluster on specific keys (e.g. all on one node-pair, or all on one collective): name the suspect axis.
@@ -169,7 +169,7 @@ Based on verdict:
 - **Read-only on the registry.** This skill never writes to `experiments/artifacts/perf-baselines/`. It writes only to `experiments/artifacts/perf-baseline-diffs/`.
 - **Provenance preserved.** The diff bundle records `baseline_sha256` and `current_sha256` so the comparison is auditable.
 - **No silent shape conversion.** If the baseline is structured and the current is scalar (or vice versa), the skill stops and asks. No fuzzy diffing.
-- **Tolerance is explicit.** Default 5% but operator must agree; the skill prints the resolved tolerance in Phase 0 and writes it into the diff bundle.
+- **Tolerance is explicit.** Default 5% but operator must agree. The skill prints the resolved tolerance in Phase 0 and writes it into the diff bundle.
 
 ## Full-context reporting (no bare numbers)
 
@@ -181,7 +181,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -204,7 +204,7 @@ measurement: nccl_all_reduce_busbw @ 1GB
 The SoL delta surfaces ceiling-distance shifts that absolute deltas
 hide: a 4.8% drop on a measurement already at 90% SoL is structurally
 different from the same drop at 30% SoL (former leaves no recovery
-room; latter is well within recoverable headroom).
+room. Latter is well within recoverable headroom).
 
 When the baseline lacks `sol_*` fields (older baselines, or
 non-roofline-bound measurements), the diff skips the SoL line silently -
@@ -219,7 +219,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

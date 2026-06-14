@@ -1,7 +1,7 @@
 # Runbooks
 
 Searchable operator runbooks indexed by the `search_runbooks` MCP tool.
-The internal launch runbooks were not carried over; the runbooks here are
+The internal launch runbooks were not carried over. The runbooks here are
 generic SOPs that reference only tools and docs shipped in this repository.
 
 ## Index

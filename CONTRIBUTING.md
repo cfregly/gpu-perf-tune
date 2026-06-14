@@ -10,7 +10,7 @@ This document covers:
 - Validation checklist.
 - What gets reviewed.
 
-## TL;DR new contributor flow
+## TL,DR new contributor flow
 
 ```bash
 git clone git@github.com:<your-org>/claude-perf-tune.git
@@ -33,7 +33,7 @@ git commit -am "add <skill-name> skill"
 gh pr create
 ```
 
-The PR template prompts you for the rest; run `make -j4 all` locally before every push.
+The PR template prompts you for the rest. Run `make -j4 all` locally before every push.
 
 ## Local setup (one-time)
 
@@ -66,7 +66,7 @@ claude plugin update profile-and-optimize@profile-and-optimize-plugins
 make refresh-symlinks
 ```
 
-`make refresh-symlinks` wraps [`scripts/install-skills-into-cursor.sh`](/scripts/install-skills-into-cursor.sh); it is idempotent and prints a summary like `Summary: <N> linked, <M> already-linked (skipped), 0 refused`. The Cursor symlinks point at the in-repo `plugins/profile-and-optimize/skills/<skill>/` directories, so re-running after a `git pull` is enough to surface any SKILL.md changes that landed in the new version.
+`make refresh-symlinks` wraps [`scripts/install-skills-into-cursor.sh`](/scripts/install-skills-into-cursor.sh). It is idempotent and prints a summary like `Summary: <N> linked, <M> already-linked (skipped), 0 refused`. The Cursor symlinks point at the in-repo `plugins/profile-and-optimize/skills/<skill>/` directories, so re-running after a `git pull` is enough to surface any SKILL.md changes that landed in the new version.
 
 `make refresh-symlinks` is deliberately **not** wired into `make all` - `make all` is the local gate you run before pushing, and it needs to stay portable across workstations where `~/.cursor/` may not exist.
 
@@ -83,7 +83,7 @@ make doctor                          # read-only: is the ~/.cursor/mcp.json prof
 make doctor FIX=1                    # if STALE: repoint it to this checkout's venv (backs up mcp.json first)
 ```
 
-`make doctor` only ever inspects/edits the `profile_and_optimize` entry; every other server in `~/.cursor/mcp.json` is left untouched, and `FIX=1` writes a timestamped `~/.cursor/mcp.json.bak-*` before changing anything. Then reload Cursor (toggle the `profile_and_optimize` MCP off/on, or restart) to pick up the repoint.
+`make doctor` only ever inspects/edits the `profile_and_optimize` entry. Every other server in `~/.cursor/mcp.json` is left untouched, and `FIX=1` writes a timestamped `~/.cursor/mcp.json.bak-*` before changing anything. Then reload Cursor (toggle the `profile_and_optimize` MCP off/on, or restart) to pick up the repoint.
 
 ### Pre-tag safety check
 
@@ -104,7 +104,7 @@ If `git status -sb` shows `behind > 0` or the target tag exists on origin (someo
 A good skill is:
 
 - **One task** - a single coherent workflow with a clear start and end.
-- **Iterative** - pauses for operator input at every gate; never auto-advances past a red.
+- **Iterative** - pauses for operator input at every gate. Never auto-advances past a red.
 - **Trigger-discoverable** - the `description` frontmatter lists the phrases an operator would naturally type to invoke this skill.
 - **Read-only by default** - mutating actions require an explicit ack flag (fail fast, no silent fallbacks).
 
@@ -133,11 +133,11 @@ Start from the template at [`plugins/profile-and-optimize/skills/_template/SKILL
 - `## Interaction style` - iterative pattern (one step, report, ask).
 - `## Workflow` - numbered phases. Each phase is a tool call sequence with a `report and ask` checkpoint.
 - `## Safety` - ack flags, fail-closed gates, forbidden actions.
-- `## Source-of-truth references` - cite repo docs by relative path; never duplicate.
+- `## Source-of-truth references` - cite repo docs by relative path. Never duplicate.
 
 Keep the body under 500 lines. Use progressive disclosure (link to sibling files for deep reference content).
 
-If the skill emits human-facing prose (a report, PR body, or summary), keep the template's "Keep it tight (no AI-slop)" block; the de-slop checklist is canon in [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) ("De-slop").
+If the skill emits human-facing prose (a report, PR body, or summary), keep the template's "Keep it tight (no AI-slop)" block. The de-slop checklist is canon in [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) ("De-slop").
 
 ### 4. Update the README
 
@@ -195,13 +195,13 @@ Skills reference MCP tools via `mcp__<server-key>__<tool-name>` in the `allowed-
 
 | Server | Key in `.mcp.json` | Tool prefix in skill frontmatter |
 | --- | --- | --- |
-| Bundled `profile_and_optimize` MCP (8 libraries; 53 tools total = 51 contract-derived + 2 auxiliary; canonical numbers in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)) | `profile_and_optimize` | `mcp__profile_and_optimize__<tool>` (e.g. `mcp__profile_and_optimize__slurm_triage`, `mcp__profile_and_optimize__perf_tune_report_report_render`, `mcp__profile_and_optimize__perf_tune_report_publish_to_lake`) |
+| Bundled `profile_and_optimize` MCP (8 libraries, 53 tools total = 51 contract-derived + 2 auxiliary. Canonical numbers in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)) | `profile_and_optimize` | `mcp__profile_and_optimize__<tool>` (e.g. `mcp__profile_and_optimize__slurm_triage`, `mcp__profile_and_optimize__perf_tune_report_report_render`, `mcp__profile_and_optimize__perf_tune_report_publish_to_lake`) |
 | Grafana | `grafana` | `mcp__grafana__<tool>` |
 | GitHub | `github` | `mcp__github__<tool>` |
 | Prometheus (optional) | `prometheus_mcp` | `mcp__prometheus_mcp__<tool>` |
 | zymtrace (optional) | `zymtrace` | `mcp__zymtrace__<tool>` |
 
-Only the first three (`profile_and_optimize`, `grafana`, `github`) are declared in [`plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json). The optional servers are configured per-operator - add them to your own `~/.cursor/mcp.json` or `~/.claude/settings.json` if you use them; skills that reference an optional server fall back to the documented bash-tool path when it is absent.
+Only the first three (`profile_and_optimize`, `grafana`, `github`) are declared in [`plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json). The optional servers are configured per-operator - add them to your own `~/.cursor/mcp.json` or `~/.claude/settings.json` if you use them. Skills that reference an optional server fall back to the documented bash-tool path when it is absent.
 
 If you need a new MCP server not in this list, add it to `.mcp.json` first (with env-var placeholders for tokens / URLs - never check in real tokens) and update this table.
 
@@ -223,16 +223,16 @@ The `plugins/profile-and-optimize/server/` directory is the **source of truth** 
 
 [`REVIEWERS.md`](/REVIEWERS.md) covers the reviewer-side workflow in depth. Short version: reviewers check that
 
-- `claude plugin validate` passes locally;
-- the version bump matches the change scope;
-- the description triggers are specific and not vague;
-- the safety section enumerates ack flags and forbidden actions;
-- no source-of-truth duplication;
+- `claude plugin validate` passes locally,
+- the version bump matches the change scope,
+- the description triggers are specific and not vague,
+- the safety section enumerates ack flags and forbidden actions,
+- no source-of-truth duplication,
 - the skill is one task, not three.
 
 ## Code of conduct
 
-Be respectful and constructive in issues and reviews. Contributions are credited through the git author line; keep skill content impersonal - skills describe workflows, not individual ownership.
+Be respectful and constructive in issues and reviews. Contributions are credited through the git author line. Keep skill content impersonal - skills describe workflows, not individual ownership.
 
 ## Contact
 

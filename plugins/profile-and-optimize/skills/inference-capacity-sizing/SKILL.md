@@ -55,13 +55,13 @@ SLA S (tok/s/user)  -> c* = max concurrency per replica where tok/s/user(c*) >= 
 
 util is the headroom for the TTFT SLA + failover (70 percent is the usual planning number).
 The pod definition is the GPUs per replica (a GB300 node = 4 GPUs = TP4). Report GPUs as the
-invariant; a "2x TP4 pod" is 8 GPUs.
+invariant. A "2x TP4 pod" is 8 GPUs.
 
 ## Workflow
 
 1. Get the measured curve. Pull the model's tok/s/user anchors from the fleet leaderboards
    ([`inference-fleet-leaderboard`](/plugins/profile-and-optimize/skills/inference-fleet-leaderboard/SKILL.md)
-   gives c=1 and c=10; the throughput leaderboard gives the knee), or, for a VERDICT, the
+   gives c=1 and c=10. The throughput leaderboard gives the knee), or, for a VERDICT, the
    full roofline sweep (c=8..128).
 2. Run the tool:
 
@@ -81,7 +81,7 @@ python3 ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/tools/capacity_sizing.py \
    commit to".
 4. Match the workload. The curve MUST be measured at the customer's workload shape
    (ISL/OSL, multi-turn). An AA-shape curve is not valid for a long-context routing-stress
-   ask; using the wrong curve is the most common sizing error.
+   ask. Using the wrong curve is the most common sizing error.
 
 ## Optimization leverage (delta-GPUs)
 
@@ -92,7 +92,7 @@ tuned curve, do not disable), load- and KV-cache-aware routing (multi-turn cache
 routing-stress regime), NVFP4-KV capacity (more streams or longer context per pod, MLA
 models), TP right-size (small-active MoE at TP1, fewer GPUs), MTP (raises tok/s/user so a
 tight SLA is met at a higher concurrency). Compute the delta-GPUs at the SLA-pinned c from
-the matched delta for the target workload; cite the campaign + tier for each.
+the matched delta for the target workload. Cite the campaign + tier for each.
 
 ## Full-context reporting (no bare numbers)
 
@@ -103,10 +103,10 @@ MUST be matched on it. A bare tok/s / TPOT / tok/s/user / GPU-count is a defect.
 - Parallelism: TP, DP (replicas), PP, EP.
 - Serving cfg: max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode, async_scheduling, prefix-caching.
 - Workload: dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- Regime: warm vs cold; latency vs throughput tier.
+- Regime: warm vs cold. Latency vs throughput tier.
 - Stack: image/vllm commit, serving engine (vllm/sglang/dynamo).
 - Grounding: %SoL + ceiling key, sol_rigor (L1-L4), trials n, same-node, baseline named.
-- The sizing inherits the curve's rigor: an anchored + interpolated sizing is a DRAFT; a
+- The sizing inherits the curve's rigor: an anchored + interpolated sizing is a DRAFT. A
   full-roofline-sweep sizing is a VERDICT. Always state which, and the curve's workload.
 
 ## Asset validation (review + FAIL LOUD)
@@ -114,7 +114,7 @@ MUST be matched on it. A bare tok/s / TPOT / tok/s/user / GPU-count is a defect.
 Every asset this skill emits (the sizing table / json) is held to `docs/METHODOLOGY.md`
 "Asset validation": the tool FAILS LOUDLY
 on missing/bad/degenerate inputs (no anchors, non-monotonic tok/s/user curve, tpm<=0,
-util out of range) and never writes a silent placeholder; and the agent REVIEWS the rendered
+util out of range) and never writes a silent placeholder, and the agent REVIEWS the rendered
 table for human-sense + accuracy (the pod count rises monotonically as the SLA tightens, the
 knee plateau is present, each number traces to the curve + the formula) and rebuilds it if
 wrong, never shipping a wrong/confusing sizing with a caveat.
@@ -125,16 +125,16 @@ If this skill emits a measured-curve-backed sizing, its output MUST end by namin
 lever, its expected unlock, and the gate that proves/refutes it, per `docs/METHODOLOGY.md`
 "Always be grinding (next-lever framing)". For sizing the standing next lever is:
 upgrade the DRAFT (anchored + interpolated) to a VERDICT by feeding the full roofline sweep
-at the customer's workload; then rank the delta-GPU optimization levers by value x cost and
+at the customer's workload. Then rank the delta-GPU optimization levers by value x cost and
 pursue the top one (fewer GPUs at the SLA is the breakthrough). Delete this section ONLY if
 the skill produces no measurements.
 
 ## Provenance
 
 Backed by the standalone `server/tools/capacity_sizing.py` (sibling of
-`tp_rightsize_advisor.py`; pure-Python, fail-loud, unit-tested in `test_capacity_sizing.py`).
+`tp_rightsize_advisor.py`. Pure-Python, fail-loud, unit-tested in `test_capacity_sizing.py`).
 Companions:
 [`inference-fleet-leaderboard`](/plugins/profile-and-optimize/skills/inference-fleet-leaderboard/SKILL.md)
-(ranks models; supplies the tok/s/user anchors),
+(ranks models. Supplies the tok/s/user anchors),
 [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
 (measures the curve).

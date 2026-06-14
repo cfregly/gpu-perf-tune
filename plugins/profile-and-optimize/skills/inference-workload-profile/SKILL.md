@@ -30,7 +30,7 @@ allowed-tools:
 Make speculative-decoding draft training **adaptive** by characterizing your
 *own* request traffic, instead of training on a generic UltraChat+ShareGPT
 mix. A draft head's acceptance (and therefore the latency win) is a function of how
-well its training distribution matches the served distribution; this skill produces
+well its training distribution matches the served distribution. This skill produces
 the profile that the corpus builder + `inference-spec-decode-train` consume so the
 draft is matched to the workload. It is an analog of Fireworks
 FireOptimizer's "profile-driven customization".
@@ -44,7 +44,7 @@ FireOptimizer's "profile-driven customization".
 - As the first phase of an adaptive spec-decode loop
   (profile -> corpus -> train -> A/B).
 
-Do **not** use this for: a model with no draft-head plan (use the standing config);
+Do **not** use this for: a model with no draft-head plan (use the standing config),
 choosing serving hardware/quant (that is `inference-model-optimize` Phases 1-5).
 
 ## Workflow
@@ -54,9 +54,9 @@ The two tools ship self-contained in this skill's [`tools/`](/plugins/profile-an
 
 ### Phase 1: collect a representative profile source
 
-Either (a) an OpenAI-style access JSONL (one request/response per line; accepted shapes
+Either (a) an OpenAI-style access JSONL (one request/response per line. Accepted shapes
 `{"messages":[...], "completion":"..."}` or pre-counted
-`{"prompt_tokens":N,"completion_tokens":M,"content_class":"..."}`; aim for a sample
+`{"prompt_tokens":N,"completion_tokens":M,"content_class":"..."}`. Aim for a sample
 spanning a full traffic cycle, >= a few thousand requests), or (b) the
 **Artificial Analysis shapes** (1k/10k/100k) when matching a draft to AA-style traffic
 with no access log -- use `--aa-shapes`.
@@ -91,13 +91,13 @@ nothing to train -- route to the Predicted Outputs path instead.
 
 - **Aggregates only by default.** The profiler stores distributions + class counts, not
   raw prompt/response text. `--keep-samples N` retains N *redacted* exemplars per class
-  for the corpus builder; use only on data the operator confirms is safe to retain.
+  for the corpus builder. Use only on data the operator confirms is safe to retain.
 - **Traffic is sensitive.** Redact PII / secrets upstream before any sample leaves the
-  serving boundary; record provenance (source, window, redaction) in the evidence
+  serving boundary. Record provenance (source, window, redaction) in the evidence
   bundle's SOURCE.md.
-- **No external posting.** Profiles and corpora stay within the workspace; sharing
+- **No external posting.** Profiles and corpora stay within the workspace. Sharing
   outside is an explicit per-turn operator decision.
-- **Measured-only downstream.** The profile recommends a method; it does NOT assert a
+- **Measured-only downstream.** The profile recommends a method. It does NOT assert a
   speedup. The acceptance + TPOT win is proven later by the
   `inference-spec-decode-train` Phase-5 A/B (same-node, >=3 trials, in-engine
   acceptance, cudagraph), per the DRAFT-vs-VERDICT rule in `docs/METHODOLOGY.md`.
@@ -120,7 +120,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -139,7 +139,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

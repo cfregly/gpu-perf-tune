@@ -79,7 +79,7 @@ findings:
 - (none)
 ```
 
-Two findings match by `id`; new ones are added; ones in A but absent (or status=resolved) in B are flagged as resolved.
+Two findings match by `id`. New ones are added. Ones in A but absent (or status=resolved) in B are flagged as resolved.
 
 ## Render semantics
 

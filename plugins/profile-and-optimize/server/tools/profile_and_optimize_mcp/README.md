@@ -13,10 +13,10 @@ parser contracts: `selector`, `contention`, `ai_tuning`, `profile`,
 `perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`,
 `k8s_launch`, `perf_tune_report`, and `known_good_config`. There is no
 hand-maintained
-registry of contract-derived tools to keep in sync; the canonical counts
+registry of contract-derived tools to keep in sync. The canonical counts
 live in [`../../mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `_TOTAL_*`
 constants. Two auxiliary read-only `search_*` tools are registered
-directly in [`server.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py); see "Auxiliary
+directly in [`server.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py). See "Auxiliary
 MCP-only tools" below.
 
 ## Install
@@ -34,7 +34,7 @@ Claude Code, Codex, Gemini CLI, and Google Antigravity.
 Every tool resolves to one explicit safety class, surfaced as the `safety`
 field on every MCP response (and `ack_required` for the gate state):
 
-- `read_only` -- never writes to disk; reads / prints only.
+- `read_only` -- never writes to disk. Reads / prints only.
 - `writes_artifacts` -- writes local evidence under an operator-selected path.
 - `submits_jobs` -- CLI verb can submit Slurm jobs when its ack flag is passed.
 - `pulls_data` -- CLI verb can pull license-gated data when its ack flag is passed.
@@ -59,7 +59,7 @@ MCP tools take one optional `params` object.
 Accepted `params` fields:
 
 - `args`: CLI arguments forwarded to the underlying verb. Use a list of
-  strings; a single string is normalized to a one-item list.
+  strings. A single string is normalized to a one-item list.
 - `allow_nonzero`: when `true`, return a non-zero command result instead
   of raising a runtime error. Default is fail-fast.
 - `i_understand_this_*`: explicit acknowledgement gates for mutating
@@ -77,7 +77,7 @@ Every wrapped CLI response uses this envelope:
 - `ack_field`: MCP param name that forwards the CLI ack flag.
 - `args`: exact argv forwarded after the verb.
 - `returncode`, `stdout`, `stderr`: raw subprocess result.
-- `json`: parsed stdout when the CLI emits JSON; `null` otherwise.
+- `json`: parsed stdout when the CLI emits JSON, `null` otherwise.
 
 This contract is deliberately thin. Tools stay composable because agents can
 pass through CLI-specific flags in `args` while relying on the shared safety,
@@ -95,14 +95,14 @@ python3 mcp_surface.py list     # enumerate every derived tool
 The expected surface is **51 contract-derived tools plus 2 auxiliary
 search tools (53 MCP tools total)** across 8 libraries.
 The canonical counts are read from [`../../mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s
-`_TOTAL_*` constants; the per-verb roster is intentionally not
+`_TOTAL_*` constants. The per-verb roster is intentionally not
 duplicated here so it does not drift. Drift is asserted away at commit
 time by [`scripts/lint-tool-counts.py`](../../../../../scripts/lint-tool-counts.py)
 + [`scripts/lint-skill-counts.py`](../../../../../scripts/lint-skill-counts.py).
 
 Auxiliary MCP-only tools (registered directly in
-[`server.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py); not derived from any CLI
-verb; `library: "mcp_aux"`, `verb: "search"`, `safety: "read_only"`):
+[`server.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py). Not derived from any CLI
+verb, `library: "mcp_aux"`, `verb: "search"`, `safety: "read_only"`):
 
 - `search_runbooks` -- `rg`-backed search across `runbooks/` and `docs/`.
 - `search_evidence` -- `rg`-backed search across `experiments/artifacts/`.

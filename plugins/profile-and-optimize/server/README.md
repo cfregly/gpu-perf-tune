@@ -42,11 +42,11 @@ After install, the venv exposes:
 | --- | --- | --- |
 | `profile-and-optimize-mcp` console script | `.venv/bin/profile-and-optimize-mcp` | Same as `python -m profile_and_optimize_mcp`, but slightly faster to launch. |
 | `perftunereport` console script | `.venv/bin/perftunereport` | Direct CLI entry into the `perf_tune_report` library (not via MCP). |
-| `mcp_surface.py` | `<server>/mcp_surface.py` | `python mcp_surface.py counts` verifies the canonical-counts constants; `python mcp_surface.py list` enumerates every derived tool. |
+| `mcp_surface.py` | `<server>/mcp_surface.py` | `python mcp_surface.py counts` verifies the canonical-counts constants, `python mcp_surface.py list` enumerates every derived tool. |
 
 ## 53 tools, 8 libraries
 
-`python mcp_surface.py list` prints the live tool surface; `python mcp_surface.py counts` confirms the canonical-counts constants in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) agree with the live derivation. Per-library quick reference:
+`python mcp_surface.py list` prints the live tool surface, `python mcp_surface.py counts` confirms the canonical-counts constants in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) agree with the live derivation. Per-library quick reference:
 
 | Library | Verbs | MCP tool prefix |
 | --- | --- | --- |
@@ -56,7 +56,7 @@ After install, the venv exposes:
 | `evidence` | 1 (`init`) | `evidence_*` |
 | `slurm` | 4 (`triage`, `drain`, `resume`, `quiet_window`) | `slurm_*` |
 | `findings` | 3 (`record`, `render`, `diff`) | `findings_*` |
-| `perf_tune_report` | 29 (campaign lifecycle: `campaign_init`, `campaign_run`, `cell_run`, `atlas_aggregate`, `report_render`, `report_smoke`, `publish_to_lake`; importers: `import_perf_bench`, `import_nsys`, `import_ncu`, `import_roofline_sweep`, `import_variant_ab`, `import_model_eval`, `import_workloads`; analysis views: `tpm_summary`, `value_view`, `trend_view`, `portability_view`, `fleet_leaderboard`, `champion_select`, `experiments_index`, `experiment_inventory`, `raw_bench_compare`, `dcgm_correlate`, `graph_diff`; capture: `kernel_profile`, `kernel_reproducer_scaffold`, `capture_plan`, `materialize_capture_reuse`) | `perf_tune_report_*` |
+| `perf_tune_report` | 29 (campaign lifecycle: `campaign_init`, `campaign_run`, `cell_run`, `atlas_aggregate`, `report_render`, `report_smoke`, `publish_to_lake`. Importers: `import_perf_bench`, `import_nsys`, `import_ncu`, `import_roofline_sweep`, `import_variant_ab`, `import_model_eval`, `import_workloads`. Analysis views: `tpm_summary`, `value_view`, `trend_view`, `portability_view`, `fleet_leaderboard`, `champion_select`, `experiments_index`, `experiment_inventory`, `raw_bench_compare`, `dcgm_correlate`, `graph_diff`. Capture: `kernel_profile`, `kernel_reproducer_scaffold`, `capture_plan`, `materialize_capture_reuse`) | `perf_tune_report_*` |
 | `known_good_config` | 2 (`record`, `check`) | `known_good_config_*` |
 | `mcp_aux` (auxiliary, not derived) | 2 (`search_runbooks`, `search_evidence`) | `search_*` |
 

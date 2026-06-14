@@ -32,7 +32,7 @@ classification.
 | DSv3-only regression in MoE path | NVTX ranges around `moe_routing` / `alltoall` | F. MoE feature interaction |
 | Step-time stable, GPU mostly idle in nsys | nsys timeline + `host_overhead.py top` | G. CPU / Python host overhead |
 
-Any symptom can land in multiple buckets; work them in order. The probe
+Any symptom can land in multiple buckets. Work them in order. The probe
 in the second column is meant to be cheap (no new cluster job).
 
 ## Step 2: capture a profile if the symptom is not already tracked
@@ -68,7 +68,7 @@ single hot kernel.
    `090da658c96a` "no recompute default"
    (commit moved the default away from full recompute). Probe:
    `MEGATRON_EXTRA_ARGS` carrying `--recompute-granularity` should match
-   the baseline's; if it changed, the probe template at
+   the baseline's. If it changed, the probe template at
    [`tuning/proposals/template-patches/llama31_405b/recompute_granularity_none.json`](/plugins/profile-and-optimize/server/tuning/proposals/template-patches/llama31_405b/recompute_granularity_none.json)
    shows how to pin the value.
 2. Quant dtype drifted: cf. Bridge
@@ -136,7 +136,7 @@ scale.
 ### D. Quantization correctness
 
 **Signal**: loss diverged with step-time stable. Profile-diff often
-looks unchanged; the fault is numerical.
+looks unchanged. The fault is numerical.
 
 **Likely culprits**:
 
@@ -151,7 +151,7 @@ looks unchanged; the fault is numerical.
    gemm weight quant caching". Probe: the candidate's mxfp8 config /
    recipe.
 
-**Fix shape**: cherry-pick the upstream numerics fix; re-run the
+**Fix shape**: cherry-pick the upstream numerics fix. Re-run the
 quality eval (`final_log_ppl`) against the recipe target before any
 throughput claim.
 
@@ -166,12 +166,12 @@ mistaken for a fabric issue.
    `6927c9fed204` (same commit as
    bucket C). Probe: `NCCL_DEBUG=INFO` log shows `nccl_ub` enabled but
    the userbuffer plugin is not loaded.
-2. NCCL_IB_TC / NCCL_P2P_DISABLE drift on the v6.0 image; some image
+2. NCCL_IB_TC / NCCL_P2P_DISABLE drift on the v6.0 image. Some image
    versions cannot init at all with the wrong values. Probe:
    `NCCL_IB_TC` and `NCCL_P2P_DISABLE` in the candidate's launcher env
    vs the launcher defaults.
 
-**Fix shape**: cluster-side env fix on the launcher; not an upstream
+**Fix shape**: cluster-side env fix on the launcher. Not an upstream
 bisect.
 
 ### F. MoE feature interaction (DSv3-only)
@@ -188,13 +188,13 @@ NVTX ranges.
 2. Triton dbias_dprob path on MoE experts: cf. Megatron-LM
    `2436e3df7b6d` "Enable dbias_dprob
    triton kernel in TE". Probe: confirm the candidate took the new
-   path; if it fell back, NVTX shows the slower bias/dropout kernel.
+   path. If it fell back, NVTX shows the slower bias/dropout kernel.
 3. MoE alltoall vs allgather dispatcher default: cf. Bridge
    `1513a102` "GPT-OSS GB200
    dispatcher default to alltoall". DSv3 inherits the same dispatcher
    selection.
 
-**Fix shape**: usually a feature-flag pin; sometimes a local patch to
+**Fix shape**: usually a feature-flag pin. Sometimes a local patch to
 the experts path in your Megatron-LM fork.
 
 ### G. CPU / Python host overhead
@@ -230,14 +230,14 @@ the run's `summary.md`.
 ## Anti-patterns
 
 - "We saw step-time grow on one NEXP, must be a regression." Cross-NEXP
-  noise on the 8B path is ~0.018%;
+  noise on the 8B path is ~0.018%,
   do not chase ghosts under that. Run >=3 NEXPs before declaring a
   regression unless the delta is more than 5%.
 - "The profile shows kernel X grew, ship a kernel patch." A kernel
-  delta is necessary but not sufficient; confirm the recipe is the
+  delta is necessary but not sufficient. Confirm the recipe is the
   same. Many "kernel X regressed" reports turn out to be "the
   candidate is taking a different path through TE entirely".
 - "We are profiling rank 0 only at scale and not seeing anything." On
   GB300 405B and DSv3 671B, the comm-overlap regressions live on the
-  MoE-expert ranks or the NVLink-peer ranks; profile those ranks too,
+  MoE-expert ranks or the NVLink-peer ranks. Profile those ranks too,
   not just rank 0.

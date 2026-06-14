@@ -1,5 +1,5 @@
 <!--
-Thanks for the PR. Fill in the sections below; the reviewer will use them
+Thanks for the PR. Fill in the sections below. The reviewer will use them
 verbatim. See CONTRIBUTING.md and REVIEWERS.md for the full process.
 -->
 
@@ -46,7 +46,7 @@ Justification (PATCH / MINOR / MAJOR per [REVIEWERS.md](/REVIEWERS.md#version-bu
 - [ ] No `slack_send_message` / `slack_schedule_message` / other chat-write tool referenced (skills are read-only toward chat systems).
 - [ ] If any new mutating MCP tool is referenced, the corresponding `i_understand_this_*` ack flag is enforced in the workflow.
 - [ ] Root `README.md` updated: skill family list, plus the skill-count line if the total changed.
-- [ ] If a new MCP server was added: env-var placeholders only; no real tokens / URLs checked in.
+- [ ] If a new MCP server was added: env-var placeholders only. No real tokens / URLs checked in.
 - [ ] If the bundled server tool surface changed: `make smoke-test` confirms `mcp_surface.py` derives the expected tool count.
 
 ## Optional but appreciated

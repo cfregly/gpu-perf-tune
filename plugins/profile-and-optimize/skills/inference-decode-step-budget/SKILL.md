@@ -58,13 +58,13 @@ in the vLLM source tree):
 | Endpoint | Effect |
 |---|---|
 | `POST /start_profile` | begin a profiling window on the running engine |
-| `POST /stop_profile` | end the window; flush the trace to disk |
+| `POST /stop_profile` | end the window. Flush the trace to disk |
 
 Two backends, both restart-free **after** a one-time enable:
 
 - `--profiler-config.profiler=cuda` + nsys `--capture-range=cudaProfilerApi
   --capture-range-end=stop --cuda-graph-trace=node` - **the accurate-budget
-  default.** vLLM calls `cudaProfilerStart/Stop` on the endpoints; nsys captures
+  default.** vLLM calls `cudaProfilerStart/Stop` on the endpoints. Nsys captures
   the timeline with CUDA-graph kernels resolved and **low overhead**, so the
   absolute GPU-busy% is trustworthy. Needs the nsys sidecar.
 - `--profiler-config.profiler=torch` `--profiler-config.torch_profiler_dir=/profiling`
@@ -126,7 +126,7 @@ This skill is **vLLM-specific**: the fast path is vLLM's native HTTP
 `/start_profile` + `/stop_profile` (torch-profiler) endpoints. **SGLang serve
 pods do not expose `/start_profile`**, so this skill fails closed on an SGLang
 arm. For the SGLang decode hot-path, fall back to a per-kernel **nsys timeline**
-(launch-wrap `sglang.launch_server` under nsys; drive a c=1 single-stream window
+(launch-wrap `sglang.launch_server` under nsys. Drive a c=1 single-stream window
 instead of c=64), then read the GPU-busy-vs-host-gap structure off the nsys CUDA-API trace
 (the same where/why question, captured a different way). The engine-agnostic SoL
 tiers (zymtrace L1, DCGM L3) apply to SGLang unchanged.
@@ -197,7 +197,7 @@ modest at gpu-mem-util >= 0.85).
 
 Copy the trace to the PVC **server-side** (`cp /profiling/... /models/...`) to
 survive any pod cycle, then analyze from a long-lived analyzer pod (RWX PVC
-mount; keep it alive across iterations). Run:
+mount. Keep it alive across iterations). Run:
 
 ```bash
 python3 assets/decode_budget.py <trace>    # auto-detects nsys .sqlite or kineto .json[.gz]
@@ -223,17 +223,17 @@ Report the budget table + the verdict + the single highest-leverage lever.
 
 ## Correctness gates (the anti-mistake checklist)
 
-These are mandatory; each one prevents a class of wrong answer seen in practice.
+These are mandatory. Each one prevents a class of wrong answer seen in practice.
 
 1. **Clean driver.** Single-stream, tiny prompt, long gen, `ignore_eos`. A
    `vllm bench serve --random-input-len 2048` driver mixes prefill + leaves
    inter-request lulls -> the budget is contaminated. Verify the driver round
    ran continuously (no connect errors / 500s) before trusting the trace.
 2. **GPU-busy MUST include CUDA-graph execution.** vLLM runs the decode forward
-   inside CUDA graphs; counting only `CUPTI_ACTIVITY_KIND_KERNEL` under-counts
+   inside CUDA graphs. Counting only `CUPTI_ACTIVITY_KIND_KERNEL` under-counts
    busy by the graph time (it lands in `GRAPH_TRACE`). Always union
    KERNEL + GRAPH_TRACE + MEMCPY. Detect graphs via the `cudaGraphLaunch` count
-   (huge vs `cudaLaunchKernel` -> graphs in play); use `--cuda-graph-trace=node`
+   (huge vs `cudaLaunchKernel` -> graphs in play). Use `--cuda-graph-trace=node`
    (nsys) to resolve the kernels inside.
 3. **Reconcile against driver-measured TPOT.** Compute tokens/step (MTP emits
    ~accept_len tok/step) and check `step_cadence / tokens_per_step` ==
@@ -244,15 +244,15 @@ These are mandatory; each one prevents a class of wrong answer seen in practice.
    **But first rule out the CUDA image-vs-driver CUPTI skew (Gate 0):** on GB300
    nodes a CUDA 12.9 image vs a 13.0 driver makes CUPTI fail to init
    (`CUPTI_ERROR_INVALID_DEVICE`) -> 0 kernels for ALL CUPTI clients (torch, nsys,
-   ncu) regardless of hygiene; grep the kineto log for `CUDA versions.
+   ncu) regardless of hygiene. Grep the kineto log for `CUDA versions.
    CUPTI/Runtime/Driver` -> a 12.x/13.x split needs a CUDA-13 image or zymtrace,
    not a re-capture.
 5. **Prior-art gate.** Grep prior bundles + summaries before
-   proposing an experiment; do not re-run settled sweeps.
+   proposing an experiment. Do not re-run settled sweeps.
 6. **Modest window.** Keep the profiler window short (a few seconds /
    `active_iterations` low) - long windows OOM at gpu-mem-util >= 0.85.
 7. **Credential pre-flight.** Verify cluster access first (e.g. `tsh status`
-   for Teleport); refresh before starting.
+   for Teleport). Refresh before starting.
 
 ## Assets
 
@@ -261,7 +261,7 @@ These are mandatory; each one prevents a class of wrong answer seen in practice.
   `CONCURRENCY`, `ROUNDS`). Reports per-round wall-time so you get TPOT for the
   reconciliation gate for free.
 - [`assets/decode_budget.py`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/assets/decode_budget.py) - auto-detects nsys
-  `.sqlite` (via `nsys export`) or kineto `.json[.gz]`; prints the true-busy
+  `.sqlite` (via `nsys export`) or kineto `.json[.gz]`. Prints the true-busy
   budget, idle-gap histogram, inter-step cadence, and the
   busy-vs-idle-vs-comm per-step split with the capture-quality verdict.
 
@@ -269,17 +269,17 @@ These are mandatory; each one prevents a class of wrong answer seen in practice.
 
 GLM-5.1 NVFP4 + MLA + DSA + MTP, TP=8, B200, c=1:
 `step ~13.1 ms = ~1.71 ms GPU-busy (12%) + ~11.4 ms host-idle (88%)`, TPOT
-6.21 ms/tok (MTP ~2 tok/step) -> **host-bound**; kernels + graphs are 12% of
+6.21 ms/tok (MTP ~2 tok/step) -> **host-bound**. Kernels + graphs are 12% of
 TPOT so kernel work cannot move c=1.
 
 ## Cost + risk
 
 - One-time ~5 min restart to enable the endpoint (on-demand) or zero (standing
   deploy). Per-capture cost is seconds.
-- torch profiler adds modest overhead during the window only; kineto traces are
+- torch profiler adds modest overhead during the window only. Kineto traces are
   typically 10-200 MB.
 - The profiler endpoint is dev-only (vLLM logs a warning) - do not enable on
-  production-routed pods; use a canary or out-of-selector deploy.
+  production-routed pods. Use a canary or out-of-selector deploy.
 
 ## Pairs with
 
@@ -299,14 +299,14 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 Per `docs/METHODOLOGY.md` "Speed-of-light framing": the decode-step budget IS
 the c=1 measured-vs-ceiling artifact. Report GPU-busy% of wall-clock as the
-workload-level number; when a kernel-bound verdict sends you to ncu, map the hot
+workload-level number. When a kernel-bound verdict sends you to ncu, map the hot
 kernel to its ceiling per `configs/sol-ceilings.yaml` (cite by key
 path, never inline magic numbers). At c=1 most kernels are launch-latency-scale
 (single token) and a throughput-style %SoL under-reads - this is a
@@ -324,7 +324,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

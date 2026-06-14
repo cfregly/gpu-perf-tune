@@ -35,7 +35,7 @@ allowed-tools:
 Capture per-kernel **hardware-counter** data from a **live vLLM
 inference pod** without rebuilding the production image. Uses
 `kubectl debug --share-processes` to attach an `ncu`-enabled sidecar
-to an existing pod; the sidecar replays a small number of launches of
+to an existing pod. The sidecar replays a small number of launches of
 each named kernel with the hardware-counter set enabled and writes
 `.ncu-rep` files into a sidecar emptyDir that you extract via
 `kubectl cp`.
@@ -60,7 +60,7 @@ budget says kernel-bound, or for the prefill/throughput tier.
 
 - Investigating WHY a specific kernel is hot. The `zymtrace-anchored-query`
   + `inference-kernel-profile` skills tell you WHICH kernels are hot and
-  HOW LONG they take; ncu tells you whether they're memory-bound vs
+  HOW LONG they take. Ncu tells you whether they're memory-bound vs
   compute-bound, whether occupancy is the ceiling, whether warps are
   stalling on memory or sync, etc.
 - Roofline analysis to prove a kernel is at-the-roof vs has-room.
@@ -72,7 +72,7 @@ budget says kernel-bound, or for the prefill/throughput tier.
 Do **not** use this skill for:
 
 - Continuous always-on capture - kernel replay is 10-100x slow per
-  replayed kernel; ncu is a per-shot tool.
+  replayed kernel. Ncu is a per-shot tool.
 - Untargeted "give me everything" sweeps - without `--kernel-name`
   scoping, ncu will replay EVERY kernel, which on a busy vLLM pod is
   a heavy operation that risks Kubelet liveness-probe failures.
@@ -86,7 +86,7 @@ Image includes nsys 2025.6.3 + **ncu 2026.1.1** + py-spy 0.4.1 +
 python3 + jq.
 
 Image is 11.87 GB. First-pull on a new GPU node is ~3-7 min from
-ghcr.io; subsequent attaches on the same node are instant.
+ghcr.io. Subsequent attaches on the same node are instant.
 
 ## Safety: live-serving impact
 
@@ -101,7 +101,7 @@ failure. Mitigate by:
 
 - Using `--launch-count 3` not 5
 - Using `--set basic` instead of `--set full` for the first capture
-  (basic captures only the metric groups required for roofline; ~3x
+  (basic captures only the metric groups required for roofline, ~3x
   slowdown instead of 30x)
 - Scoping to ONE kernel per capture, not 5
 
@@ -135,15 +135,15 @@ split needs a CUDA-13-aligned image or zymtrace (non-CUPTI), not more attach tun
 
 **SOLVED PATH (GB300 default): pull a Blackwell-capable ncu from NGC** instead of using the
 in-image ncu: copy ncu **2026.x** from `nvcr.io/nvidia/pytorch:26.05-py3` (arm64/sbsa) into the
-serve container via an initContainer (no prod rebuild; needs an NGC image-pull secret in the
-namespace). Use this NGC-tools path on GB300 for both nsys and ncu;
+serve container via an initContainer (no prod rebuild. Needs an NGC image-pull secret in the
+namespace). Use this NGC-tools path on GB300 for both nsys and ncu,
 the legacy in-image / apt paths are superseded there. Verified end-to-end on
 a GB300 MoE deploy (per-kernel Compute(SM)/Occupancy resolved).
 
 ## ncu capture-hygiene (empty-rep / non-deterministic gates) - empty != tooling limit
 
 Beyond Gate 0 (CUPTI), three ncu traps on a vLLM stack each yield "No kernels were profiled" or a
-non-deterministic-count failure; NONE is a tooling limit (each reproduced + fixed on a
+non-deterministic-count failure. NONE is a tooling limit (each reproduced + fixed on a
 DeepSeek-V4-Flash GB300 deploy). Canon: `docs/METHODOLOGY.md` "Capture hygiene".
 
 1. **`cudaProfilerStart` breaks under any vLLM `direct_register_custom_op` import.** If your harness
@@ -162,7 +162,7 @@ DeepSeek-V4-Flash GB300 deploy). Canon: `docs/METHODOLOGY.md` "Capture hygiene".
    (`VAR=v ncu … -- python3 …`), never via an `env` wrapper after `--`.
 3. **TP=N MoE+sparse in-engine `--replay-mode application` is non-deterministic.** A large MoE +
    sparse-attention model relaunched per metric-pass varies its kernel-launch count →
-   `==ERROR== Unexpected number of profiled kernels`; `--app-replay-mode relaxed` + no-op
+   `==ERROR== Unexpected number of profiled kernels`, `--app-replay-mode relaxed` + no-op
    `profile_run` + prefix-caching-off + eager + fixed-blocks do NOT fix it. The canonical L4 path is
    an **isolated single-op kernel-replay harness**: call the production library op directly (e.g.
    `vllm.utils.deep_gemm.fp8_gemm_nt` / `tf32_hc_prenorm_gemm`), TP=1, **NO `mhc.tilelang` import**,
@@ -187,7 +187,7 @@ CUDA_INJECTION64_PATH=/var/lib/zymtrace/profiler/libzymtracecudaprofiler.so
 
 This is the zymtrace profiler agent injecting itself as the CUDA
 driver-level injection library. The CUDA driver only honors **one**
-injection library per process; ncu cannot stack on top. There's no
+injection library per process. Ncu cannot stack on top. There's no
 way to add ncu's `libcompute.so` to a running zymtrace-instrumented
 process.
 
@@ -250,7 +250,7 @@ ncu --mode attach --hostname 127.0.0.1 --port 49152 \
 ```
 
 Multiple captures against the same long-lived sister pod are
-supported - vllm stays warm; the sidecar runs ncu N times sequentially.
+supported - vllm stays warm. The sidecar runs ncu N times sequentially.
 
 ### Reference helm + capture scaffolding
 
@@ -302,11 +302,11 @@ DeepSeek):
 
 An earlier recipe used `ncu --attach $VLLM_PID` against the
 zymtrace-instrumented production pod. That recipe is preserved below
-ONLY as historical reference; it WILL FAIL on every current
+ONLY as historical reference. It WILL FAIL on every current
 inference deploy. Use the sister-deploy section above.
 
 <details>
-<summary>Historical recipe (broken; click to expand)</summary>
+<summary>Historical recipe (broken. Click to expand)</summary>
 
 ```bash
 # THIS WILL FAIL:
@@ -346,8 +346,8 @@ Key columns from `--page details --section SpeedOfLight`:
 | `Block Limit Warps` | Limit imposed by max warps per SM |
 
 These are the roofline + occupancy diagnostics. A kernel with
-`DRAM Throughput % = 92%` is memory-bound; one with
-`Compute SM Throughput % = 88%` is compute-bound; one with
+`DRAM Throughput % = 92%` is memory-bound. One with
+`Compute SM Throughput % = 88%` is compute-bound. One with
 `Achieved Occupancy = 0.31` and `Block Limit Registers = limited` is
 suffering register pressure.
 
@@ -420,7 +420,7 @@ closes that loop.
 
 ## Cost + risk
 
-- ~10-100x per-replayed-kernel slowdown during capture; bounded by
+- ~10-100x per-replayed-kernel slowdown during capture. Bounded by
   `--launch-count` (5 replays at 100x = 0.5s of kernel time = sub-second
   for typical kernels)
 - ncu-rep files are typically 5-50 MB per kernel (manageable)
@@ -441,7 +441,7 @@ defect - it cannot set a default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -461,7 +461,7 @@ Workflow when proper %SoL is needed:
    [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md).
 2. Run THIS skill against that kernel name with the roofline-min
    counter set (see Reference below).
-3. Compute arithmetic intensity = FLOPS / bytes; place the point on
+3. Compute arithmetic intensity = FLOPS / bytes. Place the point on
    the B200 / GB300 / H100 roofline using peaks from
    `configs/sol-ceilings.yaml` (`b200_sm100.nvfp4_dense_pflops`
    for compute ceiling, `b200_sm100.hbm3e_tbps` for bandwidth ceiling).
@@ -478,7 +478,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -498,7 +498,7 @@ perftunereport report_render --campaign <slug>   # -> page 5 populated
 the end.) Notes:
 
 - **Two CSV shapes are auto-handled.** ncu's `--page raw` is wide (one row per
-  kernel, metric columns); ncu-2026's `--page details --section SpeedOfLight`
+  kernel, metric columns). Ncu-2026's `--page details --section SpeedOfLight`
   is long/melted (`Metric Name` / `Metric Value` rows). The importer detects
   and pivots the long shape, so either export works.
 - **Counter set determines what page 5 can show.** `--set=full` or
@@ -517,10 +517,10 @@ the end.) Notes:
   to the FLOP ceiling (`fp8_dense_pflops` / `nvfp4_dense_pflops` / `bf16_dense_pflops`). WORKED
   EXAMPLE: the DeepSeek-V4-Flash FP8 GEMM (`sm100_fp8_fp4_gemm_1d1d`, ~70% of decode compute) read
   88-92% SM (`--set basic`, which mislabeled it "at-roof") but `--set full` showed only **1-14.5% of
-  the FP8 FLOP-SoL** (M=1→256) - the kernel is concurrency-starved, not exhausted; the throughput
+  the FP8 FLOP-SoL** (M=1→256) - the kernel is concurrency-starved, not exhausted. The throughput
   tier was the real headroom, not a kernel rewrite.
 - **TP=8 NVFP4 blocker.** Multi-pass kernel-replay fails at TP=8 NVFP4
-  (`ContextSaveFailed`); see the replay-mode-application runbook in the
+  (`ContextSaveFailed`). See the replay-mode-application runbook in the
   sister-deploy scaffolding above for the `--replay-mode application` path that
   gets to a full AI-grounded point.
 
@@ -540,7 +540,7 @@ sibling set that can prove the two axes a kernel win actually turns on:
   how it schedules. Read tensor-core engagement off ncu BEFORE believing any win.
 - **P (performance target)** - the roofline (%SoL via the FLOPS + `dram__bytes.sum`
   counters, "Speed-of-light reporting" above) is the P-axis: P4 means at/above the
-  best library; a kernel far below its family ceiling that still "wins" an e2e A/B is
+  best library. A kernel far below its family ceiling that still "wins" an e2e A/B is
   winning on something other than GPU work (re-check methodology).
 
 **The gate, operationally:** record `(K,R,H,P,A)` for the candidate AND the named
@@ -563,7 +563,7 @@ krhpa:
   baseline:  {K: 4, R: 1, H: 4, P: 4, A: 1, name: "FlashInfer-TRTLLM bmm_*_sm100f"}
 ```
 
-Each axis is an int `1..4` (= `L1..L4`); `baseline.name` must name the
+Each axis is an int `1..4` (= `L1..L4`), `baseline.name` must name the
 production-representative kernel/library. The gate (`lake_writer.krhpa_problems`)
 refuses a missing or malformed block under `--strict` and records + warns otherwise.
 

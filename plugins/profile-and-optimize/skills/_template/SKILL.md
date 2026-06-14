@@ -13,7 +13,7 @@ allowed-tools:
   - Write
 ---
 
-# _template (starter scaffold; do not invoke)
+# _template (starter scaffold. Do not invoke)
 
 > **This is a copy-paste starter for new contributors.** It is intentionally
 > registered with `disable-model-invocation: true` so Claude never auto-loads
@@ -26,7 +26,7 @@ allowed-tools:
 2. Open the new `SKILL.md` and rewrite the YAML frontmatter:
    - `name`: match the new directory name (lowercase + hyphens, max 64 chars).
    - `description`: third-person, includes WHAT + WHEN, max 1024 chars. **Remove `disable-model-invocation: true`** so the skill is discoverable.
-   - `allowed-tools`: pin to the specific tools the workflow uses; see [`CONTRIBUTING.md`](/CONTRIBUTING.md#mcp-tool-naming-convention).
+   - `allowed-tools`: pin to the specific tools the workflow uses. See [`CONTRIBUTING.md`](/CONTRIBUTING.md#mcp-tool-naming-convention).
 3. Rewrite every section below. Anything wrapped in `<...>` is a placeholder.
 4. Read [`CONTRIBUTING.md`](/CONTRIBUTING.md) for the validation + version-bump + PR flow.
 5. Run `make smoke-test` from the repo root to validate.
@@ -74,7 +74,7 @@ an existing skill such as
 
 ### Phase 0: confirm intent
 
-<Resolve the operator's request to specific parameters; state them back; get confirmation.>
+<Resolve the operator's request to specific parameters. State them back. Get confirmation.>
 
 ### Phase 1: <name>
 
@@ -107,7 +107,7 @@ compared to a production-representative baseline, and (for which-kernel claims)
 backed by nsys/ncu per-kernel data. Under the always-publish policy
 a campaign published as `verdict_tier=verdict` without this provenance is
 auto-downgraded to `draft` and still lands (the honest tier is recorded on
-`campaign_v1`); `publish_to_lake --strict` refuses instead. Supersede a DRAFT
+`campaign_v1`), `publish_to_lake --strict` refuses instead. Supersede a DRAFT
 everywhere it propagated once a VERDICT overturns it.
 
 ## Kernel rubric (K/R/H/P/A)
@@ -132,7 +132,7 @@ defect - it cannot set a default, ship a config, or appear in a report. Cite all
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -141,7 +141,7 @@ ISL/OSL shape) and `shape_label_problems()` (no shared shape over heterogeneous 
 perf-report `lake_writer.py` (publish/render `--strict` fail-closed). Delete this section ONLY if the
 skill produces no measurements (read-only diagnostic).
 - **Prefill/decode roofline (page 7) + obs/mechanisms:** a serving throughput/mixed measurement
-  MUST carry the page-7 roofline (`import_roofline_sweep`; `publish_to_lake --strict` refuses a
+  MUST carry the page-7 roofline (`import_roofline_sweep`, `publish_to_lake --strict` refuses a
   serving campaign that omits it) per `server/tools/perf_tune_report/ROOFLINE-METHODOLOGY.md`, and SHOULD ship
   the `findings/01-observations.md` (measured) + `findings/02-mechanisms.md`
   (`OBSERVATION -> MECHANISM -> CONFIDENCE`) split + a source-code link (provenance block).
@@ -156,14 +156,14 @@ BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / ke
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 **Highlight NOVEL FRONTIER breakthroughs over config / well-known optimizations.** Two classes: the
 CONFIG class (flag sweeps, batching, cudagraph/async toggles, kv-dtype, well-known serving knobs) is
-table-stakes that rarely moves the SoL ceiling; the FRONTIER class (a custom or persistent megakernel,
+table-stakes that rarely moves the SoL ceiling. The FRONTIER class (a custom or persistent megakernel,
 op-chain fusion, a vendor kernel-occupancy/tiling fix, a quant-frontier format, a novel router /
 parallelism / spec-decode design, an architecture-coupled kernel) is where the real unlock lives. A
 skill's reported next-lever frontier MUST lead with the frontier class and name config levers as the
 floor, not the headline -- and a frontier lever that is out-of-repo (vendor/upstream) is still a
 first-class breakthrough to surface (with the substantiating profile), not a dead end.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. **Escalate the ladder: config
 levers -> quant / spec-decode / parallelism -> NOVEL kernel-level (a megakernel / persistent-kernel
 decode, FUSION of the per-step op chain, or a custom vLLM/SGLang kernel patch).** Config-exhaustion is
@@ -171,7 +171,7 @@ NOT frontier-exhaustion: a byte-grounded config-bound conclusion (occupancy / ho
 far from roofline) is the START of the kernel hunt -- megakernel + fusion attack exactly that regime,
 which a faster individual GEMM cannot. Never conclude "exhausted/optimal/done" without an explicit
 next-lever frontier that INCLUDES the kernel-level candidates (each pursued, or banked with a K/R/H/P/A
-structural-cap / infra-wall reason); an empty frontier requires a documented SoL wall AND the kernel
+structural-cap / infra-wall reason). An empty frontier requires a documented SoL wall AND the kernel
 frontier assessed. Delete this section ONLY if the skill produces no measurements.
 
 ## Asset validation (review + FAIL LOUD)
@@ -181,11 +181,11 @@ exported data), it is a DELIVERABLE held to the
 [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) "Asset validation" rule: (1) the generator
 **FAILS LOUDLY** on missing/bad/degenerate data -- source unreachable, zero rows when rows are
 expected, a required field `unknown`/null/NaN, a near-empty PNG/PDF, a non-finite series -> raise
-/ non-zero exit naming what is missing; NEVER a silent placeholder/fabricated asset at exit 0
+/ non-zero exit naming what is missing. NEVER a silent placeholder/fabricated asset at exit 0
 (genuinely-optional absent data = an explicit labelled "no data" panel only). (2) the agent
 **REVIEWS** the rendered asset -- opens the image / reads the report -- and confirms it is
 ACCURATE (numbers + identities + matched comparisons trace to the data) AND MAKES SENSE to a
-human (curves physically plausible, nothing mislabeled, empty == genuinely empty); if it is
+human (curves physically plausible, nothing mislabeled, empty == genuinely empty). If it is
 wrong or confusing, **REBUILD and revisit** -- never ship a wrong/confusing asset with a caveat.
 Delete this section ONLY if the skill produces no assets.
 
@@ -194,21 +194,21 @@ Delete this section ONLY if the skill produces no assets.
 If this skill's output feeds a PR (especially an upstream serving-stack patch PR) or any
 shareable/leadership artifact, that PR MUST lead with its **value proposition**: the WHY (blocker
 removed / capability unlocked), the **measured benefit** (full descriptor + `%SoL`/`sol_rigor` + a
-resolving data link; NEVER a hand-waved "no perf penalty"), an **applicability matrix** (model
+resolving data link. NEVER a hand-waved "no perf penalty"), an **applicability matrix** (model
 architecture sparse/MoE-vs-dense, size, reasoning-vs-not, quant, parallelism incl. any
 TP>1-specific behavior, workload, concurrency regime), and the **open gates**. A PR that only
 states WHAT it changes is incomplete. Before opening or finalizing such a PR, run a
 **claim-by-claim PR-body evidence audit**: every number resolves to a `campaign=<id>` / bundle
 whose provenance `delivery`+`commit` MATCHES the code-under-test (a runtime `overlay` /
 offline-prepped run is NOT evidence for an `infr-patch`, even if the kernels match -- the
-code-under-test provenance must match); confirm every cited campaign + link resolves;
+code-under-test provenance must match). Confirm every cited campaign + link resolves,
 reviewer-objection pass (impact scope, numerical approximation, honest gaps).
-**Keep it tight (no AI-slop):** lead with SoL%/roofline% and matched numbers; cut hedging,
+**Keep it tight (no AI-slop):** lead with SoL%/roofline% and matched numbers. Cut hedging,
 redundancy, and decorative visuals (infra PRs do NOT embed charts). De-slop checklist: no
 em-dashes (the #1 AI-slop tell), minimal bold (no bold-lead bullets), plain punctuation, inline
 code out of narrow table cells.
 Source: [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) "Value proposition" + "Full-context
-reporting" + "De-slop"; PR-facing surface of
+reporting" + "De-slop". PR-facing surface of
 [`inference-value-ledger`](/plugins/profile-and-optimize/skills/inference-value-ledger/SKILL.md).
 Delete this section ONLY if the skill never feeds a PR / shareable artifact.
 
@@ -217,7 +217,7 @@ Delete this section ONLY if the skill never feeds a PR / shareable artifact.
 - **<Ack flag mandatory / read-only / fail-closed condition>** per [`server/docs/mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md).
 - **<No silent fallbacks>** - fail fast rather than silently degrading.
 - **<If this skill queries/consumes zymtrace: empty != gap.>** A zymtrace query empty right after a bench is usually ClickHouse INGEST LAG (async flush), not absence - wait + requery for the freshest data before concluding. See [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md). Delete if the skill never touches zymtrace.
-- <Other forbidden actions: e.g. "read-only against external systems; no writes".>
+- <Other forbidden actions: e.g. "read-only against external systems. No writes".>
 
 ## Source-of-truth references
 

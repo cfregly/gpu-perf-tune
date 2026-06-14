@@ -26,7 +26,7 @@ Tuning spaces are checked in under [`tuning/`](/plugins/profile-and-optimize/ser
 
 - [`tuning/tuning-space.b200-llama31-8b.json`](/plugins/profile-and-optimize/server/tuning/tuning-space.b200-llama31-8b.json) - B200 LLaMA 3.1 8B operational sweep space.
 - [`tuning/tuning-space.gb300-ops.json`](/plugins/profile-and-optimize/server/tuning/tuning-space.gb300-ops.json) - GB300 fabric / NCCL / config knobs sweep space.
-- [`tuning/best-known/`](/plugins/profile-and-optimize/server/tuning/best-known) - promoted candidates with A/B evidence; refreshed after every successful tuning campaign.
+- [`tuning/best-known/`](/plugins/profile-and-optimize/server/tuning/best-known) - promoted candidates with A/B evidence. Refreshed after every successful tuning campaign.
 - [`tuning/schemas/`](/plugins/profile-and-optimize/server/tuning/schemas) - JSON Schemas for the tuning-space and proposal shapes.
 
 ## CLI surface
@@ -38,9 +38,9 @@ for full options):
 | --- | --- | --- |
 | `space` | (top-level) | describe a tuning space (parameter list, ranges). |
 | `matrix` | (top-level) | print the proposal-by-parameter matrix view. |
-| `optimizer` | `propose`, `status`, `history`, `compare`, `import-hyp` | run the LLM-assisted optimizer; persist optimizer state across sessions; ingest hypertune `.hyp` templates. |
-| `proposal` | `validate` | validate a proposal JSON against its tuning space; enforce `requires_config_patch` for any parameter consumed via `config_patches`. |
-| `experiment` | `create`, `update`, `summary`, `submit`, `poll`, `collect` | maintain a JSONL ledger of one or more concurrent experiments; submit (gated), poll Slurm read-only, collect artifacts. |
+| `optimizer` | `propose`, `status`, `history`, `compare`, `import-hyp` | run the LLM-assisted optimizer. Persist optimizer state across sessions. Ingest hypertune `.hyp` templates. |
+| `proposal` | `validate` | validate a proposal JSON against its tuning space. Enforce `requires_config_patch` for any parameter consumed via `config_patches`. |
+| `experiment` | `create`, `update`, `summary`, `submit`, `poll`, `collect` | maintain a JSONL ledger of one or more concurrent experiments. Submit (gated), poll Slurm read-only, collect artifacts. |
 | `template-patch` | `validate` | validate a context-anchored template patch against the canonical config before submission. |
 | `report` | (top-level) | render a tuning campaign summary across a session. |
 | `finalize` | (top-level) | mark a campaign as complete and emit the promotion record. |
@@ -56,7 +56,7 @@ gated by **two** explicit flags:
   exits 0.
 - `experiment poll` is read-only against Slurm (no `scancel`, no
   destructive `scontrol`).
-- `experiment collect` copies local artifacts and runs validators only;
+- `experiment collect` copies local artifacts and runs validators only,
   it never invokes mutating cluster commands.
 - `template-patch validate` and `proposal validate` never invoke any
   cluster command.

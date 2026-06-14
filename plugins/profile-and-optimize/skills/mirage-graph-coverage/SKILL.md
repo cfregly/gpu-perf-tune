@@ -52,8 +52,8 @@ consumers**.
 - `[OK] <t>: input_refs=N consumer_task_types=[...]` - wired (consumed by a task).
 - `[MISSING-WIRING] <t>: input_refs=0` - declared but never read by any task => the bug.
 - `INFO write-only` - produced by a task but never read (often a final output like
-  `output_token`; suspicious only for an intermediate/feature tensor).
-- `INFO dead` - declared, 0 refs at all (allocated scratch / codegen leftover; the
+  `output_token`. Suspicious only for an intermediate/feature tensor).
+- `INFO dead` - declared, 0 refs at all (allocated scratch / codegen leftover. The
   `nullptr` sentinel shows here as a benign false positive).
 
 ## Worked example (GLM-5.1 on GB300)
@@ -66,11 +66,11 @@ states - graph-coverage is what distinguishes them.
 ## Triage rule
 For a megakernel coherence bug (compiles, exits 0, incoherent output), run the
 graph-coverage audit **before** building a per-kernel numerics harness. A
-missing/mis-wired task makes a numerics harness pass while the model stays wrong;
+missing/mis-wired task makes a numerics harness pass while the model stays wrong,
 the audit names the unwired tensor directly. Only once coverage is clean does a
 relL2 harness make sense.
 
 ## Caveat
 Verifies **structural wiring** (is the tensor consumed by a task), not runtime
-numerical coherence. A PASS removes "feature absent" as the suspect; it does not
+numerical coherence. A PASS removes "feature absent" as the suspect. It does not
 by itself prove the output is correct.

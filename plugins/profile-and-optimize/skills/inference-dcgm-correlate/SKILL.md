@@ -44,7 +44,7 @@ Lift workload-level Speed-of-Light from "first-principles estimate" to
    per-category time-share read as a coarse upper bound on category
    busyness. (zymtrace flushes to ClickHouse asynchronously, so an empty L1
    right after the window is **ingest lag, not absence** - wait + requery for
-   the freshest data; see
+   the freshest data. See
    [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).)
 2. **ncu per-kernel arithmetic intensity** (page 5) - proper roofline
    scatter from ncu DRAM bytes + SM FLOPS counters.
@@ -71,7 +71,7 @@ Do **not** use for:
   [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)'s
   domain (DCGM has no per-kernel attribution).
 - Real-time cluster health - DCGM scrape interval (~10-30 s) is too
-  coarse for sub-minute incident response; use
+  coarse for sub-minute incident response. Use
   [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md)
   directly with the regular dashboard panels.
 
@@ -218,7 +218,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -227,7 +227,7 @@ This skill IS the byte-grounded SoL producer. Its output is the
 authoritative third-tier evidence per `docs/METHODOLOGY.md`
 "Speed-of-light framing":
 
-- Peaks live in `configs/sol-ceilings.yaml`; this skill
+- Peaks live in `configs/sol-ceilings.yaml`. This skill
   reads them by key (`b200_sm100.hbm3e_tbps`,
   `gb300_nvl72.nvfp4_dense_pflops`, etc.) - never inline.
 - DCGM metric anchors live in the same YAML under each peak's
@@ -237,11 +237,11 @@ authoritative third-tier evidence per `docs/METHODOLOGY.md`
   showing measured-vs-peak × duration × n_gpus.
 - This skill's output drives the `dcgm_grounded` flag + the campaign's
   `sol_rigor`: with a `dcgm_correlation.json` the campaign is
-  `dcgm_grounded=true` / `sol_rigor=L3` (or `L4` if ncu is also present);
+  `dcgm_grounded=true` / `sol_rigor=L3` (or `L4` if ncu is also present),
   without one it is `dcgm_grounded=false` / `sol_rigor=L1`. Under the
   **always-publish policy this is RECORDED, not a gate** - `publish_to_lake`
   lands the campaign either way, with the gap on the `campaign_v1` row + a loud
-  warning. Run this skill per cell to raise rigor to L3 (a tighter roofline);
+  warning. Run this skill per cell to raise rigor to L3 (a tighter roofline),
   pass `publish_to_lake --strict` only when you want an ungrounded campaign to
   refuse instead of land.
 
@@ -254,7 +254,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -265,12 +265,12 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
   cluster state.
 - **Knowledge-base FIRST.** Skill MUST call
   `query_observability_knowledge_base` before any `query_prometheus`
-  to confirm cardinality bounds; this is the standing
+  to confirm cardinality bounds. This is the standing
   prometheus-anchored-query pattern.
 - **Bundle write only inside the supplied cell directory.**
   No writes outside `<campaign>/cells/<cell>/`.
 - **Provenance preserved.** Every PromQL invocation is recorded in the
-  output's `queries` array; the `dcgm_correlation.json` carries
+  output's `queries` array. The `dcgm_correlation.json` carries
   `schema_version`, `sweep_start_utc`, `sweep_end_utc`, `n_gpus`,
   `dcgm_group_level`. It also carries the
   re-query provenance `nodes` (distinct host(s) the DCGM series carried),
@@ -295,7 +295,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
  - the general anchored-PromQL primitive. This skill is
   the DCGM-specific specialisation.
 - [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md)
- - the time-share proxy view (level 1 of SoL hierarchy); this skill
+ - the time-share proxy view (level 1 of SoL hierarchy). This skill
   is its level-3 upgrade.
 
 ## Source-of-truth references

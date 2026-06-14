@@ -59,12 +59,12 @@ timeline.
 python -m pytest tools/profiling/hang_detector/tests/ -x -q
 ```
 
-All tests use synthetic JSON fixtures; no live cluster dependency.
+All tests use synthetic JSON fixtures. No live cluster dependency.
 
 ## Cross-references
 
 - Design appendix: [`../../docs/profiling-and-perf-discovery.md`](/plugins/profile-and-optimize/server/docs/profiling-and-perf-discovery.md)
   "fleet-wide profiling and hang-detection stack".
 - Failure mode worth knowing: fleet-wide polling can exhaust file
-  descriptors on the collector host; that finding drives the per-rack
+  descriptors on the collector host. That finding drives the per-rack
   connection pool.

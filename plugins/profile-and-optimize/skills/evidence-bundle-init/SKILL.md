@@ -6,7 +6,7 @@ description: >-
   evidence capture: SOURCE.md (operator + cluster + git
   SHA + UTC timestamp), summary.md (verdict skeleton), commands/ (for the
   four-file .cmd/.stdout/.stderr/.exit tuple capture per shell command).
-  Workload-agnostic; works for any experiment family. Operator names family
+  Workload-agnostic. Works for any experiment family. Operator names family
   + run-id (or accepts default). Triggers on "new evidence bundle", "init
   evidence", "scaffold bundle", "start a new artifact bundle", "new run-id",
   "evidence-bundle-init", "set up a bundle", or any combination of "new /
@@ -34,15 +34,15 @@ Set up a new evidence bundle directory under `experiments/artifacts/<family>/<ru
 - `commands/` - directory for the four-file `<NN>-<step>.{cmd,stdout,stderr,exit}` tuples one per shell command run during the experiment.
 - `.gitkeep` markers so the directory layout survives an empty commit.
 
-This skill is the operator-facing convenience over `mkdir + cat > SOURCE.md`. Half a minute of friction is enough that people skip the discipline; this skill makes it 5 seconds.
+This skill is the operator-facing convenience over `mkdir + cat > SOURCE.md`. Half a minute of friction is enough that people skip the discipline. This skill makes it 5 seconds.
 
 ## Experiment isolation & traceability (required for any cluster-touching experiment)
 
 The bundle's run-id IS the **experiment-id** - the single join key across the evidence bundle, the cluster objects, and the perf-lake. When the experiment creates cluster resources:
 
 - Every Deployment/Pod/PVC/PV/Secret/ConfigMap/Service MUST use an experiment-unique name derived from the id (e.g. `glm51-expt-deepep-ll`, PV `glm51-deepep-expt-pv`) and carry the label `experiment=<id-slug>`.
-- NEVER reuse a standing/platform/migration name (e.g. a shared `*-inference*` deployment, a standing `*-cache*` PV, or anything labeled `migration=*`). Cluster-scoped PV names are global; a collision silently breaks another owner's PVC.
-- Tear down by label: `kubectl delete deploy,pod,pvc,secret -l experiment=<id-slug>`; for `Retain` PVs pre-clear the attacher finalizer before delete.
+- NEVER reuse a standing/platform/migration name (e.g. a shared `*-inference*` deployment, a standing `*-cache*` PV, or anything labeled `migration=*`). Cluster-scoped PV names are global. A collision silently breaks another owner's PVC.
+- Tear down by label: `kubectl delete deploy,pod,pvc,secret -l experiment=<id-slug>`. For `Retain` PVs pre-clear the attacher finalizer before delete.
 - Record the created object names + the perf-lake `campaign=<id>` in `SOURCE.md` (template below has the block).
 
 ## Observations vs mechanisms + roofline companions (measurement bundles)
@@ -59,7 +59,7 @@ Scaffold these in any measurement bundle:
 - `findings/02-mechanisms.md` - one item per claim, formatted `OBSERVATION -> MECHANISM (causal) ->
   CONFIDENCE (+ what would raise it)`. A mechanism claim ("decode plateaus at 41% HBM because the
   sparse-MoE+MLA kernel mix has low DRAM efficiency") needs a profile (DCGM/zymtrace/nsys/ncu) -
-  the rooflines are the observation; the mechanism is the separately-evidenced interpretation.
+  the rooflines are the observation. The mechanism is the separately-evidenced interpretation.
 - `findings/00-ANSWERS-*.md` (optional) - the live-sync handout that answers the reviewer's questions
   directly, each pointing at 01/02.
 - A ` ```provenance ` block (`experiment_provenance_v1`) in `SOURCE.md` pinning the exact
@@ -71,7 +71,7 @@ Scaffold these in any measurement bundle:
   an `infr-patch`, even if the kernels match).
 
 The prefill/decode roofline itself (page 7) is captured + always-published via the
-`inference-perf-tune-report` / `inference-perf-bench` pipeline; this bundle just holds the obs/mechanisms
+`inference-perf-tune-report` / `inference-perf-bench` pipeline. This bundle just holds the obs/mechanisms
 narrative + provenance that the report links to.
 
 > This skill is backed by a native MCP verb: `mcp__profile_and_optimize__evidence_init`. The verb does the entire scaffold atomically (mkdir + SOURCE.md + summary.md + commands/README.md + .gitkeep) and returns the bundle path. The Bash-tool path documented below remains supported as a fallback.
@@ -96,7 +96,7 @@ Do **not** use this skill for:
 
 - One-off shell commands whose output you'll throw away - no bundle needed.
 - Adding to an existing bundle - just `cd` into the bundle and add files.
-- Benchmark families whose runbooks define their own bundle layout and naming conventions - follow those; this skill is the generic scaffolder.
+- Benchmark families whose runbooks define their own bundle layout and naming conventions - follow those. This skill is the generic scaffolder.
 
 ## Example prompts
 
@@ -126,7 +126,7 @@ Fast and autonomous (3-5 seconds). Single optional pause: confirm the family + r
 bundle = ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/<family>/<run-id>/
 ```
 
-If the bundle already exists, **stop**. Bundles are immutable; new captures use a new run-id.
+If the bundle already exists, **stop**. Bundles are immutable. New captures use a new run-id.
 
 ### Phase 1: gather provenance
 
@@ -180,19 +180,19 @@ Write ${bundle}/SOURCE.md with:
 
   The run-id IS the experiment-id: the single join key across this bundle, the
   cluster objects, and the perf-lake. (Matches the `mcp__profile_and_optimize__evidence_init`
-  scaffold; keep these as structured `- key: value` lines so `publish_to_lake` /
+  scaffold. Keep these as structured `- key: value` lines so `publish_to_lake` /
   `experiments_index` can read them.)
 
   - experiment_id: <run-id>
   - family: <e.g. nvfp4-kv | warp-decode | deepep | (blank)>
   - object label (EVERY cluster object, on metadata AND pod template): `experiment=<run-id>`
-  - cluster resources created (fill in as you create them; every
+  - cluster resources created (fill in as you create them. Every
     Deployment/Pod/Job/PVC/PV/Secret/ConfigMap/Service, experiment-unique-named,
     NEVER a standing/migration name):
     -
   - perf-lake campaign: `campaign=<run-id>` (run `perftunereport campaign_init
     --experiment-id <run-id> --family <family> --evidence-bundle <this-bundle>` so
-    campaign_id == experiment_id; the `s3://perf-lake/...` atlas_v1 + campaign_v1
+    campaign_id == experiment_id. The `s3://perf-lake/...` atlas_v1 + campaign_v1
     paths are auto-appended here by `publish_to_lake`).
   - pre-apply label gate: verify every manifest carries `experiment=<run-id>`
     before `kubectl apply`.
@@ -237,10 +237,10 @@ Write ${bundle}/commands/README.md with:
   is preserved in `ls`. Use a helper to capture all four atomically, e.g.:
 
       run() {
-        local n="$1"; shift
-        local slug="$1"; shift
+        local n="$1". Shift
+        local slug="$1". Shift
         local prefix="$(printf '%02d-%s' "${n}" "${slug}")"
-        printf '%s ' "$@" > "${prefix}.cmd"; echo >> "${prefix}.cmd"
+        printf '%s ' "$@" > "${prefix}.cmd". Echo >> "${prefix}.cmd"
         "$@" > "${prefix}.stdout" 2> "${prefix}.stderr"
         echo $? > "${prefix}.exit"
       }
@@ -270,7 +270,7 @@ ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/<family>/<run-id>/
 
 ## Safety
 
-- **Never overwrite an existing bundle.** Bundles are immutable; the skill refuses to init over a populated directory.
+- **Never overwrite an existing bundle.** Bundles are immutable. The skill refuses to init over a populated directory.
 - **Audit trail.** `SOURCE.md` records the operator's `${USER}` + hostname so future readers know who captured the evidence, where, and from what prompt.
 - **No automatic commit.** The skill creates the directory + scaffold files but does NOT run `git add` / `git commit`. The operator does that after the experiment is captured.
 

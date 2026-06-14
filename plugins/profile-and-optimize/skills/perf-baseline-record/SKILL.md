@@ -35,7 +35,7 @@ Pairs with [`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-base
 
 ### Inference-perf use
 
-For inference perf measurements specifically (TTFT / ITL / throughput / tok-per-user / prefix-cache-hit-rate captured by [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)), prefer the [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) skill. It wraps this verb with the canonical `inference_perfbench_v1` schema, parses the upstream perf-bench bundle automatically, and supplies per-metric tolerances tuned for inference workloads (TTFT 5%, throughput 3%, cache-hit-rate 2 absolute pts). No new MCP verb is added; the bridge is a thin frontmatter-fluent wrapper around `perf_baseline_record` + `perf_baseline_diff`.
+For inference perf measurements specifically (TTFT / ITL / throughput / tok-per-user / prefix-cache-hit-rate captured by [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)), prefer the [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) skill. It wraps this verb with the canonical `inference_perfbench_v1` schema, parses the upstream perf-bench bundle automatically, and supplies per-metric tolerances tuned for inference workloads (TTFT 5%, throughput 3%, cache-hit-rate 2 absolute pts). No new MCP verb is added. The bridge is a thin frontmatter-fluent wrapper around `perf_baseline_record` + `perf_baseline_diff`.
 
 > This skill is backed by a native MCP verb: `mcp__profile_and_optimize__perf_baseline_record`. The verb does the registry write atomically (provenance + source snapshot + INDEX.md update in one shot). The Bash-tool path documented below remains supported as a fallback for environments without the MCP server.
 
@@ -45,7 +45,7 @@ A single perf measurement is a number with no shoulder. A registered baseline ca
 
 - **Provenance**: who recorded it, on what cluster, on what cohort, with what git SHA, with what capture command.
 - **Raw payload hash**: `sha256sum` of the source data the measurement was derived from. Lets `perf-baseline-diff` confirm that two measurements were derived from the same shape of input.
-- **Versioning**: every registration is a timestamped immutable directory; nothing is ever overwritten. Going back N versions is `ls` + `cat`.
+- **Versioning**: every registration is a timestamped immutable directory. Nothing is ever overwritten. Going back N versions is `ls` + `cat`.
 - **Schema check**: the measurement shape (units, dimensions, ranges) is validated against an operator-supplied JSON schema. Diffing apples-to-oranges fails fast.
 
 ## When to use
@@ -93,7 +93,7 @@ Resolve and report:
 - **Measurement name** (`<measurement>` becomes the per-measurement subdirectory).
 - **Value / source** (scalar OR structured).
 - **Units** (free-text, operator-supplied).
-- **Schema** (optional; if provided, validate the source).
+- **Schema** (optional. If provided, validate the source).
 - **Registry path**: `${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/perf-baselines/<family>/<measurement>/<UTC-timestamp>/`.
 
 Ask: "Register?" One confirmation.
@@ -168,7 +168,7 @@ Append a row to the index (one line per registered baseline). Index becomes the 
 Print the registry path. Recommend:
 
 - "Diff a future measurement against this baseline" -> [`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-baseline-diff/SKILL.md) `--baseline <registry-path>`.
-- "Make this the documented run-of-record" -> cite the registry path in your project docs; the `INDEX.md` row is the canonical history.
+- "Make this the documented run-of-record" -> cite the registry path in your project docs. The `INDEX.md` row is the canonical history.
 
 ## Registry layout
 
@@ -190,7 +190,7 @@ ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/perf-baselines/
 - **Never overwrite.** Every registration is a new timestamped directory. The registry is append-only by construction.
 - **Schema validation fails fast.** If the source doesn't match the schema, the registry write does not happen. No corrupt baselines.
 - **Provenance is mandatory.** A baseline without a `source_sha256` + `profile_and_optimize_sha` + `registered_at_utc` is rejected by the writer.
-- **Attribution is audit-only.** `baseline.json` captures the operator's `${USER}` for the audit trail; it is never asserted as a "lead" / "owner" claim.
+- **Attribution is audit-only.** `baseline.json` captures the operator's `${USER}` for the audit trail. It is never asserted as a "lead" / "owner" claim.
 
 ## Full-context reporting (no bare numbers)
 
@@ -202,7 +202,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -224,11 +224,11 @@ SoL deltas against an immutable reference). Schema fragment:
 
 - `sol_ceiling_key` is the YAML path used to source the peak (e.g.
   `b200_sm100.nvlink5_tbps`, `gb300_nvl72.nvfp4_dense_pflops`) - sourced
-  from `configs/sol-ceilings.yaml`; never inline.
+  from `configs/sol-ceilings.yaml`. Never inline.
 - `sol_ceiling_value` is the value snapshotted at record time so future
   diffs are stable even if the YAML's peak number is later updated.
 - `sol_pct` is computed at record time = `measurement_value /
-  sol_ceiling_value * 100` for bandwidth measurements; for compute
+  sol_ceiling_value * 100` for bandwidth measurements. For compute
   measurements use the analogous TFLOPS / peak_TFLOPS ratio.
 
 Baselines for measurements that are not roofline-bound (eval scores,
@@ -243,7 +243,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

@@ -7,7 +7,7 @@ description: >-
   EXHAUSTED: every external lever varied (grid, pipeline depth, layout, dtype),
   the result deterministic + lever-independent, yet the structure reads correct.
   Two tracks: (A) an in-kernel operand + accumulator trace
-  (`if constexpr`-gated to survive megakernel pipelining); (B) a standalone
+  (`if constexpr`-gated to survive megakernel pipelining), (B) a standalone
   reproducer .cu instantiating the EXACT kernel template + TMA descriptors with
   controlled inputs (all-ones then real-dump) vs a host GEMM. Localizes the
   defect to operand-load vs MMA vs epilogue vs descriptor. Escalation tier above
@@ -40,9 +40,9 @@ statically). White-box engineering goes further: it instruments or re-runs the k
 INTERNAL data path with controlled inputs. (The same **isolated single-op harness** pattern --
 call the production library op directly, TP=1, no engine-side imports, synthetic fixed-shape
 inputs -- is also the canonical L4 ncu path when in-engine app-replay is non-deterministic on a
-TP=N MoE+sparse model; see the ncu capture-hygiene section of the ncu-profile skill.) It is a **standing, first-class option** --
+TP=N MoE+sparse model. See the ncu capture-hygiene section of the ncu-profile skill.) It is a **standing, first-class option** --
 reach for it whenever a K3-K4 kernel is numerically wrong and the mechanism is invisible
-from outside; it is not a last resort. Canon: `docs/METHODOLOGY.md`.
+from outside. It is not a last resort. Canon: `docs/METHODOLOGY.md`.
 
 ## When to use
 
@@ -77,13 +77,13 @@ accumulator, then compare to a host/torch hand-compute on the SAME inputs.
    - **batch/N padding** -- when `BATCH < MMA_N` the TMA box is clamped, so the padding
      rows (`N >= BATCH`) are stale/zero and an all-elements absmax is confounded. Gate to
      real rows (`N < BATCH`) or print the values to see the real-vs-padding split.
-   - **layer/config** -- an all-invocation absmax mixes layers; late-layer
+   - **layer/config** -- an all-invocation absmax mixes layers. Late-layer
      massive-activation inputs are legitimately larger. Pin the layer or use a controlled
      input before calling the operand "over".
-   - **cross-op flags** -- a runtime flag set by op X and read by op Y dies to pipelining;
+   - **cross-op flags** -- a runtime flag set by op X and read by op Y dies to pipelining,
      use the compile-time `if constexpr` keyed on the instantiation.
-3. **Verdict logic:** operands correct + accumulator ~Nx => the MMA/compute over-counts;
-   operand ~Nx (after de-confounding) => operand-load/TMA bug; accumulator correct =>
+3. **Verdict logic:** operands correct + accumulator ~Nx => the MMA/compute over-counts,
+   operand ~Nx (after de-confounding) => operand-load/TMA bug. Accumulator correct =>
    downstream (epilogue/store).
 
 ## Recipe B -- standalone reproducer
@@ -96,22 +96,22 @@ input) and definitively localizes scale-vs-layout-vs-stride.
 1. **Copy the instantiation + descriptors VERBATIM from the codegen site** (e.g.
    `task_register.cc`'s `register_*_task` `code.e(...)` block) -- the template params, the
    `tma_2d<...>` types (gmem/smem shape, strides, swizzle bits), the bias tensor. Do not
-   re-derive them; transcribe them.
+   re-derive them. Transcribe them.
 2. **Controlled inputs, analytic check first.** all-ones weight + input => a GEMM output
-   MUST equal `K` everywhere; if the kernel gives `~Nx*K`, the compute over-counts. Then
+   MUST equal `K` everywhere. If the kernel gives `~Nx*K`, the compute over-counts. Then
    feed the real dumped input + checkpoint weight and diff vs a host GEMM (`relL2`,
    `kernel/ref_ratio`).
 3. **Build with the SAME flags the production JIT uses** -- read them off a real compile
    line (the JIT log): include paths (`-I<tree>/include -I<tree>/include/<pkg> -I.../deps/
    cutlass/include ...`), arch (`-gencode=arch=compute_103a,code=sm_103a` for GB300),
    `-std=c++20`, the project `-D` defines. Produce an EXECUTABLE (drop `-shared` /
-   nvshmem-runtime; the task impl is self-contained), launch one CTA (the m_tile loop
+   nvshmem-runtime. The task impl is self-contained), launch one CTA (the m_tile loop
    covers all output tiles), set the dynamic smem `cudaFuncSetAttribute` above
    `sizeof(SharedStorage)`.
 4. **Runtime-hang caveat (heavier build).** A structurally-valid harness can still HANG
    (100% GPU spin) because the bare 1-CTA launch does not perfectly reproduce the
    production smem/barrier/scheduler context (a TMA-descriptor or named-barrier deadlock).
-   Resolve with `cuda-gdb` on the spin (`thread apply all bt`); commit the `.cu` + build
+   Resolve with `cuda-gdb` on the spin (`thread apply all bt`). Commit the `.cu` + build
    script regardless -- they are reusable once the context is reproduced.
 
 ## Reconcile + verify
@@ -119,7 +119,7 @@ input) and definitively localizes scale-vs-layout-vs-stride.
 Reconcile Track A + Track B -> name the exact stage/line -> apply the minimal fix ->
 verify against the reference trajectory (the golden numeric the kernel must match). A
 white-box localization is a **VERDICT** only when a controlled-input reproducer (or an
-unconfounded in-kernel trace) isolates it; a padding/layer-confounded absmax is a
+unconfounded in-kernel trace) isolates it. A padding/layer-confounded absmax is a
 **DRAFT** -- walk it back per DRAFT-vs-VERDICT (that confound is exactly how an
 over-confident "the input is Nx" / "the router is also over" claim sneaks in).
 
@@ -154,7 +154,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -177,9 +177,9 @@ confirmed the weights load correctly (absmax 1.30) and the real input rows load
 faithfully -- an all-layer input absmax of 11-15 was late-layer massive activations (the
 padding/layer confound, walked back) -- pointing at the MMA itself. Track B (a standalone
 reproducer with the exact instantiation + TMA descriptors, all-ones input, sm_103a build)
-first hit the runtime-hang friction; the hang was the `BATCH=8 < MMA_N=16` clamped-box
+first hit the runtime-hang friction. The hang was the `BATCH=8 < MMA_N=16` clamped-box
 path. At `BATCH=16` the reproducer ran clean and the GEMM was **numerically correct**
-(all-ones -> out==K=6144, ratio 1.000; non-uniform -> relL2 0.00182 vs a host GEMM): the
+(all-ones -> out==K=6144, ratio 1.000. Non-uniform -> relL2 0.00182 vs a host GEMM): the
 over-amplification was REFUTED. The "~10x" was the `BATCH<MMA_N` padding confound (stale
 smem rows read by an all-rows absmax) -- the exact DRAFT-vs-VERDICT lesson this skill
 encodes: a VERDICT needs the controlled-input reproducer, not an in-kernel absmax.

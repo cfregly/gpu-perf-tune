@@ -3,7 +3,7 @@ Audience: operators who need direct commands now that the Makefile is intentiona
 
 # Operator Commands
 
-The Makefile keeps a deliberately small target surface; run `make help` at the
+The Makefile keeps a deliberately small target surface. Run `make help` at the
 repo root for the current list. Use the direct commands below for operator
 workflows that are not Make targets.
 
@@ -20,6 +20,6 @@ Every contract-bearing library is also invokable as `python -m <library>`
 (for example `python -m contention snapshot --json` or
 `python -m evidence --help`). The full verb matrix, safety classes, and
 required/optional flags live in
-[`docs/cli-contract.md`](/plugins/profile-and-optimize/server/docs/cli-contract.md);
+[`docs/cli-contract.md`](/plugins/profile-and-optimize/server/docs/cli-contract.md),
 the MCP server derives its tool surface from the same parsers, so a verb
 documented there is callable both from the shell and as an MCP tool.

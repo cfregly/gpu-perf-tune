@@ -55,11 +55,11 @@ launchers) and only parameterizes the per-target inputs.
 
 Do **not** use this skill for:
 
-- `deepseek_mtp` / `ngram` -- there is nothing to train (MTP is a built-in head;
+- `deepseek_mtp` / `ngram` -- there is nothing to train (MTP is a built-in head,
   ngram is prompt-driven). Just set `--speculative-config` and validate
   acceptance (Phase 7 of the orchestrator / the validation half here).
 - Consuming a pre-trained public draft (e.g. `lightseekorg/kimi-k2.6-eagle3`) --
-  pull it and serve it; no training needed.
+  pull it and serve it. No training needed.
 - The acceptance A/B alone on an already-trained head -- you can run just the
   validation phase below.
 
@@ -78,7 +78,7 @@ The skill **fails closed** if any of these are not satisfied.
    staged on a shared FS / PVC the Slurm trainer can read.
 2. The SpecForge trainer container built for the target arch -- a new arch may
    need a newer SGLang/transformers (a target arch class missing from the
-   trainer's SGLang is a kill-gate; reconcile versions before any GPU spend).
+   trainer's SGLang is a kill-gate. Reconcile versions before any GPU spend).
 3. The target `config.json` (for `num_hidden_layers` -> aux layers, and to
    confirm the arch is supported by the trainer's SGLang).
 4. Free GPU nodes: plain K8s (e.g. GB300) via `kubectl` GPU requests, or
@@ -132,9 +132,9 @@ written for the full dataset.
 ### Phase 3: train the draft head (submit-and-queue)
 
 Submit the train sbatch (`train_eagle3.py` or `train_dflash.py`). This is the
-multi-hour job; submit it as a self-driving Slurm job and do NOT babysit (it
+multi-hour job. Submit it as a self-driving Slurm job and do NOT babysit (it
 re-queues through preemption). Gate: training `acc_0` / loss is non-degenerate
-(a healthy run lands `acc_0` around ~0.6-0.7; a head stuck near zero acceptance
+(a healthy run lands `acc_0` around ~0.6-0.7. A head stuck near zero acceptance
 is a train/serve mismatch to debug, not a result to ship).
 
 ### Phase 4: convert to a vLLM-loadable draft
@@ -162,7 +162,7 @@ report why.
 
 ### Teardown
 
-Cancel any running Slurm jobs you own; tear down the canary deploy by label
+Cancel any running Slurm jobs you own. Tear down the canary deploy by label
 (`kubectl delete deploy,pod -l experiment=<id-slug>`). Keep the trained draft
 artifact on the PVC until the parent run promotes or discards it.
 
@@ -172,7 +172,7 @@ artifact on the PVC until the parent run promotes or discards it.
 | --- | --- | --- |
 | `TARGET_MODEL_PATH=/mnt/data/models/GLM-5.1-FP8` | `--target-model-path` | operator input (base, not NVFP4) |
 | `--aux-hidden-states-layers 1,38,74` | `AUX_LAYERS` | `[1, L//2-1, L-4]` from `config.json` `num_hidden_layers` |
-| `--chat-template glm5p1` | `--chat-template` | target family; add to SpecForge `template.py` if absent |
+| `--chat-template glm5p1` | `--chat-template` | target family. Add to SpecForge `template.py` if absent |
 | `configs/glm5p1-eagle3.json` | `spec-decode/configs/<slug>-eagle3.json` | rendered from target `config.json` (hidden_size/vocab/layers) |
 | EAGLE3 only | `--method eagle3 | dflash` | operator input |
 | `TP_SIZE=8` (single B200 node) | `--tp-size` / `--num-gpus` | from the target's fit math |
@@ -188,15 +188,15 @@ latency alone.
 
 ## Safety
 
-- **Never preempt serving** -- training uses idle Slurm nodes only; submit-and-
+- **Never preempt serving** -- training uses idle Slurm nodes only. Submit-and-
   queue with a self-driving Job, do not babysit or drain a serving node. A
   drained quiet window is for bench windows only, never for training.
 - **Standing config stays until a measured win** -- the standing
   `--speculative-config` (e.g. MTP K=3) is not changed until the Phase-5 A/B
   shows a real acceptance + TPOT win under cudagraph.
 - **Experiment isolation** -- the canary deploy + any draft-staging objects are
-  experiment-prefixed + `experiment=<id-slug>` labeled; teardown by label.
-- **Local fork only** -- keep any SpecForge changes on a local fork; no upstream
+  experiment-prefixed + `experiment=<id-slug>` labeled. Teardown by label.
+- **Local fork only** -- keep any SpecForge changes on a local fork. No upstream
   PR / external outreach without explicit per-turn operator approval.
 
 ## Source-of-truth references
@@ -223,7 +223,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -242,7 +242,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

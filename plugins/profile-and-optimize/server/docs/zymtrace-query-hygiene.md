@@ -5,7 +5,7 @@ comes back empty. Cited by the zymtrace skills (`zymtrace-anchored-query`,
 `analyze-zymtrace-workload`), the per-kernel importer
 (`tools/perf_tune_report/importers/zymtrace_kernels.py`), and the skill `_template`.
 The capture-side mechanism (a poll-until-rows loop) lives in
-`scripts/zymtrace-ingest-wait.sh`; the policy
+`scripts/zymtrace-ingest-wait.sh`. The policy
 canon is `docs/METHODOLOGY.md` "Zymtrace data is not instantaneous
 (ClickHouse ingest lag)".
 
@@ -22,7 +22,7 @@ queryable *yet*.
 
 This is the sibling of the nsys "empty != blind spot" gate
 (`docs/METHODOLOGY.md`): there an empty `cuda_gpu_kern_sum`
-is a capture-hygiene bug; here an empty query is **ingest lag**, and the fix is
+is a capture-hygiene bug. Here an empty query is **ingest lag**, and the fix is
 to wait for the flush and requery for the freshest data - NOT to declare a gap.
 
 ## The three things an empty result can mean (rank them in this order)
@@ -57,18 +57,18 @@ done
 - The canonical implementation is `zym_wait_for_rows` in
   `scripts/zymtrace-ingest-wait.sh` (sourced by
   `capture-sol-window.sh`). Tune with `ZYM_INGEST_WAIT_SEC`,
-  `ZYM_INGEST_MAX_ATTEMPTS`, `ZYM_INGEST_BACKOFF`; set `ZYM_INGEST_DISABLE=1`
+  `ZYM_INGEST_MAX_ATTEMPTS`, `ZYM_INGEST_BACKOFF`. Set `ZYM_INGEST_DISABLE=1`
   when backfilling an old, already-flushed window from retained telemetry.
 - For self-driving capture pods, **hold the pod ~60s past the bench before exit**
   so the implant flushes before the pod (and its frames) go away
   (`PROFILING-RUNBOOK.md`).
 - The wait is **advisory**: it delays until data is present or the poll is
-  exhausted; it does not fabricate data. After the poll, the existing empty-output
+  exhausted. It does not fabricate data. After the poll, the existing empty-output
   check is what decides a real gap - now legitimately, because you waited.
 
 ## For the importer (consumes already-captured TSVs)
 
-`zymtrace_kernels.py` reads a static `<bundle>/zymtrace/*.tsv` snapshot; it cannot
+`zymtrace_kernels.py` reads a static `<bundle>/zymtrace/*.tsv` snapshot. It cannot
 requery ClickHouse. It therefore stays **fail-fast** (a header-only / empty TSV is
 a loud `ZymtraceTSVMalformed` / `ZymtraceTSVMissing`, never a silent pass) but its
 error message names ingest lag as a likely cause and points back here: the fix is

@@ -4,11 +4,11 @@ last_validated: 2026-05-24
 description: >-
   Reusable wrapper for the knowledge-base-first SQL pattern,
   adapted to the zymtrace ClickHouse profiling backend. Operator names the
-  metric / question / time range; skill anchors the `zymtrace_profiling.events`
+  metric / question / time range. Skill anchors the `zymtrace_profiling.events`
   schema first (DESCRIBE + label-value + cardinality probes), derives the
   safe narrow SQL, runs it via `kubectl port-forward` + `curl -X POST`, and
   saves the raw payload to a provenance-bearing bundle per the
-  perf-lake-contract. Workload-agnostic; the ClickHouse cousin of
+  perf-lake-contract. Workload-agnostic. The ClickHouse cousin of
   `prometheus-anchored-query`. Triggers on "zymtrace anchored query",
   "clickhouse anchored query", "zymtrace query", "save zymtrace payload",
   "anchored zymtrace", "anchored clickhouse", or any combination of
@@ -39,16 +39,16 @@ operator effort.
 
 This skill exists because the `zymtrace_profiling.events` table on a
 busy cluster holds tens of millions of rows per day across every
-profiler-enabled namespace; an SQL query that forgets to bound
+profiler-enabled namespace. An SQL query that forgets to bound
 `timestamp` or `pod_name LIKE '...'` returns a full-table scan that
 overloads ClickHouse and starves real-time ingest. The anchor-then-query
-pattern works for arbitrary profiling questions; this skill makes it
+pattern works for arbitrary profiling questions. This skill makes it
 agent-routable.
 
 [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md) is
 the Prometheus version of the same pattern. Use this
 when the question targets profiling data (CPU on-cpu samples, GPU cuda
-kernel samples, stack-traces, function-resolution lookups); use the
+kernel samples, stack-traces, function-resolution lookups). Use the
 Prometheus skill when the question targets time-series cluster metrics.
 
 ## When to use
@@ -71,7 +71,7 @@ Do **not** use this skill for:
 - Already-vetted profile queries - just run the SQL directly via
   `curl -X POST 'http://localhost:9123/' --data-binary @<query.sql>`.
 - Live UI exploration - the zymtrace web UI has its own
-  flamegraph/timeline views; this skill is for headless reproducible
+  flamegraph/timeline views. This skill is for headless reproducible
   queries.
 - Cross-tenant queries - every example here scopes to a single
   `pod_name LIKE` pattern. Cross-tenant exploration belongs to the
@@ -198,7 +198,7 @@ Per the fail-fast rationale in
 running the top-N on an empty result would look like "no signal" when it is really
 either ingest lag (requery) or a wrong selector (fix it) - never silently proceed.
 
-If `rows > 10_000_000`: refuse. The selector is too broad; narrow the
+If `rows > 10_000_000`: refuse. The selector is too broad. Narrow the
 time window or `pod_name` pattern.
 
 ### Phase 2: emit the SQL
@@ -309,7 +309,7 @@ defect - it cannot set a default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound - e.g. accuracy/acceptance - omit `%SoL` but keep the rest of the descriptor.)
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -323,7 +323,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -333,7 +333,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 - **Empty != no data (ClickHouse ingest lag).** A `rows = 0` on a freshly-run
   pod/window is often ingest lag, not absence - zymtrace flushes to ClickHouse
   asynchronously. **Wait for the flush and re-probe** (`ZYM_INGEST_WAIT_SEC` /
-  `ZYM_INGEST_MAX_ATTEMPTS`) before concluding; only a persistent 0 past the flush
+  `ZYM_INGEST_MAX_ATTEMPTS`) before concluding. Only a persistent 0 past the flush
   is a wrong selector / real gap. See
   [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).
 - **Schema-anchor first is mandatory.** Phase 1 cannot be skipped. The
@@ -344,7 +344,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 - **No full-table scans.** If the cardinality probe reports >10M rows
   scanned, the skill refuses to run the top-N. Operator narrows the
   selector and retries.
-- **LIMIT 25 default.** The default top-N is 25 rows; operator can
+- **LIMIT 25 default.** The default top-N is 25 rows. Operator can
   override to as many as 100. Anything larger is refused - the bundle
   is for human-readable summary, not bulk export.
 - **Raw payload preservation.** Per
@@ -352,24 +352,24 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
   every saved query records the SQL, the schema anchor, the time
   range, the response time, and the cluster context.
 - **Read-only.** The skill only runs `SELECT` / `DESCRIBE` / `SHOW`
-  statements; never `INSERT` / `ALTER` / `DROP` / `TRUNCATE`. The
+  statements. Never `INSERT` / `ALTER` / `DROP` / `TRUNCATE`. The
   ClickHouse credential the port-forward uses
   (`${CH_USER}:${CH_PASSWORD}`) is the default in-cluster read/write
   account, but this skill self-restricts to read-only via its
   query-construction logic - operator-supplied SQL that contains any
   non-`SELECT` verb is refused before the curl.
 - **Port-forward hygiene.** The `nohup kubectl port-forward` is left
-  running in `/tmp/zt-ch-pf.log`. Cleanup is operator-driven; the
+  running in `/tmp/zt-ch-pf.log`. Cleanup is operator-driven. The
   skill does not kill the port-forward on exit (subsequent queries
   re-use it).
 - **No credentials in conversation.** The curl lines read `CH_USER` /
-  `CH_PASSWORD` from the environment; nothing is hard-coded here.
+  `CH_PASSWORD` from the environment. Nothing is hard-coded here.
   Never paste a real production password into the conversation or any
   saved bundle.
 
 ## Source-of-truth references
 
 - [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md) - the Prometheus cousin of this skill.
-- [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) - primary consumer; derives `kernel_class_gpu_pct` + `cpu_spinpoll_pct` from this skill's output.
-- [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md) - the zymtrace MCP analytical workflow (different layer; pattern-recognition over the same data).
+- [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) - primary consumer. Derives `kernel_class_gpu_pct` + `cpu_spinpoll_pct` from this skill's output.
+- [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md) - the zymtrace MCP analytical workflow (different layer. Pattern-recognition over the same data).
 - Bundled server [`AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - fail-fast + provenance rules.

@@ -6,13 +6,13 @@ Audience: maintainers keeping MCP tool inputs and outputs reviewable.
 
 The `profile_and_optimize` MCP server exposes 51 contract-derived MCP tools across
 8 libraries (inherited from the original cluster-performance seed:
-contention, ai_tuning, profile; 8 profile-and-optimize-native: perf_baseline,
+contention, ai_tuning, profile, 8 profile-and-optimize-native: perf_baseline,
 evidence, slurm, experiments, findings, k8s_launch, perf_tune_report,
 known_good_config), plus 2 auxiliary MCP-only tools (`search_runbooks` and
 `search_evidence`) for **53 MCP tools total**. The canonical counts live in
 [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `_TOTAL_*` constants
 (`_TOTAL_CONTRACT_TOOLS`, `_TOTAL_AUX_TOOLS`, `_TOTAL_MCP_TOOLS`,
-`_TOTAL_LIBRARIES`); the source of truth for the 51 contract-derived
+`_TOTAL_LIBRARIES`). The source of truth for the 51 contract-derived
 tools is [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `derive_tool_specs()`,
 which introspects the live parsers and derives one MCP tool per CLI
 verb. The auxiliary tools are registered directly in
@@ -25,7 +25,7 @@ Each `profile_and_optimize` tool accepts one optional `params` object.
 Supported `params` fields:
 
 - `args`: CLI arguments forwarded to the underlying verb. Pass a list of
-  strings; a single string is normalized to a one-item list.
+  strings. A single string is normalized to a one-item list.
 - `allow_nonzero`: when `true`, return a non-zero command result instead of
   raising a runtime error. Default behavior is fail-fast.
 - `i_understand_this_*`: explicit acknowledgement fields for mutating tools.
@@ -54,13 +54,13 @@ Every wrapped CLI response uses this envelope:
 - `safety`: one of `read_only`, `writes_artifacts`, `submits_jobs`,
   `pulls_data`, or `substitutes_nodes`. The `substitutes_nodes` class
   covers verbs that mutate Slurm cluster state without submitting new
-  jobs; today that is `slurm drain`, `slurm resume`, and
+  jobs. Today that is `slurm drain`, `slurm resume`, and
   `slurm quiet_window`.
 - `ack_required`: whether the verb has a CLI ack flag.
 - `ack_field`: MCP parameter that forwards the CLI ack flag.
 - `args`: exact forwarded argument list after ack / `--json` normalization.
 - `returncode`, `stdout`, `stderr`: raw subprocess result.
-- `json`: parsed stdout when the CLI emits JSON; `null` otherwise.
+- `json`: parsed stdout when the CLI emits JSON, `null` otherwise.
 
 Example response skeleton:
 

@@ -10,7 +10,7 @@ description: >-
   A/B (vLLM AND SGLang arms) -> quantize -> validate -> spec-decode
   train+validate -> bench the multi-workload suite -> champion_select (baseline
   vs top-X, the obvious production pick) -> publish_to_lake. Pauses at every red
-  gate; every number defaults to DRAFT (a champion VERDICT needs the
+  gate. Every number defaults to DRAFT (a champion VERDICT needs the
   multi-workload + accuracy gates + L3 byte-grounding). Triggers on "optimize a
   new model", "bring up a model end-to-end", "model bring-up pipeline", "find the
   best perf for <model>", "run the full optimization pipeline", or any
@@ -58,12 +58,12 @@ publish loop without hand-stitching seven skills together.
 
 The orchestrator owns three things the individual skills do not:
 
-1. **Phase sequencing + gates** -- each phase has an explicit go/no-go; a red
+1. **Phase sequencing + gates** -- each phase has an explicit go/no-go. A red
    pauses the pipeline and reports, never auto-advances.
 2. **One experiment-id end to end** -- the run-id is the join key across the
    harness bundle, every cluster object's `experiment=<id-slug>` label, and the
    perf-lake `campaign=<id>` rows.
-3. **Discipline enforcement** -- every number defaults to **DRAFT**; the run
+3. **Discipline enforcement** -- every number defaults to **DRAFT**. The run
    always publishes to the perf-lake with a recorded `focus` + `sol_rigor`.
 
 ## When to use
@@ -103,13 +103,13 @@ The skill **fails closed** if any of these are not satisfied.
 3. Live cluster access + the right **cluster profile** (`scaffold-model-bringup.sh
    --cluster-profile`): **`k8s`** = plain Kubernetes (GB300:
    `default-scheduler`, k8s `nvidia.com/gpu` authoritative, NO storageclass
-   -> emptyDir + hf-pull, artifacts -> S3); **`slurm`** = Slurm-on-K8s (legacy
+   -> emptyDir + hf-pull, artifacts -> S3), **`slurm`** = Slurm-on-K8s (legacy
    B200: the Slurm scheduler pod, VAST PVC). Detect: a `slurm-controller`
    + `slurm.example.com/lock` taint => `slurm`, else `k8s`.
 4. Free GPUs confirmed BEFORE any GPU phase: on **k8s** via `kubectl get nodes -l
    node.kubernetes.io/instance-type=<gpu>,cluster.example.com/state=dev` + k8s GPU
-   requests; on **slurm** via `sinfo`/`squeue`. GB300 node = 4 GPU (TP8 spans 2 nodes
-   via the NVLink domain); B200 = 8 GPU.
+   requests. On **slurm** via `sinfo`/`squeue`. GB300 node = 4 GPU (TP8 spans 2 nodes
+   via the NVLink domain). B200 = 8 GPU.
 5. For the quant + spec-decode phases: a non-NVFP4 base checkpoint (BF16 or FP8)
    is reachable on HF/S3 (those phases consume the base, not the serving NVFP4).
 
@@ -154,9 +154,9 @@ This renders the per-model harness bundle (03a PVC, 03b puller,
 03c deploy, `my-values-minimax-m27.yaml`, `profiling/`, `quantize/`,
 `spec-decode/`) and an evidence bundle at
 `experiments/artifacts/model-optimize/<run-id>/` with `SOURCE.md` +
-`summary.md`. **The run-id printed here is the experiment-id** -- record it; every
+`summary.md`. **The run-id printed here is the experiment-id** -- record it. Every
 later phase uses it as the `experiment=<id-slug>` label and the
-`campaign=<id>` key. Report the scaffolded paths; ask before deploying.
+`campaign=<id>` key. Report the scaffolded paths. Ask before deploying.
 
 ### Phase 1: deploy baseline (cluster-profile aware)
 
@@ -171,8 +171,8 @@ to pick the weight loader for this tier (decision tree + measured basis in
 rationale in the bundle `SOURCE.md`, then drive the scaffolder with it
 (`scaffold-model-bringup.sh --loader auto|hf-pull|runai`) so the rendered baseline matches.
 Rule of thumb the advisor encodes: **non-MTP tier -> RunAI streamer** (streams weights from
-object storage straight to GPU, fastest, no HF dependency / emptyDir / FUSE); **MTP tier ->
-hf-pull** (MTP-native; RunAI needs the drafter patch + double-streams).
+object storage straight to GPU, fastest, no HF dependency / emptyDir / FUSE), **MTP tier ->
+hf-pull** (MTP-native. RunAI needs the drafter patch + double-streams).
 
 **Then resolve the TP (right-size to active params, do not over-shard).** Run the TP right-size
 advisor to size tensor-parallel to the model's ACTIVE params, not its total -- a small-active MoE
@@ -183,7 +183,7 @@ on the 30B-A3B class):
 --dtype nvfp4|fp8|bf16 --current-tp <TP> --emit experiments/artifacts/model-optimize/<run-id>/`. It
 writes `tp_rightsize.json` + `TP-RIGHTSIZE.md` (recommended TP + over-provisioned flag +
 ~$/replica/month at matched throughput + `measured|extrapolated` confidence). Rule it encodes:
-**recommend the lowest TP that fits weights in memory while keeping active >= ~3B/GPU**; it flags
+**recommend the lowest TP that fits weights in memory while keeping active >= ~3B/GPU**. It flags
 OVER-PROVISIONED only when active/current_TP < 3B (so large-active tiers -- e.g. a 13B-active
 model at TP4 -- are NOT touched). `extrapolated` (total > ~40B) = verify with a same-node TP A/B
 before shipping. Record the recommended TP + rationale in `SOURCE.md` and deploy at that TP.
@@ -193,13 +193,13 @@ one exists) via the scaffolded bundle's `03a -> 03b -> 03c`.
 
 - **plain-K8s GB300 (the DEFAULT):**
   `schedulerName: default-scheduler` + `resources.requests.nvidia.com/gpu`
-  (k8s device-plugin is authoritative); preflight `kubectl get nodes -l
+  (k8s device-plugin is authoritative). Preflight `kubectl get nodes -l
   node.kubernetes.io/instance-type=<gpu>,cluster.example.com/state=dev` + k8s GPU
   requests==0. NO storageclass -> emptyDir + hf-pull. GB300 node = 4 GPU (TP8
   spans 2 nodes via the NVLink domain).
 - **legacy Slurm-on-K8s B200 (only if you detect a `slurm-controller` +
   `slurm.example.com/lock` taint):** `schedulerName:
-  <slurm-scheduler-pod>` + the lock toleration; preflight `sinfo -N -o
+  <slurm-scheduler-pod>` + the lock toleration. Preflight `sinfo -N -o
   '%N %t %G'` / `squeue`. NEVER `default-scheduler` + a hard `nodeSelector` GPU
   grab on Slurm-on-K8s (it double-books GPUs Slurm has already allocated).
 
@@ -208,7 +208,7 @@ bring-up template's `profiling/experiment-deploy-template.yaml`).
 Delivery: for a modified-vLLM arm, default to the runtime overlay ladder --
 a subPath ConfigMap, or the initContainer patch-set
 (the template's `overlay-patchset.sh`) for a whole engine patch set
-on a pullable base image; bake an image only for prod / compiled changes.
+on a pullable base image. Bake an image only for prod / compiled changes.
 Gate: pod Ready + a curl smoke + `verify-experiment-labels.sh <id-slug> --post`
 returns PASS. Record the baseline as a DRAFT perf-baseline.
 
@@ -220,7 +220,7 @@ template). Sequence:
 - [`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md) at
   c=1..8 -- is the hot path kernel-bound / host-bound / comm-bound?
 - [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md) -- GPU+CPU
-  cross-view; which kernel family dominates.
+  cross-view. Which kernel family dominates.
 - [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) (nsys) and,
   when a per-kernel which-kernel verdict is needed,
   [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) (ncu).
@@ -231,9 +231,9 @@ template). Sequence:
 
 Gate: a profile actually captured (the nsys capture-validation gate must be
 clear -- an empty rep is a capture bug, not a verdict). Capture all four where a
-where/why verdict matters; the next phase fuses them. **Capture orchestration**
-(one pod can't run all four; use a submit-and-queue self-driving Job with a
-variance-controlled bench >=3 trials/concurrency; pass `--tokenizer <local>` in an
+where/why verdict matters. The next phase fuses them. **Capture orchestration**
+(one pod can't run all four. Use a submit-and-queue self-driving Job with a
+variance-controlled bench >=3 trials/concurrency. Pass `--tokenizer <local>` in an
 offline pod) is documented in
 [`inference-perf-synthesize`](/plugins/profile-and-optimize/skills/inference-perf-synthesize/SKILL.md) "Capture
 orchestration" -- reuse the `experiments/` Job
@@ -245,17 +245,17 @@ Hand off to [`inference-perf-synthesize`](/plugins/profile-and-optimize/skills/i
 fuse the four profiler artifacts (nsys + ncu + zymtrace + DCGM) into ONE ranked,
 artifact-cited recommendation ledger (config knobs AND concrete vLLM-source
 overlays). Every row cites its backing artifact + `sol_rigor` (the explainability
-contract); every row is DRAFT (predicted) until an A/B proves it. The top-ranked
+contract). Every row is DRAFT (predicted) until an A/B proves it. The top-ranked
 levers seed Phase 3, and any `vllm-src` lever becomes an overlay A/B there.
 
 ### Phase 3: tune CROSS-ENGINE (vLLM + SGLang) via the variant A/B
 
 The tuning spine is the **engine-agnostic variant A/B** -- we no longer pick an
-engine by reputation; every candidate config (vLLM AND SGLang) is an arm proven
+engine by reputation. Every candidate config (vLLM AND SGLang) is an arm proven
 on ONE shared bench client so the numbers are comparable by construction. Hand
 off to [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md), which fills
 the rendered bundle's `variants/arms.tsv` with both
-engines' levers (one arm per lever; first row per engine = that engine's
+engines' levers (one arm per lever. First row per engine = that engine's
 baseline) and runs the same-node, >=3-trial sweep:
 
 ```text
@@ -263,7 +263,7 @@ run-variant-ab.sh readback arms-crossengine.tsv <out>   # vLLM + SGLang arms, c-
 ```
 
 - **vLLM levers:** `max_num_batched_tokens`, `kv-cache-dtype`, `cudagraph_mode`,
-  `--enable-expert-parallel`, MoE backend; plus any Phase-2.5 `vllm-src` overlay.
+  `--enable-expert-parallel`, MoE backend. Plus any Phase-2.5 `vllm-src` overlay.
 - **SGLang levers:** `--moe-runner-backend`, `--attention-backend`, cuda-graph,
   `--mem-fraction-static`, `--disable-radix-cache` (match caching across engines
   BEFORE crowning a throughput champion -- a radix-cache replay can manufacture a
@@ -272,12 +272,12 @@ run-variant-ab.sh readback arms-crossengine.tsv <out>   # vLLM + SGLang arms, c-
 Then `perftunereport import_variant_ab --bundle <out> --model <id>` (engine-tagged
 `vllm-sweep` / `sglang-sweep` cells) -> `atlas_aggregate`. For any decode-latency
 ship/no-ship claim, confirm with the same-node controlled A/B
-(`run-controlled-ab.sh`; SGLang via `BENCH_TARGET=deploy/<client> BACKEND=openai`).
+(`run-controlled-ab.sh`. SGLang via `BENCH_TARGET=deploy/<client> BACKEND=openai`).
 Gate: a champion that beats the Phase-1 baseline on the run's `focus` metric
 (throughput tok/s/GPU OR median TPOT/ITL -- never output tok/s at small
 `num_prompts` for a latency claim). Promote DRAFT -> VERDICT only same-node + >=3
 trials. The cross-engine ranking + the production pick happen in Phase 8.4
-(`champion_select`); record the per-engine top-3 here.
+(`champion_select`). Record the per-engine top-3 here.
 
 ### Phase 4: calibrate + quantize
 
@@ -287,7 +287,7 @@ calibration-dataset Job + a quantize Job (NVIDIA ModelOpt -> NVFP4 by default,
 llm-compressor -> FP8 alternate) that writes weights + per-layer KV/activation
 scales to an experiment-prefixed PVC. Gate: the quantize Job completes and the
 output `config.json` declares the expected quant method. This phase is
-**ack-gated** (it submits GPU jobs); fails closed without the ack flag.
+**ack-gated** (it submits GPU jobs). Fails closed without the ack flag.
 
 The generated `quantize/quantize.py` is driven by a **model-family registry**
 (`gemma4_text` native-plugin / `qwen3_moe` + `nemotron_h` generic) that
@@ -295,10 +295,10 @@ auto-resolves the recipe + exclude scope from `config.json` `model_type` -- matc
 the `nvidia/*-NVFP4` sibling's `hf_quant_config` excludes for an apples-to-apples
 A/B. Key gemma4/qwen3 VERDICT lessons (full detail in `inference-quantize-calibrate`
 Phase 3d/3e): fused-3D experts are the #1 hazard (a naive quantize silently skips
-them -- the registry + coverage guard handle it; modelopt natively quantizes many
-fused MoEs e.g. Qwen3 `_QuantSparseMoe`); calibrate with
-`create_forward_loop(cnn_dailymail)` + `HF_HUB_OFFLINE=0`; serve **marlin-first**
-(our exports can serve degenerate on cutlass); pad the MoE intermediate only if a
+them -- the registry + coverage guard handle it. Modelopt natively quantizes many
+fused MoEs e.g. Qwen3 `_QuantSparseMoe`). Calibrate with
+`create_forward_loop(cnn_dailymail)` + `HF_HUB_OFFLINE=0`. Serve **marlin-first**
+(our exports can serve degenerate on cutlass). Pad the MoE intermediate only if a
 backend rejects the alignment.
 
 ### Phase 5: validate the quantized weights
@@ -317,7 +317,7 @@ prompt on an `-it` model yields degenerate repetition by design and will falsely
 fail a correct checkpoint. When any gate fails, first run a known-good control
 (the BF16 base, or TP=1) on the SAME gate to attribute model-vs-gate before
 concluding the quant is broken. (Worked failure: gemma4 NVFP4 falsely read
-"garbage 0/4" on a raw-completions gate; the chat gate returned 4/4.) For
+"garbage 0/4" on a raw-completions gate. The chat gate returned 4/4.) For
 NVFP4-MoE serving blockers (activation-capability + intermediate-alignment),
 see `inference-quantize-calibrate` Phase 3c.
 
@@ -328,7 +328,7 @@ Only if `--spec-method` is a trained method (`eagle3` | `dflash`). Hand off to
 target hidden states, train the draft head on the offline dataset, convert to a
 vLLM-loadable draft. (For `deepseek_mtp` / `ngram` there is nothing to train --
 the head is built-in or prompt-driven -- skip straight to Phase 7 with the
-config lever.) This phase runs a multi-hour Slurm job; submit-and-queue, do not
+config lever.) This phase runs a multi-hour Slurm job. Submit-and-queue, do not
 babysit. Gate: training `acc_0` / loss is non-degenerate.
 
 ### Phase 7: validate the draft (acceptance A/B)
@@ -343,12 +343,12 @@ loses (trained drafts can measure ~0% acceptance) is **do-not-ship** -- keep the
 
 Run the baseline + the top-X variants through the **full workload suite**
 (`bench-all-workloads.sh`: AA + Sonnet + ShareGPT + random + code at the tier's
-concurrency -- a single-workload number is a DRAFT, not a verdict; a config can
+concurrency -- a single-workload number is a DRAFT, not a verdict. A config can
 win one workload and lose the suite), aggregate into the campaign atlas, byte-ground
 each cell (`dcgm_correlate`), and **always generate the prefill/decode roofline
 (page 7)** via `roofline-sweep.sh` + `perf_tune_report_import_roofline_sweep` (the
 "what C maxes the TFLOPs / is decode >=75% HBM / which sharding degree" answers --
-see [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md) Phase D3; sweep
+see [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md) Phase D3. Sweep
 the baseline AND every top-X variant so the champion roofline overlay has them
 all). Record which workloads ran (`<out>/workloads.txt`) for the Phase-8.4 gate.
 
@@ -369,7 +369,7 @@ their rooflines, and emits `CHAMPION.md` + `champion_select.json` + the PDF
 champion page with a **RECOMMENDED-FOR-PRODUCTION** banner. The recommendation is
 tiered: a **VERDICT** requires variance (same-node + >=3 trials), the
 multi-workload suite (`--workloads-present` covers the canonical set), the
-accuracy gate (`--accuracy-gate pass`), AND L3 byte-grounding of the champion;
+accuracy gate (`--accuracy-gate pass`), AND L3 byte-grounding of the champion,
 anything short is a **DRAFT** recommendation (the gate that failed is named in
 `CHAMPION.md`). Render the PDF + `publish_to_lake` with `focus` + `sol_rigor`:
 the champion lands in the perf-lake (`campaign_v1.recommended_cell` +
@@ -391,7 +391,7 @@ Publish the ledger into the same `campaign=<run-id>` so it lands in the perf-lak
 **This bring-up is ratcheted, NOT done** (`docs/METHODOLOGY.md` "Always be
 grinding"). Close the loop:
 
-- **The champion is the next baseline.** The won config replaces the Phase-1 baseline;
+- **The champion is the next baseline.** The won config replaces the Phase-1 baseline,
   the next grind measures against it, not the original.
 - **Record the next lever in the ledger.** Add/refresh the model's entry in the operator-side
   `configs/value-findings.yaml`
@@ -429,14 +429,14 @@ standing/migration objects must be untouched + Ready.
 | 1 deploy | bundle `03a/03b/03c` + `verify-experiment-labels.sh` | pod Ready + label PASS |
 | 2 profile | `inference-decode-step-budget`, `analyze-zymtrace-workload`, `inference-kernel-profile`, `inference-kernel-ncu-profile`, `inference-dcgm-correlate`, `inference-graph-diff` | a real profile captured |
 | 2.5 synthesize | [`inference-perf-synthesize`](/plugins/profile-and-optimize/skills/inference-perf-synthesize/SKILL.md) | ranked, artifact-cited recommendation ledger |
-| 3 tune (cross-engine) | [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md) + `run-variant-ab.sh` (vLLM + SGLang arms) -> `import_variant_ab` | per-engine top-3 beat their baselines; same-node >=3-trial |
+| 3 tune (cross-engine) | [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md) + `run-variant-ab.sh` (vLLM + SGLang arms) -> `import_variant_ab` | per-engine top-3 beat their baselines. Same-node >=3-trial |
 | 4 quantize | [`inference-quantize-calibrate`](/plugins/profile-and-optimize/skills/inference-quantize-calibrate/SKILL.md) | quantize Job complete (ack-gated) |
 | 5 validate quant | [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md) + perf A/B | accuracy within tolerance + perf win |
 | 6 spec-decode train | [`inference-spec-decode-train`](/plugins/profile-and-optimize/skills/inference-spec-decode-train/SKILL.md) | non-degenerate training |
 | 7 validate draft | bundle `spec-decode/dflash_vllm_eval.py` + spec_decode metrics | acceptance win vs standing |
-| 8 bench (multi-workload) | `bench-all-workloads.sh` (AA/Sonnet/ShareGPT/random/code) -> `dcgm_correlate` + `import_roofline_sweep` | baseline + top-X benched across the full suite; rooflines captured |
+| 8 bench (multi-workload) | `bench-all-workloads.sh` (AA/Sonnet/ShareGPT/random/code) -> `dcgm_correlate` + `import_roofline_sweep` | baseline + top-X benched across the full suite. Rooflines captured |
 | 8.4 champion select | `perftunereport champion_select` -> `report_render` -> `publish_to_lake` | baseline vs top-X champion picked + tiered (VERDICT needs multi-workload + accuracy + L3) + published |
-| 8.5 synthesize + ratchet | [`inference-perf-synthesize`](/plugins/profile-and-optimize/skills/inference-perf-synthesize/SKILL.md) + `value-findings.yaml` `next_lever` | final verdict ledger + future-work levers published; champion = next baseline; model's `next_lever` recorded (ratcheted, not done) |
+| 8.5 synthesize + ratchet | [`inference-perf-synthesize`](/plugins/profile-and-optimize/skills/inference-perf-synthesize/SKILL.md) + `value-findings.yaml` `next_lever` | final verdict ledger + future-work levers published. Champion = next baseline. Model's `next_lever` recorded (ratcheted, not done) |
 
 ## Explainable verdicts (every claim -> artifact)
 
@@ -460,7 +460,7 @@ trials, mean +/- std), metric-isolated (median TPOT/ITL for decode-latency
 claims -- NOT output tok/s at small `num_prompts`), compared to a
 production-representative baseline, and (for which-kernel claims) backed by
 nsys/ncu per-kernel data. The Phase-8 campaign is published with the honest
-`verdict_tier`; an unsupported `verdict` auto-downgrades to `draft` and still
+`verdict_tier`. An unsupported `verdict` auto-downgrades to `draft` and still
 lands (the honest tier is recorded). Supersede a DRAFT everywhere it propagated
 once a VERDICT overturns it.
 
@@ -468,41 +468,41 @@ once a VERDICT overturns it.
 
 - **Scheduling is cluster-profile aware** -- on a **plain-K8s GB300**
   cluster (the default): `schedulerName: default-scheduler` +
-  `resources.requests.nvidia.com/gpu` (k8s device-plugin authoritative); preflight
+  `resources.requests.nvidia.com/gpu` (k8s device-plugin authoritative). Preflight
   k8s GPU requests==0 on a dev node. On a **legacy Slurm-on-K8s** cluster (detect
   a `slurm-controller` + `slurm.example.com/lock` taint): `schedulerName:
-  <slurm-scheduler-pod>` + the lock toleration; `sinfo`/`squeue` preflight,
+  <slurm-scheduler-pod>` + the lock toleration, `sinfo`/`squeue` preflight,
   and NEVER `default-scheduler` + a hard `nodeSelector` to grab GPUs (it
   double-books GPUs Slurm has already allocated).
 - **GPU-telemetry gate before any bench (hard precondition)** --
   `capture-run-env.sh` must return `gpu_frames_gate=pass` (the zymtrace implant is
-  intercepting the pod) before a measurement bench is trusted; the gated wrappers
+  intercepting the pod) before a measurement bench is trusted. The gated wrappers
   (`bench-with-sol.sh` / `run-controlled-ab.sh` / `run-variant-ab.sh`) fail closed
   on it. Split the injection tax: headline perf injection-OFF, L1 SoL in a
   separate injection-ON window.
 - **GB300 profiling default = the NGC CUDA-13 templates** (`nsys-ngc.yaml` /
-  `nsys-sglang.yaml` / `ncu-ngc.yaml`); the in-image/apt nsys/ncu records 0
+  `nsys-sglang.yaml` / `ncu-ngc.yaml`). The in-image/apt nsys/ncu records 0
   kernels under the CUPTI image-vs-driver skew (Gate 0).
 - **Strict publish only** -- land results via the gated path
-  (`champion_select` -> `report_render` -> `publish_to_lake`, strict-by-default);
+  (`champion_select` -> `report_render` -> `publish_to_lake`, strict-by-default),
   never an ad-hoc driver. A VERDICT publish requires a clean pinned source commit
   (provenance gate).
 - **Experiment isolation is mandatory** -- experiment-prefixed names +
-  `experiment=<id-slug>` labels on every object; never touch
+  `experiment=<id-slug>` labels on every object. Never touch
   standing/platform/migration names (standing deployments, shared caches,
-  image-pull secrets, ...); teardown by label, PV last, per
+  image-pull secrets, ...). Teardown by label, PV last, per
   `docs/METHODOLOGY.md`.
 - **Ack-gated phases** -- Phase 4 (quantize) and Phase 6 (train) submit GPU
-  jobs; they fail closed without the explicit ack flag, per
+  jobs. They fail closed without the explicit ack flag, per
   [`server/docs/mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md).
 - **No silent fallbacks** -- a failed/empty profile is a capture bug to debug,
   not a verdict (the nsys capture-validation gate) -- EXCEPT the GB300
   CUDA image-vs-driver CUPTI skew (12.x toolkit vs 13.x driver ->
-  `CUPTI_ERROR_INVALID_DEVICE` -> 0 kernels for all CUPTI clients; needs a
+  `CUPTI_ERROR_INVALID_DEVICE` -> 0 kernels for all CUPTI clients. Needs a
   CUDA-13 image or zymtrace, not a re-capture). A red gate pauses the
-  pipeline; it is never skipped. (zymtrace empty-now right after a bench is
+  pipeline. It is never skipped. (zymtrace empty-now right after a bench is
   usually ClickHouse INGEST LAG, not a gap -- `capture-sol-window.sh` polls +
-  requeries for the freshest data; see
+  requeries for the freshest data. See
   [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).)
 - **No external posting** -- this skill never pushes to prod (`infr-cli`) or
   posts outside the workspace without explicit per-turn operator approval.
@@ -539,7 +539,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -558,7 +558,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -566,11 +566,11 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 ## Champion close: capture the known-good config (CONFIG half)
 
 A model bring-up is ratcheted, not done -- and a champion is not closed until its **known-good
-config** is captured (rigor principle k; `docs/METHODOLOGY.md` "the performance ratchet ->
+config** is captured (rigor principle k, `docs/METHODOLOGY.md` "the performance ratchet ->
 CONFIG half"). At Phase 8.4 (`champion_select`), also **`known_good_config record`** the model's
 REQUIRED serve flags (boot-blocker / crash-at-high-c / deploy-correctness workarounds it needs)
 into `configs/known-good-configs.yaml`
 via the [`inference-known-good-config`](/plugins/profile-and-optimize/skills/inference-known-good-config/SKILL.md) skill. The
 champion-close gate (`verify-grind-closure.sh <bundle> --model <m>`)
-fails closed unless BOTH the next lever (grind-ledger) AND a registered known-good config are present;
+fails closed unless BOTH the next lever (grind-ledger) AND a registered known-good config are present,
 the `~/.cursor/hooks/known-good-config-gate.sh` hook then ASKS before any deploy that drops a required flag.

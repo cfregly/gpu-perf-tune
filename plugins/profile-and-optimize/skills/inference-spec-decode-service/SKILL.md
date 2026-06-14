@@ -51,7 +51,7 @@ higher draft hit-rate), and it is promoted only on a measured acceptance + TPOT 
 
 This is the closed-loop framing of
 [`inference-model-optimize`](/plugins/profile-and-optimize/skills/inference-model-optimize/SKILL.md) Phase 6/7: that
-orchestrator trains a draft on a generic corpus one-shot; this one matches the corpus to
+orchestrator trains a draft on a generic corpus one-shot. This one matches the corpus to
 traffic and is structured to run repeatedly.
 
 **Implementation (v1 `oneshot`).** The loop is driven by `specdec-loop.sh`, which
@@ -75,10 +75,10 @@ Do **not** use this skill for:
 - A one-shot draft on a generic corpus with no workload profiling -- use
   [`inference-spec-decode-train`](/plugins/profile-and-optimize/skills/inference-spec-decode-train/SKILL.md) directly.
 - The full new-model bring-up (deploy/profile/tune/quantize/...) -- that is
-  [`inference-model-optimize`](/plugins/profile-and-optimize/skills/inference-model-optimize/SKILL.md); this skill is its
+  [`inference-model-optimize`](/plugins/profile-and-optimize/skills/inference-model-optimize/SKILL.md). This skill is its
   spec-dec sub-loop, made adaptive + repeatable.
 - `deepseek_mtp` / `ngram` / Predicted-Outputs methods -- there is nothing to train
-  (built-in head / prompt-driven / per-request reference text); set the config and run
+  (built-in head / prompt-driven / per-request reference text). Set the config and run
   only the acceptance A/B (Phase 4 below).
 
 ## Example prompts
@@ -103,7 +103,7 @@ The skill **fails closed** if any of these are not satisfied.
    AUTO-DETECTS which (Slurm-on-K8s = a Slurm control plane + the lock taint) and `--scheduler
    default|slurm` overrides. For a TRAINED method (`eagle3`/`dflash`), also `sbatch` access to the
    SpecForge Slurm trainer (C3 is Slurm-native in BOTH cases). An idle GPU node confirmed BEFORE
-   any GPU phase (Slurm-on-K8s: `pin-node.sh`-verified); training never preempts serving. (The no-train
+   any GPU phase (Slurm-on-K8s: `pin-node.sh`-verified). Training never preempts serving. (The no-train
    `deepseek_mtp`/`ngram` path needs only the serving cluster.)
 5. For a `--mode controller` run only: a writable `service-state.json` location.
 
@@ -134,7 +134,7 @@ campaign) and initialize `service-state.json`:
 `service-state.json` is the **graduation seam to a deployed controller**: it records the
 last profile hash, current champion draft, and last A/B verdict so a future controller
 Deployment can decide "has the workload drifted enough to retrain?" without re-deriving
-state. Report the scaffolded paths; ask before any GPU phase.
+state. Report the scaffolded paths. Ask before any GPU phase.
 
 ### Phase 1: profile the workload (WS-C1)
 
@@ -150,7 +150,7 @@ prediction path -- there is no draft to train.
 ### Phase 2: build the hit-rate-matched corpus (WS-C2)
 
 Run `profile-to-corpus.py` (in the `inference-workload-profile` skill dir): mode (b)
-converts a redacted traffic JSONL directly to the SpecForge `conversations` schema;
+converts a redacted traffic JSONL directly to the SpecForge `conversations` schema,
 mode (a) emits a weighted `prepare_data.py` plan matched to the content-class mix +
 length distribution. The corpus is the `DATA_PATH` for the trainer. Gate: a corpus that
 renders cleanly through the target chat template (a bad loss-mask shows up as
@@ -162,7 +162,7 @@ Hand off to [`inference-spec-decode-train`](/plugins/profile-and-optimize/skills
 with the Phase-2 corpus as `DATA_PATH`. **The capture-correctness probe
 (`--probe-logits`) MUST pass before any full re-capture/retrain** -- a broken
 hidden-state capture trains a head that serves at ~0% acceptance and wastes days
-of GPU time. Submit-and-queue on idle Slurm nodes; never babysit, never preempt serving.
+of GPU time. Submit-and-queue on idle Slurm nodes. Never babysit, never preempt serving.
 Gate: non-degenerate training `acc_0` / loss.
 
 ### Phase 4: acceptance + TPOT A/B (WS-C4, the gate that matters)
@@ -176,7 +176,7 @@ that loses is **do-not-ship**. Record `last_ab_verdict`.
 ### Phase 5: promote on a win (WS-C5) + publish
 
 On a measured win, flip the experiment-prefixed canary's `--speculative-config`
-(`specdec-presets.sh` renders the line); set `champion_draft` in service-state. On a
+(`specdec-presets.sh` renders the line). Set `champion_draft` in service-state. On a
 loss, keep the standing config and report why. Either way, publish the campaign:
 `perf_tune_report_campaign_init --experiment-id <run-id> --focus latency` ->
 `cell_run` (at the profile's `bench_shapes`) -> `atlas_aggregate` ->
@@ -189,7 +189,7 @@ Record `campaign=<id>` + `s3://perf-lake/...` in SOURCE.md/summary.md.
 long-running loop that periodically re-profiles live traffic, compares
 `last_profile_sha256` to detect drift, retrains + re-A/Bs on drift, and auto-promotes on
 a win -- plus the dynamic runtime fallback (disable spec-dec when the live
-`spec_decode_*` acceptance drops). v1 implements only `oneshot`; `controller` reuses
+`spec_decode_*` acceptance drops). v1 implements only `oneshot`, `controller` reuses
 Phases 1-5 verbatim driven by a controller Deployment reading/writing
 `service-state.json`. Implementing the Deployment + fallback engine policy is the
 separate "(b) deployed controller" track.
@@ -206,16 +206,16 @@ strawman). The Phase-5 campaign publishes with the honest `verdict_tier`.
 
 - **Scheduling (plain K8s OR Slurm-on-K8s)** -- the serving canary is rendered for whichever the loop
   detects (override with `--scheduler default|slurm`): plain K8s uses `default-scheduler` +
-  `nvidia.com/gpu`; Slurm-on-K8s uses the Slurm `schedulerName` + the `slurm.example.com/lock`
+  `nvidia.com/gpu`. Slurm-on-K8s uses the Slurm `schedulerName` + the `slurm.example.com/lock`
   toleration, same-node-pinned to a `pin-node.sh`-verified-idle node (a bare `nodeSelector` to a
   non-idle node loops on NodeAffinity under the Slurm scheduler). TRAINED-method Slurm jobs
-  (eagle3/dflash) submit-and-queue and never preempt serving; preflight an idle node first.
+  (eagle3/dflash) submit-and-queue and never preempt serving. Preflight an idle node first.
 - **Standing config stays until a measured win** -- the served `--speculative-config`
   is not changed until the Phase-4 A/B shows a real acceptance + TPOT win under cudagraph.
 - **Capture-correctness gate** -- never launch a full re-capture/retrain until the
-  `--probe-logits` probe passes; a broken capture costs days of wasted training.
+  `--probe-logits` probe passes. A broken capture costs days of wasted training.
 - **Experiment isolation** -- canary + draft-staging objects experiment-prefixed +
-  `experiment=<id-slug>`; teardown by label, PV last; never touch standing deploy names.
+  `experiment=<id-slug>`. Teardown by label, PV last. Never touch standing deploy names.
 - **Local/fork only** -- no upstream PR / external posting without explicit per-turn
   operator approval.
 
@@ -224,7 +224,7 @@ strawman). The Phase-5 campaign publishes with the honest `verdict_tier`.
 - **v1 loop components:** `specdec-loop.sh` (the loop), `specdec-decide.py` (GO/NO-GO gate),
   `canary-arm.yaml` (A/B arm), `specdec-presets.sh` (config rendering).
 - [`inference-workload-profile`](/plugins/profile-and-optimize/skills/inference-workload-profile/SKILL.md) -- Phase 1/2 (profile + corpus).
-- [`inference-spec-decode-train`](/plugins/profile-and-optimize/skills/inference-spec-decode-train/SKILL.md) -- Phase 3 (SpecForge train); its capture-correctness + serve-wiring gates are the ones this loop encodes.
+- [`inference-spec-decode-train`](/plugins/profile-and-optimize/skills/inference-spec-decode-train/SKILL.md) -- Phase 3 (SpecForge train). Its capture-correctness + serve-wiring gates are the ones this loop encodes.
 - [`inference-model-optimize`](/plugins/profile-and-optimize/skills/inference-model-optimize/SKILL.md) -- the parent orchestrator whose Phase 6/7 this loop makes adaptive + repeatable.
 - [`inference-aa-workload`](/plugins/profile-and-optimize/skills/inference-aa-workload/SKILL.md) -- the AA-shape profile source.
 
@@ -243,7 +243,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -262,7 +262,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

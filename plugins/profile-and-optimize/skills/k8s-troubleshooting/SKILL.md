@@ -9,7 +9,7 @@ description: >
   high latency, PVC issues, GPU/InfiniBand problems, workload hangs, or any cluster incident.
   Also triggers when the user pastes error messages, kubectl output, alert names, or
   incident-channel links and wants help understanding what's wrong. This skill works iteratively - it does
-  NOT dump a wall of diagnostics all at once; it pauses after each step and
+  NOT dump a wall of diagnostics all at once. It pauses after each step and
   asks the user how to proceed.
 ---
 
@@ -45,7 +45,7 @@ Never guess metric names or cluster accessibility - verify through enterprise se
 ### 2. Teleport (read-only kubectl)
 The **real-time K8s state layer** - direct kubectl, gated through an identity-aware
 proxy if your org uses one (this skill uses [Teleport](https://goteleport.com) as the
-named example throughout; any read-only kubeconfig path works the same way). Use it when:
+named example throughout. Any read-only kubeconfig path works the same way). Use it when:
 - The incident is active and the target cluster is accessible via Teleport.
 - You need Custom Resource objects, labels, annotations, or live status.
 
@@ -81,7 +81,7 @@ Typical triggers:
 Discipline:
 - Always `list_clusters` → `describe_endpoint` before `query_endpoint`, so you know the real field
   names and can filter precisely.
-- Prefer specific filters over `cluster="*ALL*"`; payloads can be large.
+- Prefer specific filters over `cluster="*ALL*"`. Payloads can be large.
 - This tool is read-only and tertiary - don't reach for it on non-storage incidents.
 
 ## Domain-Specific Supplement Skills
@@ -90,7 +90,7 @@ Some subsystems warrant their own troubleshooting skills with
 architecture, metrics, log selectors, and lessons learned that this skill
 does not duplicate. **Load the matching supplement when the incident touches
 one of these domains, and use it alongside this skill** - this skill remains
-the orchestrator (Phase 0 → 4); the supplement provides domain-specific
+the orchestrator (Phase 0 → 4). The supplement provides domain-specific
 investigation steps and recovery patterns.
 
 | Domain trigger | When to load a supplement |
@@ -114,7 +114,7 @@ Before touching any tool, ask the user two quick questions if not already clear 
 2. **Rough time window** - e.g., "started ~30 min ago and still ongoing", or "happened around
    2024-03-20 14:00 UTC, lasted ~10 minutes, resolved on its own".
 
-Why this matters: a live incident means Teleport (real-time state) is the primary tool; a
+Why this matters: a live incident means Teleport (real-time state) is the primary tool. A
 historical issue means Grafana (metrics/logs) is the primary tool, and you'll need a concrete
 time range to query. Don't assume - a user saying "my pod is crashing" might mean right now or
 might mean last Tuesday.
@@ -130,8 +130,8 @@ If the user's original message already includes a time window or says something 
 3. Based on the time context from Phase 0, check whether the cluster is accessible via Teleport
    (only relevant for active/recent incidents).
 4. Identify the specific metrics, log streams, and labels relevant to this problem.
-5. **Checkpoint:** Tell the user what you found ("This cluster is accessible via Teleport; the
-   service uses these metric labels; loading the Slurm-on-K8s supplement because this is a Slurm-on-K8s
+5. **Checkpoint:** Tell the user what you found ("This cluster is accessible via Teleport. The
+   service uses these metric labels. Loading the Slurm-on-K8s supplement because this is a Slurm-on-K8s
    tenant...") and state your plan before executing anything.
 
 ### Phase 2: Pre-Failure Logs & Events (Application Layer - highest priority)

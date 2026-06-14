@@ -1,9 +1,9 @@
 # AGENTS.md
 
 Guidance for AI coding agents working in this repository (the canonical copy).
-AGENTS.md-aware tools (Codex CLI, Gemini CLI, Cursor, ...) read it natively;
+AGENTS.md-aware tools (Codex CLI, Gemini CLI, Cursor, ...) read it natively,
 Claude Code loads it via the one-line `@AGENTS.md` import in
-[`CLAUDE.md`](CLAUDE.md); Cursor additionally pins it always-on via
+[`CLAUDE.md`](CLAUDE.md). Cursor additionally pins it always-on via
 [`.cursor/rules/coding-guidelines.mdc`](.cursor/rules/coding-guidelines.mdc).
 
 ## Behavioral guidelines
@@ -65,7 +65,7 @@ Transform tasks into verifiable goals:
 - "Refactor X" → "Ensure tests pass before and after"
 
 For multi-step tasks, state a brief plan with a verify step per item. Strong
-success criteria let you loop independently; weak criteria ("make it work")
+success criteria let you loop independently. Weak criteria ("make it work")
 require constant clarification.
 
 ## Working in this repo
@@ -75,7 +75,7 @@ require constant clarification.
   parallel).
 - Skill / tool / library counts are canonical in
   [`plugins/profile-and-optimize/server/mcp_surface.py`](plugins/profile-and-optimize/server/mcp_surface.py)
-  (`_TOTAL_*` constants); the lint gates fail any doc that names a different
+  (`_TOTAL_*` constants). The lint gates fail any doc that names a different
   number. Never hardcode a count in a doc.
 - Measurement rigor rules live in [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md)
   (DRAFT-vs-VERDICT labeling, full-context perf numbers, asset validation).

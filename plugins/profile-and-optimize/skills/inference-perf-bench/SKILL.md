@@ -2,7 +2,7 @@
 name: inference-perf-bench
 last_validated: 2026-06-07
 description: >-
-  Canonical inference perf-bench skill (formal name; the colloquial alias
+  Canonical inference perf-bench skill (formal name. The colloquial alias
   is `ai-bench` - identical behaviour). Drives NVIDIA AIPerf + the
   replay-playback dataset against an in-cluster vLLM endpoint to
   measure TTFT, ITL, throughput, tok/s/user, request latency, and prefix
@@ -28,7 +28,7 @@ allowed-tools:
 
 # inference-perf-bench
 
-> **Fast model loading (always-applied):** when standing up a vLLM deploy, never load 100s-of-GB single-stream via s3fs FUSE (a GLM-5.1-sized model takes ~50 min that way; see `docs/METHODOLOGY.md`). Prefer, in order: a fast model-loading endpoint when reachable -> parallel multipart to local NVMe (`server/tools/stage-model-parallel.py`) -> `runai_model_streamer` (`--load-format runai_streamer`) -> tensorizer. Flag a slow load loudly: if effective rate < ~500 MB/s on a large model, STOP and switch. Details: `server/docs/inference-fast-model-loading.md`.
+> **Fast model loading (always-applied):** when standing up a vLLM deploy, never load 100s-of-GB single-stream via s3fs FUSE (a GLM-5.1-sized model takes ~50 min that way. See `docs/METHODOLOGY.md`). Prefer, in order: a fast model-loading endpoint when reachable -> parallel multipart to local NVMe (`server/tools/stage-model-parallel.py`) -> `runai_model_streamer` (`--load-format runai_streamer`) -> tensorizer. Flag a slow load loudly: if effective rate < ~500 MB/s on a large model, STOP and switch. Details: `server/docs/inference-fast-model-loading.md`.
 
 ## Purpose
 
@@ -37,12 +37,12 @@ endpoint using NVIDIA's [AIPerf](https://github.com/ai-dynamo/aiperf)
 tool and the `replay-playback` HuggingFace dataset of
 recorded multi-turn agentic-coding conversations (the dataset may be
 gated - confirm your HF token has access before starting). Runs from
-an in-cluster bench pod for accurate latency measurement; supports
+an in-cluster bench pod for accurate latency measurement. Supports
 concurrency sweeps, multi-model comparison, and server-side metric
 capture.
 
 > **Steady-state window (throughput trap):** drive `num_prompts >= 2*c` at each concurrency
-> `c` (AIPerf/`vllm bench serve` measure throughput over the full run; too few prompts make
+> `c` (AIPerf/`vllm bench serve` measure throughput over the full run. Too few prompts make
 > the window ramp/drain-dominated and undercount high-c throughput ~1.6-1.8x). Default
 > sweeps use `num_prompts=2*c` (e.g. 128 @ c=64). See `docs/METHODOLOGY.md` trap 4.
 
@@ -195,7 +195,7 @@ perftunereport publish_to_lake --campaign <id>              # atlas_v1 + campaig
 `*-deploy/profiling/roofline-sweep.sh` (decode-concurrency + prefill-ISL sweep with
 per-cell in-pod `dcgmi` PROF) and `import_roofline_sweep` so the campaign carries **page 7**
 (per-GPU roofline + HBM%/tensor%/SM%-vs-concurrency - the "what C maxes the TFLOPs / is decode
->=75% HBM / which sharding degree" answers; per-(c,ISL) DCGM lands in `atlas_v1.extra_json`).
+>=75% HBM / which sharding degree" answers. Per-(c,ISL) DCGM lands in `atlas_v1.extra_json`).
 Sweep every candidate config (TP / KV-dtype) so page 7 overlays them. See
 [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md) Phase D3.
 
@@ -214,11 +214,11 @@ tighter (L3) roofline.
 This pipeline records gaps loudly instead of leaving silent
 blanks: `import_perf_bench` prints a `WARNING:` for any cell that imports as
 STATUS_FULL but lacks `Median TTFT (ms)` / `Request throughput (req/s)`
-(such a cell produces no scatter point); `atlas_aggregate` warns on 0
-plot-ready / full-but-unplottable cells; `report_render` records every
+(such a cell produces no scatter point), `atlas_aggregate` warns on 0
+plot-ready / full-but-unplottable cells, `report_render` records every
 omitted SoL page (why + how-to-fix) on a completeness page +
-`report_status.json`; and `publish_to_lake` records the gap on the lake row
-(it lands by default; `--strict` refuses). If a cell's bench output
+`report_status.json`, and `publish_to_lake` records the gap on the lake row
+(it lands by default, `--strict` refuses). If a cell's bench output
 is missing those lines, re-run the bench so it prints them, then
 re-import + re-aggregate + re-render.
 
@@ -235,10 +235,10 @@ re-import + re-aggregate + re-render.
   been traced to exactly this).
 - **Bench pod cleanup is required.** The Cleanup
   step (`kubectl delete pod my-perf-bench`) MUST run before the
-  evidence bundle is finalized; orphan bench pods consume cluster
+  evidence bundle is finalized. Orphan bench pods consume cluster
   capacity for hours.
 - **No credential commit.** `HF_TOKEN` and any provider API keys
-  stay in env vars; never written into the evidence bundle's
+  stay in env vars. Never written into the evidence bundle's
   `SOURCE.md` or commit history.
 
 ## Experiment isolation & traceability (mandatory)
@@ -253,11 +253,11 @@ Traceability" rule (and `docs/METHODOLOGY.md`):
   `migration=*`). Cluster-scoped PV
   names are global - a collision silently breaks another owner's PVC.
 - Tear down by label (`kubectl delete deploy,pod,pvc,secret -l
-  experiment=<id-slug>`); pre-clear the attacher finalizer on `Retain`
+  experiment=<id-slug>`). Pre-clear the attacher finalizer on `Retain`
   experiment PVs before deleting. Verify standing/migration objects are
   untouched + Ready afterward.
 - **DCGM + zymtrace capture is required during the Phase 5 bench window**
-  (DCGM via the Prometheus MCP PromQL for the window+node; zymtrace via the
+  (DCGM via the Prometheus MCP PromQL for the window+node. Zymtrace via the
   always-on DaemonSet flamegraph for the window+node) so the perf-lake
   roofline pages render. zymtrace flushes to ClickHouse asynchronously, so an
   empty L1 right after the window is **ingest lag, not absence** -- wait + requery
@@ -276,7 +276,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -287,10 +287,10 @@ alongside the absolute throughput / latency numbers. Per the
 
 - Workload-level: peak `output_tps_per_gpu` compared to the
   HBM-bandwidth ceiling (`b200_sm100.hbm3e_tbps = 8.0 TB/s` ÷
-  per-token footprint). Per-token footprint depends on model;
+  per-token footprint). Per-token footprint depends on model,
   e.g. GLM-5.1 NVFP4 at ISL=4096 / OSL=512 is ~7 GB/token.
 - Source of all peak numbers: `configs/sol-ceilings.yaml`
- - cite by key path (`b200_sm100.hbm3e_tbps`, etc.); never inline.
+ - cite by key path (`b200_sm100.hbm3e_tbps`, etc.). Never inline.
 - Per-run sol-summary doc lives at `<campaign>/sol-summary.md` and
   carries the workload-level %SoL row. The perf-report PDF page 4
   picks it up automatically when zymtrace per-category data is also
@@ -305,7 +305,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -317,7 +317,7 @@ A single sweep is a **DRAFT**. Promote to a **VERDICT** only when variance-contr
 (same-node, >=3 trials, mean +/- std), metric-isolated (median TPOT/ITL for
 decode-latency claims - output tok/s at small num_prompts is TTFT-dominated, NOT
 decode), and against a production-representative baseline (cudagraph-on, shipped
-backend; never an eager strawman). Mark the campaign `verdict_tier` accordingly; the
+backend. Never an eager strawman). Mark the campaign `verdict_tier` accordingly. The
 perf-lake writer gates `verdict_tier=verdict` on this provenance.
 
 **Quant-format / serve-backend claims are a MATRIX, not a single cell** (per
@@ -326,16 +326,16 @@ perf-lake writer gates `verdict_tier=verdict` on this provenance.
 backends (NVFP4 marlin vs cutlass, FP8 compressed-tensors, ...), a single
 (backend, concurrency) point is NEVER a universal verdict -- the winner is
 concurrency-dependent (e.g. on Qwen3: FP8 wins c1 latency, NVFP4-marlin the c16 knee,
-NVFP4-cutlass throughput at c64-256; no universal best). MANDATORY for such a verdict:
+NVFP4-cutlass throughput at c64-256. No universal best). MANDATORY for such a verdict:
 run the **serve-backend x concurrency matrix same-node** (one pod, all backends, 3
-trials) and aggregate the cells; root-cause any failed/degenerate cell by
+trials) and aggregate the cells. Root-cause any failed/degenerate cell by
 reading the `(EngineCore pid=...)` worker traceback instead of
-assuming the backend is blocked; report the winner PER concurrency regime.
+assuming the backend is blocked. Report the winner PER concurrency regime.
 
 ## Source-of-truth references
 
 - Pair: `ai-bench` (colloquial alias of this
-  skill); [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md)
+  skill), [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md)
   (quality-side counterpart).
 - Bridge: [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md).
 - `server/AGENTS.md` - fail-fast + provenance rules.

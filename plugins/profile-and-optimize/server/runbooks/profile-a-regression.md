@@ -2,14 +2,14 @@
 
 A generic SOP for taking a suspected serving/training performance regression
 from "the number got worse" to a classified root cause, a fix, and a new
-recorded baseline. Every step names the repo tool that performs it; nothing
+recorded baseline. Every step names the repo tool that performs it. Nothing
 here assumes a specific cluster, model, or vendor account.
 
 Methodology canon: [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md)
 (verdict rigor, full-context reporting, kernel-work classification, capture
 hygiene). Hardware ceilings: [`configs/sol-ceilings.yaml`](../../../../configs/sol-ceilings.yaml).
 
-All module commands below run from `plugins/profile-and-optimize/server/`;
+All module commands below run from `plugins/profile-and-optimize/server/`,
 each is also exposed as an MCP tool of the same verb name (see
 [`docs/mcp-composition.md`](../docs/mcp-composition.md)).
 
@@ -44,7 +44,7 @@ python3 -m tools.perf_baseline.perf_baseline_cli diff \
   --tolerance-percent 5 --json
 ```
 
-- **GREEN** - no regression; stop here (noise or expectation error).
+- **GREEN** - no regression. Stop here (noise or expectation error).
 - **YELLOW / RED** - reproduce once before profiling: rerun the *same* bench
   with the *same* workload shape (ISL/OSL, concurrency, dataset). A
   single-observation regression is a DRAFT, not a finding
@@ -60,7 +60,7 @@ Capture one profile of the **regressed** build and ensure one exists (or is
 captured) for the **baseline** build, under driven load matching the regressing
 workload.
 
-Sidecar capture into a serving pod (ack-gated; submits a real profiling job):
+Sidecar capture into a serving pod (ack-gated. Submits a real profiling job):
 
 ```bash
 python3 -m tools.perf_tune_report.perf_tune_report_cli kernel_profile \
@@ -84,7 +84,7 @@ The script enforces the 4-point gate: (1) `--cuda-graph-trace=node` was in the
 nsys argv (graph-resident kernels are opaque otherwise), (2) the rep is not
 suspiciously small (idle/untrafficked window), (3) the rep exists and
 finalized, (4) the exported sqlite KERNEL table has nonzero rows. Exit 0 =
-safe to analyze; exit 1 = RETRY with the printed reason. Do **not** run stats
+safe to analyze. Exit 1 = RETRY with the printed reason. Do **not** run stats
 on a rep that fails the gate.
 
 If you are sampling with a zymtrace-style continuous profiler instead, gate
@@ -109,7 +109,7 @@ pre-extracted CSV dirs via `--baseline-csv-dir` / `--candidate-csv-dir`.
 
 If the kernel mix is *unchanged* but wall time grew, suspect host-side
 overhead and run `profile_host_overhead` (verb `host-overhead` in the same
-CLI; subverbs `top` / `record` / `dump`) before chasing kernels.
+CLI. Subverbs `top` / `record` / `dump`) before chasing kernels.
 
 ## 4. Per-kernel attribution
 
@@ -148,7 +148,7 @@ and the lake see the same attribution (campaign scaffolding:
    ```
 
 Every "%SoL" you quote must name the ceiling it is a percentage of
-(METHODOLOGY.md "Speed-of-light framing"; roofline math:
+(METHODOLOGY.md "Speed-of-light framing". Roofline math:
 [`tools/perf_tune_report/ROOFLINE-METHODOLOGY.md`](../tools/perf_tune_report/ROOFLINE-METHODOLOGY.md)).
 
 ## 5. Classify the offending kernel(s)
@@ -160,7 +160,7 @@ the diff ranked. Climbing the wrong category wastes the engagement:
 |---|---|---|
 | **K**nown-good | matches roofline expectation for its ceiling | move on - the regression is elsewhere |
 | **R**educible | algorithmic/fusion headroom vs roofline | optimize the kernel or its launch shape |
-| **H**idden | wall-time grew, device time did not; gaps between kernels | chase launch/sync/host overhead (`profile_host_overhead`) |
+| **H**idden | wall-time grew, device time did not. Gaps between kernels | chase launch/sync/host overhead (`profile_host_overhead`) |
 | **P**arallelism-starved | low occupancy / load imbalance at fixed work | fix grid sizing, batching, or balance |
 | **A**ttribution-error | implausible totals, empty windows, profile disagrees with DCGM | fix capture hygiene FIRST (back to step 2) |
 
@@ -199,10 +199,10 @@ original workload shape. A fix that cannot be seen in both the profile diff
 | Step | Tool / file |
 |---|---|
 | Detect / confirm | `perf_baseline_diff` (`tools/perf_baseline/perf_baseline_cli.py`) |
-| Capture | `perf_tune_report_kernel_profile`; gate with `scripts/nsys-validate-capture.sh` |
+| Capture | `perf_tune_report_kernel_profile`. Gate with `scripts/nsys-validate-capture.sh` |
 | Profile diff | `profile_profile_diff` (`tools/pipeline/submission/profile/profile_cli.py`) |
 | Host overhead | `profile_host_overhead` (same CLI, `host-overhead` verb) |
 | Per-kernel attribution | `perf_tune_report_import_nsys` / `perf_tune_report_import_ncu` |
 | Byte/FLOP grounding | `perf_tune_report_dcgm_correlate` + `configs/sol-ceilings.yaml` |
 | Classification rubric | `docs/METHODOLOGY.md` "Kernel-work classification" |
-| Re-baseline | `perf_baseline_record`; `known_good_config_record` |
+| Re-baseline | `perf_baseline_record`, `known_good_config_record` |

@@ -64,7 +64,7 @@ rather than querying immediately after a run.
 
 Every result section ends by naming the next lever: the single highest-leverage
 follow-up the data points at, with its expected magnitude and cost. A report
-that ends "done" is a report that ends the engagement; a report that ends
+that ends "done" is a report that ends the engagement. A report that ends
 "NEXT LEVER: …" compounds.
 
 ## Value proposition
@@ -78,9 +78,9 @@ cannot state its value proposition is exploration (fine - label it as such).
 Every human-facing artifact this repo emits (reports, PR bodies, ledger rows,
 summaries, commit messages) is written plain. The checklist:
 
-- no em-dashes or en-dashes (the #1 AI-slop tell); plain punctuation,
-- minimal bold; no bold-lead bullets,
-- verb-led sentences; no fragments posing as findings,
+- no em-dashes or en-dashes (the #1 AI-slop tell). Plain punctuation,
+- minimal bold. No bold-lead bullets,
+- verb-led sentences. No fragments posing as findings,
 - numbers over adjectives: "2.1x at C=32" beats "significantly faster",
 - no marketing language: blazing, powerful, seamless, robust, leverage,
   cutting-edge, game-changing, world-class, supercharge,
@@ -89,8 +89,8 @@ summaries, commit messages) is written plain. The checklist:
   underscore, foster, showcase, intricate, vibrant, fundamental, interplay,
 - no filler phrases: "here's the thing", "let me break this down", "the bottom
   line", "make no mistake",
-- no "it's not X, it's Y" framing; say the Y,
-- cut hedging and redundancy; inline code stays out of narrow table cells,
+- no "it's not X, it's Y" framing. Say the Y,
+- cut hedging and redundancy. Inline code stays out of narrow table cells,
 - no decorative visuals (infra PRs do not embed charts).
 
 For anything rendered (HTML, slides, dashboards), the same discipline covers

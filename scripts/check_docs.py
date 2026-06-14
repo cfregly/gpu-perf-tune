@@ -10,10 +10,11 @@ Reads .doccheck.json at the repo root and checks, over the configured docs:
   3. every relative markdown link resolves to a real file
   4. (linters) the rule count the README states equals the count in code
 
-It also scans every shipped .md/.txt in the repo for em/en dashes, the one
-de-slop rule every repo's writing guide mandates (perf-tune's AGENTS.md and
-METHODOLOGY.md: "No em-dashes"), over the whole tree rather than just the
-configured docs.
+It also scans every shipped .md/.txt in the repo for em/en dashes and prose
+semicolons, the de-slop rules every repo's writing guide mandates (perf-tune's
+AGENTS.md and METHODOLOGY.md), over the whole tree rather than just the
+configured docs. Code spans, inline code, links, and entities are exempt from
+the semicolon scan, so a semicolon in a shell command or URL is left alone.
 
 Unlike the deslop prose linter, this gate scans code blocks too: install
 commands are exactly where placeholders and stale names hide. A repo that
@@ -49,6 +50,10 @@ MARKER_RE = re.compile(r"\b(TODO|FIXME|TBD)\b")
 DASH_RE = re.compile("[–—]")  # en dash (U+2013), em dash (U+2014)
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__",
              ".pytest_cache", ".mypy_cache", "dist", "build", "site-packages"}
+# Spans where a semicolon is legitimate (code, inline code, links, entities).
+# Blanked before the prose-semicolon scan, newlines kept so line numbers hold.
+CODE_SPAN = re.compile(r"```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`|"
+                       r"\]\([^)]*\)|https?://[^\s)]+|&[#a-zA-Z0-9]+;")
 
 
 def _line(text: str, idx: int) -> int:
@@ -130,6 +135,31 @@ def check_dashes(cfg: dict) -> list[str]:
     return out
 
 
+def check_semicolons(cfg: dict) -> list[str]:
+    """No semicolon may ship in prose (an AI-writing tell the user bans). Scans
+    every .md/.txt, blanking code spans, inline code, links, and entities first
+    so a semicolon in a shell command or URL is left alone. Set
+    'semicolon_scan': false to disable, or list a file under 'dash_exclude'."""
+    if not cfg.get("semicolon_scan", True):
+        return []
+    excludes = cfg.get("dash_exclude", [])
+    out: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for fn in sorted(filenames):
+            if not fn.endswith((".md", ".txt")):
+                continue
+            path = Path(dirpath) / fn
+            rel = path.relative_to(ROOT).as_posix()
+            if any(fnmatch.fnmatch(rel, pat) for pat in excludes):
+                continue
+            text = path.read_text(encoding="utf-8")
+            prose = CODE_SPAN.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+            for m in re.finditer(";", prose):
+                out.append(f"{rel}:{_line(prose, m.start())}: prose semicolon")
+    return out
+
+
 def check_rule_count(cfg: dict) -> list[str]:
     mod = cfg.get("rule_module")
     if not mod:
@@ -163,6 +193,7 @@ def main() -> int:
         findings += check_doc(ROOT / d, cfg)
     findings += check_rule_count(cfg)
     findings += check_dashes(cfg)
+    findings += check_semicolons(cfg)
     if not findings:
         print(f"[ok] check_docs: {cfg['repo']} docs are consistent")
         return 0

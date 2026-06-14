@@ -7,7 +7,7 @@ One directory per server, one JSON file per tool. The shipped skill set
 references three servers - the bundled `profile_and_optimize` (validated
 directly against `mcp_surface.py`, no snapshot needed) plus the optional
 external `prometheus_mcp` and `zymtrace` servers. No snapshots are bundled
-for the external servers; the lint treats a missing directory as "schema
+for the external servers. The lint treats a missing directory as "schema
 validation skipped for that server".
 
 To refresh a snapshot, connect the server in your client, dump its tool list,

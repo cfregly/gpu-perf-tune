@@ -27,7 +27,7 @@ allowed-tools:
 
 Diff the **compiled torch FX / Inductor graphs** between two vLLM
 configs to surface exactly which compilation choices changed. The most
-common need: "I added `pass_config.fuse_allreduce_rms=true`;
+common need: "I added `pass_config.fuse_allreduce_rms=true`,
 which graph nodes were affected?" - torch.compile decisions are not
 visible in the vllm startup logs alone.
 
@@ -95,7 +95,7 @@ a_graphs = extract_fx_graphs("side-A.log")
 b_graphs = extract_fx_graphs("side-B.log")
 ```
 
-(The exact log marker strings depend on vLLM version + torch version;
+(The exact log marker strings depend on vLLM version + torch version,
 the recipe above is the v0.21.x default. For other versions, dump via
 `TORCH_COMPILE_DEBUG=1` and parse the `compile_debug_*.txt` files
 torch.compile writes under `~/.cache/torch/`.)
@@ -163,11 +163,11 @@ that automates the recipe end-to-end.
 A compilation-graph change is often a **representation (R)** or **hardware
 specialization (H)** move in the kernel rubric (`docs/METHODOLOGY.md`
 "Kernel-work classification"). A fusion pass that replaces a generic Triton
-op with a library/`sm100f` tensor-core kernel raises both R (R2→R1) and H (toward H4);
+op with a library/`sm100f` tensor-core kernel raises both R (R2→R1) and H (toward H4),
 `fuse_allreduce_rms` / `fuse_attn_quant` shift which hardware path the graph dispatches.
 When a graph diff backs a custom-kernel comparison, **note the R/H delta in
 `graph_diff.json` `notes`** and carry the candidate + baseline `(K,R,H,P,A)` coordinates
-into the bundle's `SOURCE.md`/`summary.md`. The graph diff shows R/H *changed*; it does
+into the bundle's `SOURCE.md`/`summary.md`. The graph diff shows R/H *changed*. It does
 NOT prove the new path engages tensor cores or hits its roofline - defer that H + P
 proof to [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md), the
 gate's enforcement point. A win over a strictly-lower-H/R baseline stays a **DRAFT, never
@@ -193,7 +193,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -213,7 +213,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

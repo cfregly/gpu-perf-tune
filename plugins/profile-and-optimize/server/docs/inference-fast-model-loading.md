@@ -16,7 +16,7 @@ is forbidden as a default.
 ## The rule (preference order, gate each)
 
 Enforced by the always-applied `docs/METHODOLOGY.md`. Always pick
-the fastest AVAILABLE loader; FLAG a slow load loudly and switch if effective rate
+the fastest AVAILABLE loader. FLAG a slow load loudly and switch if effective rate
 is `< ~500 MB/s` on a large model.
 
 1. **Accelerated object-store endpoint** - a drop-in accelerated endpoint in
@@ -24,11 +24,11 @@ is `< ~500 MB/s` on a large model.
    reachability AND a real bucket read. Two failure shapes seen in practice:
    an endpoint DNS name that resolves to a non-routable placeholder (the probe
    must fall back to the plain endpoint), and an endpoint that is TCP-reachable
-   but does not serve the bucket (staging fails mid-flight; drop it from the
+   but does not serve the bucket (staging fails mid-flight. Drop it from the
    candidate list). Set `S3_ENDPOINT_URL` to force a known-good endpoint and
    skip the probe (plain endpoint validated at ~543 MB/s with the parallel stager).
 2. **Parallel multipart -> local NVMe** then load local. GATE: node NVMe free
-   `>= model_size x 1.2` (GB300 `/tmp` / emptyDir, xfs ~28 TiB; probe with
+   `>= model_size x 1.2` (GB300 `/tmp` / emptyDir, xfs ~28 TiB. Probe with
    [`local-nvme-probe.sh`](../tools/local-nvme-probe.sh)).
 3. **`runai_model_streamer`** (`--load-format runai_streamer`) - vLLM-native
    single-pass parallel S3 stream. GATE: package in the image (`vllm-tensorizer` has it).
@@ -55,7 +55,7 @@ Tunables (env): `STAGE_SHARD_CONCURRENCY` (default 16), `STAGE_MULTIPART_CONCURR
 ## Gotcha
 
 The object store requires **virtual-hosted-style** addressing (`bucket.host/key`). boto3
-defaults to path-style for a custom `endpoint_url`; the store rejects it on `ListObjectsV2`
+defaults to path-style for a custom `endpoint_url`. The store rejects it on `ListObjectsV2`
 with `PathStyleRequestNotAllowed`. The stager sets `Config(s3={"addressing_style": "virtual"})`.
 
 ## Validation
@@ -63,7 +63,7 @@ with `PathStyleRequestNotAllowed`. The stager sets `Config(s3={"addressing_style
 On a GB300 node, staging GLM-5.1 (433.9 GB) with
 16 shards x 8-way multipart measured **~544-600 MB/s aggregate (~10x the
 ~58 MB/s single-stream s3fs rate)**. No accelerated endpoint was reachable from
-that zone, so the win is purely from parallelism over the plain endpoint; an
+that zone, so the win is purely from parallelism over the plain endpoint. An
 in-zone accelerated endpoint would raise it further.
 
 ## Loader selection for a serving tier (the resolver)
@@ -89,8 +89,8 @@ flowchart TD
   q5 -->|no| none2["none: no viable loader -- provide a runai image (s3fs FUSE fallback retired)"]
 ```
 
-Measured basis (GLM-5.1-NVFP4, GB300 TP4): hf-pull+xet ~12-13min;
-RunAI streamer ~10min (streams the object store at ~2 GB/s); RunAI + MTP needs
+Measured basis (GLM-5.1-NVFP4, GB300 TP4): hf-pull+xet ~12-13min,
+RunAI streamer ~10min (streams the object store at ~2 GB/s). RunAI + MTP needs
 an MTP-drafter patch and then double-streams (~16min). boto3 parallel-multipart
 (~0.5 GB/s, the stager above) is dominated by RunAI for streaming, but remains
 the path when the image lacks runai_model_streamer.

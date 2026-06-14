@@ -1,7 +1,7 @@
 # AA workload deps, exact-pinned so every operator resolves identical versions.
 #
 # The pyproject.toml `perf_tune_report` extra carries the abstract `>=` floors
-# (tiktoken>=0.7, etc.); this constraints file pins the concrete versions the
+# (tiktoken>=0.7, etc.). This constraints file pins the concrete versions the
 # inference-aa-workload skill was validated against (profile-and-optimize v1.27.0), so a
 # team install is reproducible without over-constraining the whole environment.
 #

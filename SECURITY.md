@@ -6,9 +6,9 @@
 
 | Version | Supported |
 | --- | --- |
-| `1.14.x` | Yes (latest; current release line) |
-| `1.13.x` | Yes (previous MINOR; best-effort PATCH backports) |
-| `1.0.x`-`1.12.x` | Best-effort; please upgrade to `1.14.x` |
+| `1.14.x` | Yes (latest. Current release line) |
+| `1.13.x` | Yes (previous MINOR. Best-effort PATCH backports) |
+| `1.0.x`-`1.12.x` | Best-effort. Please upgrade to `1.14.x` |
 | `< 1.0.0` | No |
 
 The release line moves forward as new MINORs ship. See the GitHub releases for the version history.
@@ -29,7 +29,7 @@ You should receive an initial response within 5 business days. If you do not, ad
 ## In scope
 
 - The bundled MCP server source at [`plugins/profile-and-optimize/server/`](/plugins/profile-and-optimize/server), including the 8 stub libraries and the `tools/` implementations.
-- The skill files at [`plugins/profile-and-optimize/skills/`](/plugins/profile-and-optimize/skills), specifically: any skill that grants `allowed-tools` access beyond what its purpose requires; any skill that exfiltrates secrets / tokens; any skill that writes to external chat systems (skills are read-only toward chat).
+- The skill files at [`plugins/profile-and-optimize/skills/`](/plugins/profile-and-optimize/skills), specifically: any skill that grants `allowed-tools` access beyond what its purpose requires. Any skill that exfiltrates secrets / tokens. Any skill that writes to external chat systems (skills are read-only toward chat).
 - The plugin manifests ([`marketplace.json`](/.claude-plugin/marketplace.json), [`plugin.json`](/plugins/profile-and-optimize/.claude-plugin/plugin.json), [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json)) - specifically: tokens / URLs hard-coded instead of `${ENV}` placeholders, ack-flag bypass paths, or any change that escalates a tool's safety class without operator notice.
 - The helper scripts in [`scripts/`](/scripts).
 

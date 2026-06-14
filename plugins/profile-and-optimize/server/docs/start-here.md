@@ -22,7 +22,7 @@ ignore the rest until you need it.
 
 ## Runbooks
 
-Operator runbooks live under [`../runbooks/`](/plugins/profile-and-optimize/server/runbooks); its README
+Operator runbooks live under [`../runbooks/`](/plugins/profile-and-optimize/server/runbooks). Its README
 explains what belongs there.
 
 ## Mental model in one paragraph

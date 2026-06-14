@@ -3,11 +3,11 @@ name: prometheus-anchored-query
 last_validated: 2026-05-21
 description: >-
   Reusable wrapper for the knowledge-base-first PromQL pattern.
-  Operator names the metric / question / time range; skill calls
+  Operator names the metric / question / time range. Skill calls
   query_observability_knowledge_base first to confirm labels + cardinality,
   derives the safe narrow PromQL, runs it via the Prometheus MCP, and saves the
   raw payload to a provenance-bearing bundle per the perf-lake-contract.
-  Workload-agnostic; replaces the ad-hoc "run PromQL and hope" pattern with
+  Workload-agnostic. Replaces the ad-hoc "run PromQL and hope" pattern with
   a disciplined anchor-then-query workflow. Triggers on
   "prometheus query", "promql query", "anchored query", "knowledge-base
   query", "query the Prometheus MCP", "what's the prometheus metric for", "save
@@ -34,7 +34,7 @@ allowed-tools:
 
 Make ad-hoc PromQL queries **safe by default** by wrapping the "Contention And O11y Pattern" discipline (anchor labels in the knowledge base FIRST, then run the query) as a reusable skill. Saves the raw payload to a provenance-bearing bundle so future queries can replay the same shape, and so the perf-lake-contract is honored without operator effort.
 
-This skill exists because PromQL is easy to write **wrong** at cluster scale: a missing label selector turns a 100-series query into a 10,000-series query that overloads the Prometheus backend. The bundled server's [`mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) Contention And O11y Pattern (step 3) makes the knowledge-base-first call mandatory; this skill enforces it.
+This skill exists because PromQL is easy to write **wrong** at cluster scale: a missing label selector turns a 100-series query into a 10,000-series query that overloads the Prometheus backend. The bundled server's [`mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) Contention And O11y Pattern (step 3) makes the knowledge-base-first call mandatory. This skill enforces it.
 
 Use it for ad-hoc questions ("what's the IB traffic on `<node>` right now?" / "is the dataloader being starved?" / "what's the median dcgm_xid rate across a partition?").
 
@@ -46,7 +46,7 @@ Use it for ad-hoc questions ("what's the IB traffic on `<node>` right now?" / "i
 
 Do **not** use this skill for:
 
-- Already-vetted queries - call `mcp__prometheus_mcp__query_prometheus` directly (or run them from whatever dashboarding UI they live in); the anchor pass adds nothing when the query shape is already known.
+- Already-vetted queries - call `mcp__prometheus_mcp__query_prometheus` directly (or run them from whatever dashboarding UI they live in). The anchor pass adds nothing when the query shape is already known.
 - Log queries - this skill emits PromQL only. The MCP server also fronts a log datasource via `query_loki_logs`, but anchored log queries are out of scope here.
 
 ## Example prompts
@@ -153,7 +153,7 @@ mcp__prometheus_mcp__query_prometheus with:
   user_prompt: "<operator's original prompt>"
 ```
 
-(Use `queryType: "instant"` + only `endTime` for a single-point query; drop `startTime` / `stepSeconds` in that case.)
+(Use `queryType: "instant"` + only `endTime` for a single-point query. Drop `startTime` / `stepSeconds` in that case.)
 
 Save the raw payload to:
 
@@ -186,7 +186,7 @@ defect - it cannot set a default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound - e.g. accuracy/acceptance - omit `%SoL` but keep the rest of the descriptor.)
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -200,7 +200,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -210,11 +210,11 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 - **Knowledge base first is mandatory.** Phase 1 cannot be skipped - fail fast, no silent fallbacks. The whole point of the skill is to enforce that discipline.
 - **No high-cardinality queries.** If the knowledge base reports the proposed query would return >10k series, the skill refuses to run it. Operator narrows the selector and retries.
 - **Raw payload preservation.** Per [`perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md), every saved query records the datasource UID, the exact PromQL, the time range, the response time, and the source label.
-- **Read-only.** The skill never mutates state through the Prometheus MCP; never creates dashboards / annotations / alerts (those would need `create_*` tools which are not in `allowed-tools`).
+- **Read-only.** The skill never mutates state through the Prometheus MCP. Never creates dashboards / annotations / alerts (those would need `create_*` tools which are not in `allowed-tools`).
 
 ## Known limitations
 
-- **The agent's MCP token may lack `datasources:read`.** If `mcp__prometheus_mcp__query_prometheus` returns `403 datasources:read on <uid>` for every Prometheus datasource UID, Phases 2-4 of this skill are blocked end-to-end. **Workaround:** the operator runs the exact PromQL produced in Phase 3 from an authenticated shell or the Prometheus web UI and pastes the response JSON into `${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/prometheus-bundles/<run-id>/response.json`; the skill's Phase 5 summary still works against the operator-pasted payload.
+- **The agent's MCP token may lack `datasources:read`.** If `mcp__prometheus_mcp__query_prometheus` returns `403 datasources:read on <uid>` for every Prometheus datasource UID, Phases 2-4 of this skill are blocked end-to-end. **Workaround:** the operator runs the exact PromQL produced in Phase 3 from an authenticated shell or the Prometheus web UI and pastes the response JSON into `${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/prometheus-bundles/<run-id>/response.json`. The skill's Phase 5 summary still works against the operator-pasted payload.
 
 ## Source-of-truth references
 

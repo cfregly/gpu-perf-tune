@@ -44,7 +44,7 @@ go and why":
 | DCGM | [`inference-dcgm-correlate`](/plugins/profile-and-optimize/skills/inference-dcgm-correlate/SKILL.md) | byte-grounded workload-level %SoL over the bench window | L3 |
 
 **Do NOT conclude "kernel at-roof / no lever" from SM-busy% (ncu `--set basic` or DCGM SM-active).**
-An 88-92% SM-busy can hide a kernel at <15% of its FLOP-roofline (persistent/split-K spin); decide
+An 88-92% SM-busy can hide a kernel at <15% of its FLOP-roofline (persistent/split-K spin). Decide
 at-roof vs headroom only from ncu `--set full` achieved-TFLOPS vs the FLOP ceiling. Worked example:
 a DeepSeek-V4-Flash FP8 GEMM read 88-92% SM but was 1-14.5% of FP8 FLOP-SoL -> the synthesized
 recommendation was "throughput tier", not "kernel rewrite". (Canon: the ncu capture-hygiene section of
@@ -108,16 +108,16 @@ Getting the four artifacts is itself constrained -- these rules are
 hard-won. Encode them so a capture is right the first time:
 
 - **One pod cannot run all four profilers.** `ncu` and the zymtrace CUDA injection
-  (`CUDA_INJECTION64_PATH`) are **mutually exclusive**; `nsys` needs the sidecar
+  (`CUDA_INJECTION64_PATH`) are **mutually exclusive**, `nsys` needs the sidecar
   image or vLLM `/start_profile`. So a full capture is **2-3 coordinated pods**:
   (A) the bench pod with the zymtrace injection ON + vLLM torch profiler
-  (`VLLM_TORCH_PROFILER_DIR` + `/start_profile`/`/stop_profile` window); (B) a
-  SEPARATE `nsys` launch-wrap pod (injection cleared, `--cuda-graph-trace=node`);
+  (`VLLM_TORCH_PROFILER_DIR` + `/start_profile`/`/stop_profile` window), (B) a
+  SEPARATE `nsys` launch-wrap pod (injection cleared, `--cuda-graph-trace=node`),
   (C) a SEPARATE `ncu` sister pod (`--set basic`, `--kernel-name` scoped). DCGM is
   correlated POST-HOC over the bench window (no in-pod agent).
 - **Use a submit-and-queue self-driving Job on a contended cluster** (per
   `server/AGENTS.md`): the capture pod embeds serve + bench + window-stamp, writes to the
-  RWX PVC, and EXITS to free the GPU; `backoffLimit` re-queues through preemption;
+  RWX PVC, and EXITS to free the GPU, `backoffLimit` re-queues through preemption,
   guard idempotency on the **result file** (not a marker that could be touched on
   failure). Make the bench **variance-controlled** (>=3 trials/concurrency, same pod
   => same node) so the baseline is VERDICT-grade, not a single-shot DRAFT.
@@ -131,7 +131,7 @@ hard-won. Encode them so a capture is right the first time:
 
 ### Phase 1: inventory + validate the captured artifacts
 
-Read the bundle; list which of the four profilers produced a *valid* artifact
+Read the bundle. List which of the four profilers produced a *valid* artifact
 (apply each capture-validation gate). Record the `sol_rigor` available per source.
 Refuse to proceed if fewer than two valid sources exist.
 
@@ -167,7 +167,7 @@ with no `source_refs[]` is not actionable. **Code-under-test provenance
 match:** the `expected_effect` number MUST come from an `evidence_artifacts[]` campaign whose
 provenance `delivery`+`commit` matches the recommendation's `source_refs[]` -- an
 `overlay`/offline-prepped campaign cited as the benefit of an `infr-patch` recommendation is a
-cross-tier DRAFT defect (even when the kernels match); cite the patch's own run.
+cross-tier DRAFT defect (even when the kernels match). Cite the patch's own run.
 
 - **type=config**: a `vllm.extraArgs` / cudagraph / kv-cache-dtype change ->
   hand to [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md).
@@ -218,18 +218,18 @@ emits carries:
 1. the backing artifact path(s),
 2. the `sol_rigor` tier of that evidence (`L1` zymtrace-proxy / `L3` DCGM /
    `L4` ncu),
-3. a DRAFT/VERDICT tier (DRAFT = predicted from profiles; VERDICT = proven by an
+3. a DRAFT/VERDICT tier (DRAFT = predicted from profiles. VERDICT = proven by an
    A/B).
 
 A claim missing any of the three is not emitted. An empty/failed capture is a
 capture bug to fix, never evidence of "unprofilable" -- clear the capture-
 validation gate first, then conclude. (For zymtrace specifically, an empty-now
 right after the bench is usually ClickHouse INGEST LAG, not a bug -- wait + requery
-for the freshest data; see [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).)
+for the freshest data. See [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).)
 (One genuine environmental exception seen on
 GB300: a CUDA 12.x image on a CUDA 13.x driver skews CUPTI ->
 `CUPTI_ERROR_INVALID_DEVICE` -> 0 kernels for ALL CUPTI clients regardless of
-hygiene; grep `CUDA versions. CUPTI/Runtime/Driver` -> use a CUDA-13 image or zymtrace.)
+hygiene. Grep `CUDA versions. CUPTI/Runtime/Driver` -> use a CUDA-13 image or zymtrace.)
 
 ## Verdict rigor (DRAFT vs VERDICT)
 
@@ -242,18 +242,18 @@ production-representative baseline). Never report a predicted speedup as achieve
 
 Any `type=kernel` recommendation records the candidate AND the named production
 baseline's `(K,R,H,P,A)` coordinates per `server/AGENTS.md` "Kernel rubric".
-The H + P proof (tensor-core engagement + roofline %) comes from the ncu artifact;
+The H + P proof (tensor-core engagement + roofline %) comes from the ncu artifact,
 a win over a strictly-lower-H/R baseline is a DRAFT, never a VERDICT.
 
 ## Safety
 
 - **No silent fallbacks / no fabricated evidence** -- refuses to synthesize from
-  < 2 valid sources or from an unvalidated capture; rejects any uncited claim.
+  < 2 valid sources or from an unvalidated capture. Rejects any uncited claim.
 - **A/B before believe** -- a `vllm-src` recommendation is staged as an
-  experiment-prefixed overlay and proven on this workload; it is never applied to
+  experiment-prefixed overlay and proven on this workload. It is never applied to
   a standing deploy or asserted from first principles.
 - **Experiment isolation + scheduling** -- all A/B arms are experiment-prefixed +
-  `experiment=<id-slug>` labeled and torn down by label; scheduled per the cluster
+  `experiment=<id-slug>` labeled and torn down by label. Scheduled per the cluster
   profile (plain-K8s `default-scheduler` / the Slurm scheduler on legacy Slurm-on-K8s).
 - **No external posting** of recommended vLLM changes (no upstream PR) without
   explicit per-turn operator approval.
@@ -268,7 +268,7 @@ a win over a strictly-lower-H/R baseline is a DRAFT, never a VERDICT.
 - [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md) +
   [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md) -- where the
   staged A/Bs run and the recommendations get published. The ranked levers here
-  become the cross-engine variant arms; the proven survivors flow to
+  become the cross-engine variant arms. The proven survivors flow to
   `perftunereport champion_select` (the baseline-vs-top-X production pick + page 8).
 - `server/AGENTS.md` -- attribution-must-be-profiled, speed-of-light framing,
   DRAFT-vs-VERDICT, kernel rubric.
@@ -284,7 +284,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -301,7 +301,7 @@ Every asset this skill emits (findings doc / recommendation ledger / perfreport 
 `server/AGENTS.md` "Validate every generated asset"
 (`docs/METHODOLOGY.md`): the generator **FAILS LOUDLY** on missing/bad data (a recommendation with no backing
 profile artifact, an empty/degenerate fused view, `unknown`/null where a value is required) ->
-raise / flag loudly, never a silent placeholder or an unbacked recommendation; and the agent
+raise / flag loudly, never a silent placeholder or an unbacked recommendation, and the agent
 **REVIEWS** the rendered doc/ledger for human-sense + 100% accuracy (every recommendation cites
 its backing artifact + sol_rigor tier, the A/B staging is sound) and **rebuilds** it if wrong --
 never ships a wrong/confusing synthesis with a caveat.
@@ -315,7 +315,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

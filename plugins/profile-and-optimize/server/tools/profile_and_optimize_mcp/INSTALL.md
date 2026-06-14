@@ -40,7 +40,7 @@ Restart Cursor after saving. `PROFILE_AND_OPTIMIZE_REPO_ROOT` is optional when
 Cursor starts inside the repo, but setting it makes the server
 independent of the IDE working directory.
 
-The installed package also provides `profile-and-optimize-mcp serve`; the installer
+The installed package also provides `profile-and-optimize-mcp serve`. The installer
 uses the explicit venv Python above so Cursor does not accidentally start
 the server with a Python that lacks the editable `profile_and_optimize_mcp` package.
 
@@ -120,7 +120,7 @@ tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --cli
 
 Open Antigravity, use `Agent window -> Manage MCP Servers -> View raw
 config`, and confirm the raw config path. By default the installer
-writes `~/.config/antigravity/mcp_config.json`; pass
+writes `~/.config/antigravity/mcp_config.json`. Pass
 `--antigravity-config PATH` to `configure_clients.py` if your install
 uses a different path.
 

@@ -14,7 +14,7 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 3. **Optimize**: `inference-model-optimize` (cross-engine bring-up orchestrator), `inference-quantize-calibrate`, `inference-spec-decode-train` / `-tune` / `-service`, `inference-decode-step-budget`, `inference-capacity-sizing`, `inference-known-good-config`.
 4. **Report & track**: `inference-perf-tune-report` (multi-page PDF renderer), `inference-perf-synthesize`, `inference-fleet-leaderboard`, `inference-value-ledger`, `evidence-bundle-init` provenance bundles, `prometheus-anchored-query` / `zymtrace-anchored-query` anchored observability queries.
 
-The bundled MCP server (`plugins/profile-and-optimize/server/`) exposes the tool surface that backs these skills; the documented bash-tool path is the fallback wherever an optional external server is missing.
+The bundled MCP server (`plugins/profile-and-optimize/server/`) exposes the tool surface that backs these skills. The documented bash-tool path is the fallback wherever an optional external server is missing.
 
 ## Quickstart
 
@@ -57,10 +57,10 @@ The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, fu
 
 ## Limitations
 
-The skills measure and report; they do not tune the cluster for you. Every
+The skills measure and report. They do not tune the cluster for you. Every
 number depends on hardware, precision, and engine version, which the skills
 record next to the result. The speed-of-light ceilings are datasheet values, an
-upper bound rather than a promise. The bundled MCP server is optional; the
+upper bound rather than a promise. The bundled MCP server is optional. The
 documented bash-tool path is the fallback.
 
 ## License

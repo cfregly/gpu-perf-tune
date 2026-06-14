@@ -62,7 +62,7 @@ A common pattern for optional servers is gating the command on an environment va
 
 When your environment does not export `MY_OPTIONAL_SERVER_COMMAND`, the shell expands the placeholder to `true`, which is a Unix builtin that exits 0 immediately. Cursor sees the process exit before any MCP handshake and reports the connection as closed.
 
-This is **expected** when you don't have the corresponding tool installed. The plugin runs without optional servers; the gate exists so that operators who DO have access can opt in by exporting the relevant env var before launching Cursor.
+This is **expected** when you don't have the corresponding tool installed. The plugin runs without optional servers. The gate exists so that operators who DO have access can opt in by exporting the relevant env var before launching Cursor.
 
 ### Fix (if you intend to enable the optional server)
 
@@ -73,9 +73,9 @@ export MY_OPTIONAL_SERVER_COMMAND=/path/to/server-binary
 open -a Cursor
 ```
 
-For persistent setup, put the export in your shell profile (e.g. `~/.zshrc`; brace variables that are followed by punctuation, like `${var}:port`) and source it before launching Cursor.
+For persistent setup, put the export in your shell profile (e.g. `~/.zshrc`. Brace variables that are followed by punctuation, like `${var}:port`) and source it before launching Cursor.
 
-### Fix (if you don't intend to enable it; suppress the red badge)
+### Fix (if you don't intend to enable it. Suppress the red badge)
 
 Two options:
 
@@ -94,7 +94,7 @@ These servers carry OAuth tokens or session cookies that expire on a regular sch
 
 ### Fix
 
-Inside Cursor's MCP panel, click the "Sign in" or "Re-authenticate" button next to the affected server. Cursor opens the provider's auth flow in a browser. Complete the flow; the badge transitions from "Logout" to "Connected".
+Inside Cursor's MCP panel, click the "Sign in" or "Re-authenticate" button next to the affected server. Cursor opens the provider's auth flow in a browser. Complete the flow. The badge transitions from "Logout" to "Connected".
 
 If the auth flow fails or hangs, the fallback is to remove and re-add the server in the MCP panel, which forces Cursor to re-run the auth flow from scratch.
 
@@ -110,7 +110,7 @@ A server declared in [`../plugins/profile-and-optimize/.mcp.json`](/plugins/prof
 
 ### Root cause
 
-The manifest entry references an env var via `${VAR}` (no `:-default` fallback). When you haven't exported `VAR` before launching Cursor, Cursor expands the placeholder to the literal string `${VAR}` and passes it to Docker / npx / the binary, which fails before any MCP handshake. Cursor reports this as `Connection closed`. (Claude Code skips servers whose env vars are unset; Cursor does not - hence the asymmetry.)
+The manifest entry references an env var via `${VAR}` (no `:-default` fallback). When you haven't exported `VAR` before launching Cursor, Cursor expands the placeholder to the literal string `${VAR}` and passes it to Docker / npx / the binary, which fails before any MCP handshake. Cursor reports this as `Connection closed`. (Claude Code skips servers whose env vars are unset. Cursor does not - hence the asymmetry.)
 
 ### Fix (option 1: export the env vars)
 
@@ -127,11 +127,11 @@ Persist these in your shell profile and source it before launching Cursor for a 
 
 ### Fix (option 2: comment out the server locally)
 
-If you don't intend to use `grafana` or `github` via the plugin manifest, comment out the corresponding block in your local `~/.cursor/mcp.json` (NOT the in-repo `.mcp.json`). The repo manifest is the marketplace artifact; your local file is operator state.
+If you don't intend to use `grafana` or `github` via the plugin manifest, comment out the corresponding block in your local `~/.cursor/mcp.json` (NOT the in-repo `.mcp.json`). The repo manifest is the marketplace artifact. Your local file is operator state.
 
 ### Why `grafana` and `github` are in `.mcp.json`
 
-The manifest keeps `profile_and_optimize` (bundled, mandatory), `grafana`, and `github`. `grafana` ships as a straightforward Docker image and `github` has a `:-default` fallback on the command (`${GITHUB_MCP_COMMAND:-docker}`); these are the two external servers most operators have credentials for. Servers whose every dimension would be placeholder-gated stay operator-side optional instead.
+The manifest keeps `profile_and_optimize` (bundled, mandatory), `grafana`, and `github`. `grafana` ships as a straightforward Docker image and `github` has a `:-default` fallback on the command (`${GITHUB_MCP_COMMAND:-docker}`). These are the two external servers most operators have credentials for. Servers whose every dimension would be placeholder-gated stay operator-side optional instead.
 
 ## Quick troubleshooting matrix
 

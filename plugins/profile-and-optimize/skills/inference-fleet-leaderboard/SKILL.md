@@ -29,7 +29,7 @@ allowed-tools:
 
 ## Purpose
 
-Each perf-report campaign PDF is one model; "which model do I pick?" is a
+Each perf-report campaign PDF is one model, "which model do I pick?" is a
 **cross-campaign** question the per-campaign artifacts cannot answer. This skill
 renders three complementary cross-model leaderboards from the local campaigns
 dir in one `perftunereport fleet_leaderboard` call:
@@ -55,7 +55,7 @@ generator scripts.
   batch?" or "is model X worth its cost vs model Y?".
 - After any new AA or roofline campaign publishes, to refresh the fleet view
   (the leaderboards are PROVISIONAL while a sweep is still filling cells).
-- As the cross-model companion to `experiments_index` (which lists experiments;
+- As the cross-model companion to `experiments_index` (which lists experiments,
   this ranks models).
 
 Do **not** use this to *measure* a model (that is `inference-perf-bench` /
@@ -85,13 +85,13 @@ perftunereport fleet_leaderboard --campaigns-dir ./campaigns --json
      or GLM-5.1 whose value is DSA-sparse long-context) is correctly dominated on
      the AA short-context shape yet chosen for capability. The frontier is "the
      perf-efficient choice AMONG quality-equivalent models", never "never use".
-   - **Engine-version skew:** per-model serves may use different vLLM builds; treat
+   - **Engine-version skew:** per-model serves may use different vLLM builds. Treat
      TTFT as directional across engines, output-speed/cost as the robust metrics.
 
 4. **For the grounded *why*** (e.g. the models are host/KV-bound, not
    memory-bound - DCGM L3 + zymtrace L1), pair the leaderboards with a curated
    DCGM+zymtrace attribution doc built via `inference-dcgm-correlate` +
-   `analyze-zymtrace-workload`; this verb does not generate one.
+   `analyze-zymtrace-workload`. This verb does not generate one.
 
 ## Full-context reporting (no bare numbers)
 
@@ -104,13 +104,13 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 The leaderboards carry the $/1M-output-token cost column (latency-optimal at c=1,
-throughput-optimal at the knee); they do
+throughput-optimal at the knee). They do
 not themselves recompute %SoL (that is `inference-dcgm-correlate` /
 `inference-perf-tune-report` pages 4-7). A common throughput-tier finding is
 that peak tok/s/GPU is set by per-token active-param work + host/KV scheduling,
@@ -122,7 +122,7 @@ Every asset this skill emits (leaderboard table / Pareto chart / fleet view) is 
 `docs/METHODOLOGY.md` "Asset validation": the generator **FAILS LOUDLY** on
 missing/bad/degenerate data (no campaigns discovered,
 zero plot-ready points, `unknown`/null/NaN where a value is required) -> raise / non-zero exit
-naming what is missing, never a silent placeholder/empty leaderboard; and the agent **REVIEWS**
+naming what is missing, never a silent placeholder/empty leaderboard, and the agent **REVIEWS**
 the rendered leaderboard for human-sense + 100% accuracy (every model row traces to its
 campaign, latency/throughput/cost matched on concurrency, the Pareto frontier
 is plausible) and **rebuilds** it if wrong -- never ships a wrong/confusing asset with a caveat.
@@ -136,7 +136,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -146,5 +146,5 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 Backed by the `perf_tune_report` CLI `fleet_leaderboard` verb (+ the auto-derived
 `perf_tune_report_fleet_leaderboard` MCP tool) in
 `plugins/profile-and-optimize/server/tools/perf_tune_report/fleet_leaderboard.py`. Read-only on
-campaigns/; writes only the three `*-FLEET-*.md` files. Unit tests:
+campaigns/. Writes only the three `*-FLEET-*.md` files. Unit tests:
 `test_fleet_leaderboard.py`.

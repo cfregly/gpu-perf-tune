@@ -71,7 +71,7 @@ is a documented `--optimizer` hook left as a stub for a later phase.
 Do **not** use this skill for:
 
 - The first stability pass on a brand-new model -- get it Ready + QA-clean
-  (deploy, smoke-test, accuracy QA) first; tuning a hanging config chases ghosts.
+  (deploy, smoke-test, accuracy QA) first. Tuning a hanging config chases ghosts.
 - A which-kernel "why is it slow" question -- that is the profiling skills
   ([`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) et al.).
 - Rendering the final PDF -- that is
@@ -96,7 +96,7 @@ The skill **fails closed** if any of these are not satisfied.
    overlays per cell) and the chart fork.
 4. Cluster access + a free GPU node confirmed before any GPU cell: plain K8s
    (e.g. GB300) via a `kubectl` free-GPU preflight (k8s GPU requests are
-   authoritative); Slurm-on-K8s (e.g. B200) via `sinfo`/`squeue`.
+   authoritative). Slurm-on-K8s (e.g. B200) via `sinfo`/`squeue`.
 5. For a decode-latency **verdict**: the `pin-node.sh` + `run-controlled-ab.sh`
    helpers so both arms land on the SAME node.
 
@@ -138,9 +138,9 @@ override + bench command with no cluster spend.
 **Methodology gates (mandatory, per `docs/METHODOLOGY.md`):**
 
 - **Warm vs cold** -- a sequential prefix-cached sweep's tail point is a *warm*
-  best-case; label every throughput number warm (sweep-tail) or cold
+  best-case. Label every throughput number warm (sweep-tail) or cold
   (fresh/single-shot) and never compare across the two.
-- **Eager vs cudagraph** -- both arms of any A/B MUST match `cudagraph_mode`; an
+- **Eager vs cudagraph** -- both arms of any A/B MUST match `cudagraph_mode`. An
   eager "win" is host-overhead, not GPU work. Record `enforce_eager` /
   `cudagraph_mode` per cell.
 
@@ -182,7 +182,7 @@ levers through the engine-agnostic variant A/B harness
 (`run-variant-ab.sh`),
 which benches every arm from ONE shared client (`vllm bench serve --backend
 openai`) so vLLM and SGLang numbers are comparable by construction. Fill
-`arms.tsv` with both engines' levers (one arm per lever; first row per engine is
+`arms.tsv` with both engines' levers (one arm per lever. First row per engine is
 that engine's baseline):
 
 - **vLLM levers:** `max_num_batched_tokens`, `kv-cache-dtype`, `cudagraph_mode`,
@@ -203,14 +203,14 @@ top-X cross-engine champion with the production recommendation. Import the
 baseline + each kept variant's roofline sweep into the ONE campaign so page 7
 overlays baseline-vs-optimized on a single per-GPU roofline (see
 `plugins/profile-and-optimize/server/tools/perf_tune_report/ROOFLINE-METHODOLOGY.md`). The champion VERDICT requires the multi-workload + accuracy gates
-(`--workloads-present`, `--accuracy-gate pass`) and L3 byte-grounding; see
+(`--workloads-present`, `--accuracy-gate pass`) and L3 byte-grounding. See
 [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md).
 
 ### Optional: the --optimizer hook (stub, later phase)
 
 A future `--optimizer bayesian|hyperband` flag would replace the fixed grid with
 an adaptive propose/validate loop borrowing the `ai_tuning_*`
-report -> space -> proposal -> validate machinery. Out of scope for v1; the grid
+report -> space -> proposal -> validate machinery. Out of scope for v1. The grid
 sweep is the shipped behavior. The hook is documented here so the search surface
 is forward-compatible.
 
@@ -227,15 +227,15 @@ a DRAFT.
 
 - **Scheduling (cluster-profile aware)** -- on plain K8s (e.g. GB300):
   `default-scheduler` + a `kubectl` free-GPU preflight (k8s requests are
-  authoritative); on Slurm-on-K8s (e.g. B200): the Slurm `schedulerName` + the lock
+  authoritative). On Slurm-on-K8s (e.g. B200): the Slurm `schedulerName` + the lock
   toleration + `sinfo`/`squeue`, where a `default-scheduler` + hard `nodeSelector`
   GPU grab is forbidden (double-books Slurm). NOTE: if the chart cannot stage
   model weights per cell, run the config sweep via the variant A/B harness
   (`run-variant-ab.sh` arms) instead of `campaign_run`/helm.
-- **Ack-gated** -- `campaign_run` is `submits_jobs`-tier; fails closed without
+- **Ack-gated** -- `campaign_run` is `submits_jobs`-tier. Fails closed without
   `--i-understand-this-submits-jobs`. `--dry-run` is the safe preview.
 - **Experiment isolation** -- sweep cells use experiment-prefixed serve names +
-  `experiment=<id-slug>` labels; teardown by label. Never reuse standing names.
+  `experiment=<id-slug>` labels. Teardown by label. Never reuse standing names.
 - **No silent fallbacks** -- a within-noise result is reported as "no
   improvement", never rounded up to a win.
 
@@ -263,7 +263,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -282,7 +282,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.

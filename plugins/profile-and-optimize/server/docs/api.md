@@ -8,7 +8,7 @@ stable shared primitives from the `tools.shared` modules listed below.
 Operator commands remain under [`tools/`](/plugins/profile-and-optimize/server/tools).
 
 Do not import other `tools.pipeline...` modules directly from external
-code; their layout and signatures are internal and may change without
+code. Their layout and signatures are internal and may change without
 notice.
 
 ## Stable Exports

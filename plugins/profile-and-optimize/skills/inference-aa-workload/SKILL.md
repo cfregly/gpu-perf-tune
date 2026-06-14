@@ -41,7 +41,7 @@ benchmarking methodology](https://artificialanalysis.ai/methodology/performance-
 against an OpenAI-compatible chat endpoint, so your deployment
 can be compared apples-to-apples with AA's published leaderboard
 numbers. AA tests three text workload shapes with fixed sampling parameters
-and an "at least N answer tokens" guarantee; this skill drives NVIDIA
+and an "at least N answer tokens" guarantee. This skill drives NVIDIA
 [AIPerf](https://github.com/ai-dynamo/aiperf) to emit the same shapes and
 captures TTFT / output-speed / throughput.
 
@@ -72,7 +72,7 @@ Two run modes:
   (`--input-file ... --custom-dataset-type mooncake_trace` with the
   `text_input` field), giving deterministic cross-endpoint comparability.
 
-## Reasoning models (TTFT vs TTFO; thinking often cannot be disabled)
+## Reasoning models (TTFT vs TTFO. Thinking often cannot be disabled)
 
 AA's synthetic-filler + `min_tokens` + `ignore_eos` shape is **ill-posed for a reasoning
 model**. With filler input the model reasons about nonsense and fills the entire answer
@@ -89,11 +89,11 @@ tokens and ZERO answer tokens), so the AA "answer length" guarantee becomes a
 Rules for reasoning models:
 
 1. **Report TTFO with its COVERAGE, not TTFT.** AIPerf averages TTFO over only the
-   requests that emitted an answer token; on synthetic filler a reasoning model can
+   requests that emitted an answer token. On synthetic filler a reasoning model can
    exhaust the whole budget thinking, so always pair `ttfo_avg_ms` with `ttfo_coverage`
    (= ttfo.count/ttft.count) - a low-coverage TTFO is an answered-subset stat. The
    perf-report runners persist `ttfo_avg_ms` + `ttfo_coverage` +
-   `reasoning_token_count` (schema `atlas_v1`); a TTFT-only number under-reports answer
+   `reasoning_token_count` (schema `atlas_v1`). A TTFT-only number under-reports answer
    latency by the whole think phase (a 0.10 s "TTFT" can hide a ~4 s answer latency).
 2. **TTFT/TTFO are NOT comparable across stacks unless normalized.** AIPerf can only split
    them when the stack surfaces a reasoning field it recognizes, and the field name/exposure
@@ -107,14 +107,14 @@ Rules for reasoning models:
    vendor ships no non-thinking mode. When no-think is impossible, the only
    apples-to-apples latency is **TTFO on a real-content prompt** (`--mode dataset-replay`
    with a real-content `--input-file`), because a real question elicits a bounded think then
-   an answer; synthetic filler does not. Pass `--reasoning` to the reproducer to surface
+   an answer. Synthetic filler does not. Pass `--reasoning` to the reproducer to surface
    this guidance.
 
 4. **Record the reasoning-parser state PER STACK, and treat a tied TTFT==TTFO column on a
    reasoning model as the fingerprint of an UNCONFIGURED parser until falsified** (one
    streaming request: look for `reasoning_content`/`reasoning` delta fields). Measured on a
    large reasoning MoE in a single-stack A/B: with the parser off, TTFO collapses onto TTFT
-   exactly (think text streams inline as `content`, reasoning uncounted); with it on, TTFO
+   exactly (think text streams inline as `content`, reasoning uncounted). With it on, TTFO
    lands seconds later (the think phase) while the decode rate is parser-invariant. Reasoning
    splitting is OPT-IN on the common stacks (vLLM `--reasoning-parser`, NVIDIA Dynamo
    `--dyn-reasoning-parser`), so two endpoints under the same column header can be reporting
@@ -123,7 +123,7 @@ Rules for reasoning models:
 5. **Unified-parser landmine:** some engines register UNIFIED parsers where the TOOL-CALL
    parser alone activates reasoning splitting (e.g. vLLM 0.22 `minimax_m2`: "Using unified
    parser ... for reasoning and tool parsing"). You cannot keep tool parsing and disable
-   reasoning exposure; a true parser-OFF arm must drop the reasoning parser, the tool-call
+   reasoning exposure. A true parser-OFF arm must drop the reasoning parser, the tool-call
    parser, AND auto tool choice together.
 
 ## When to use
@@ -162,9 +162,9 @@ The skill **fails closed** if any of these are not satisfied.
    to `uv run --with aiperf --python 3.13 aiperf`, which fetches aiperf
    ephemerally), or `AIPERF_BIN` set. Canonical install:
    `uv tool install aiperf` - this lands the `aiperf` shim in `~/.local/bin`
-   (already on PATH; run `uv tool update-shell` once if that dir isn't on
+   (already on PATH. Run `uv tool update-shell` once if that dir isn't on
    PATH yet). Inside a venv you can instead `pip install aiperf` (PyPI
-   package `aiperf`, Python >=3.10; macOS and Linux x86_64 install from
+   package `aiperf`, Python >=3.10. MacOS and Linux x86_64 install from
    prebuilt wheels - Linux aarch64 needs a C toolchain, e.g.
    `build-essential`, for the `crick` dependency). The reproducer prefers a
    real `aiperf` on PATH over the uv fallback.
@@ -176,14 +176,14 @@ The skill **fails closed** if any of these are not satisfied.
    `o200k_base` token-budget sizing. Without it the generator falls back to
    a ~0.75 tokens/word heuristic and warns loudly.
 4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** (perf_tune_report integration only) - set by the
-   bundled MCP server; campaigns land under `./campaigns/` by default.
+   bundled MCP server. Campaigns land under `./campaigns/` by default.
 
 ## Interaction style
 
 Iterative - confirm parameters, optionally generate the dataset, run the
 shapes one at a time, report TTFT / output-speed / throughput per shape,
 then (optionally) bridge to the perf_tune_report campaign pipeline. Pause at each
-gate; never auto-advance past a failed shape.
+gate. Never auto-advance past a failed shape.
 
 ## Workflow
 
@@ -191,7 +191,7 @@ gate; never auto-advance past a failed shape.
 
 Resolve the operator request to concrete parameters and state them back:
 model, endpoint URL, shapes (`aa-1k,aa-10k,aa-100k`), load scenario
-(concurrency 1 = AA "single prompt"; concurrency 10 = AA "parallel
+(concurrency 1 = AA "single prompt". Concurrency 10 = AA "parallel
 prompts"), mode (`synthetic` vs `dataset-replay`), and request count. Get
 confirmation before running.
 
@@ -228,7 +228,7 @@ the perf-lake (Phase 2).
 ### Phase 2: perf_tune_report campaign path (traceable, roofline-ready)
 
 One AA shape maps to one perf-report cell (so the `(cell_id, concurrency)`
-atlas key stays unique; a campaign that wants all three shapes uses three
+atlas key stays unique. A campaign that wants all three shapes uses three
 cells: `aa-1k`, `aa-10k`, `aa-100k`). Each cell's YAML carries an `aa:`
 block (`model`, `url`, `shape`, `mode`, `api_key_env`, optional
 `tokenizer` / `custom_dataset_type` / `namespace`+`bench_pod`+`kube_context`
@@ -243,13 +243,13 @@ acceptance length (`AL = 1 + accepted/drafts`) + accept rate
 On a spec-OFF deploy the window sees no drafts and the fields stay null.
 Opt out with `aa: {spec_scrape: false}`.
 
-**Settle discipline (sweep vs sleep; opt-in, kube mode).** Deploy-first
+**Settle discipline (sweep vs sleep. Opt-in, kube mode).** Deploy-first
 measurements run 6-37% low without shape-matched warmup (measured in a GB300
 settle audit), and prewarm alone is insufficient. Enable via the cell's
 `aa:` block: `prewarm_shapes: [aa-1k, aa-10k]` (one completion per shape at
 the shape's dims before the sweep), `burn_in: true` (one run-and-discard pass
 of the first concurrency point), `settle_s: 30` (pause after prewarm/burn-in
-and between recorded points). Steps are logged to `<cell>/commands/settle.log`;
+and between recorded points). Steps are logged to `<cell>/commands/settle.log`,
 never quote a first-after-deploy number without this discipline.
 
 ```text
@@ -266,7 +266,7 @@ mcp__profile_and_optimize__perf_tune_report_report_render   with: args: ["--camp
 mcp__profile_and_optimize__perf_tune_report_publish_to_lake with: args: ["--campaign", "<id>", "--json"]
 ```
 
-`cell_run --backend aa` is **ack-gated** (`safety=submits_jobs`); use
+`cell_run --backend aa` is **ack-gated** (`safety=submits_jobs`). Use
 `--dry-run` to print the per-concurrency aiperf commands without executing.
 AA cells flow through `atlas_aggregate -> report_render -> publish_to_lake`
 unchanged because the runner records `backend=aiperf` provenance and stashes
@@ -298,7 +298,7 @@ Then re-render (`report_render`) so page 7 + `roofline_v1` land. See
   [`server/docs/mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md).
   Pass `--i-understand-this-submits-jobs` to execute, `--dry-run` to preview.
 - **No credentials in artifacts.** The API key is read from the env var
-  named by `cell.aa.api_key_env` (default `WANDB_INFERENCE_API_KEY`); it is
+  named by `cell.aa.api_key_env` (default `WANDB_INFERENCE_API_KEY`). It is
   never written into the campaign config, `SOURCE.md`, or commit history.
 - **Public-gateway caveat.** AA's methodology benchmarks a provider's public
   endpoint, so the standalone script defaults to the W&B public gateway. The
@@ -322,7 +322,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -331,7 +331,7 @@ Every result table this skill produces MUST carry a `%SoL` column alongside
 absolute throughput / latency, per `docs/METHODOLOGY.md` "Speed-of-light
 framing". Peak numbers come from the shared
 `configs/sol-ceilings.yaml` cited by key path
-(`b200_sm100.hbm3e_tbps`, etc.); the perf_tune_report renderer auto-emits the SoL
+(`b200_sm100.hbm3e_tbps`, etc.). The perf_tune_report renderer auto-emits the SoL
 pages when DCGM + zymtrace capture is present for the bench window.
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
@@ -343,7 +343,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -356,7 +356,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 - perf_tune_report runner: [`server/tools/perf_tune_report/runners/aa_bench.py`](/plugins/profile-and-optimize/server/tools/perf_tune_report/runners/aa_bench.py).
 - Self-contained script: [`assets/repro_artificialanalysis.py`](/plugins/profile-and-optimize/skills/inference-aa-workload/assets/repro_artificialanalysis.py).
 - Pair: [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
-  (in-cluster multi-turn replay counterpart);
+  (in-cluster multi-turn replay counterpart),
   [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md)
   (renders the campaign PDF).
 - [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - full-context reporting + Speed-of-light framing.

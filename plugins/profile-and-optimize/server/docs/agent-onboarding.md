@@ -66,7 +66,7 @@ Full snippets and troubleshooting live in
 ## Skills
 
 The plugin's skills live under `plugins/profile-and-optimize/skills/` and
-travel with any clone; the plugin README carries the full table. Cursor
+travel with any clone. The plugin README carries the full table. Cursor
 users can symlink every skill into `~/.cursor/skills/` with
 `make refresh-symlinks` from the repo root.
 

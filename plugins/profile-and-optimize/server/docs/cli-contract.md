@@ -1,28 +1,28 @@
 Status: Active
-Audience: contributors implementing or reviewing any of the 12 contract-bearing libraries; the MCP server that auto-derives its tool surface from these CLIs.
+Audience: contributors implementing or reviewing any of the 12 contract-bearing libraries. The MCP server that auto-derives its tool surface from these CLIs.
 
 # CLI Contract for the 12 contract-bearing libraries
 
-This document is the single source of truth for the operator-facing CLI verbs the active surface exposes. The CLIs under [`selector/`](/plugins/profile-and-optimize/server/selector), [`contention/`](/plugins/profile-and-optimize/server/contention), [`ai_tuning/`](/plugins/profile-and-optimize/server/ai_tuning), [`profile/`](/plugins/profile-and-optimize/server/profile), [`perf_baseline/`](/plugins/profile-and-optimize/server/perf_baseline), [`evidence/`](/plugins/profile-and-optimize/server/evidence), [`slurm/`](/plugins/profile-and-optimize/server/slurm), [`experiments/`](/plugins/profile-and-optimize/server/experiments), [`findings/`](/plugins/profile-and-optimize/server/findings), [`k8s_launch/`](/plugins/profile-and-optimize/server/k8s_launch), [`perf_tune_report/`](/plugins/profile-and-optimize/server/perf_tune_report), and [`known_good_config/`](/plugins/profile-and-optimize/server/known_good_config) implement every verb listed below; the MCP server in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) introspects the same parsers and registers one MCP tool per verb (76 in total).
+This document is the single source of truth for the operator-facing CLI verbs the active surface exposes. The CLIs under [`selector/`](/plugins/profile-and-optimize/server/selector), [`contention/`](/plugins/profile-and-optimize/server/contention), [`ai_tuning/`](/plugins/profile-and-optimize/server/ai_tuning), [`profile/`](/plugins/profile-and-optimize/server/profile), [`perf_baseline/`](/plugins/profile-and-optimize/server/perf_baseline), [`evidence/`](/plugins/profile-and-optimize/server/evidence), [`slurm/`](/plugins/profile-and-optimize/server/slurm), [`experiments/`](/plugins/profile-and-optimize/server/experiments), [`findings/`](/plugins/profile-and-optimize/server/findings), [`k8s_launch/`](/plugins/profile-and-optimize/server/k8s_launch), [`perf_tune_report/`](/plugins/profile-and-optimize/server/perf_tune_report), and [`known_good_config/`](/plugins/profile-and-optimize/server/known_good_config) implement every verb listed below. The MCP server in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) introspects the same parsers and registers one MCP tool per verb (76 in total).
 
 The 4 cluster-performance libraries inherited from the original seed (`selector`, `contention`, `ai_tuning`, `profile`) account for 27 verbs. The 8 profile-and-optimize-native libraries (`perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`, `k8s_launch`, `perf_tune_report`, `known_good_config`) account for the remaining 49 verbs, with `perf_tune_report` - the inference perf-tuning campaign engine - carrying 29 of them.
 
 Three of the seed libraries are shim packages: [`contention/`](/plugins/profile-and-optimize/server/contention), [`ai_tuning/`](/plugins/profile-and-optimize/server/ai_tuning), and [`profile/`](/plugins/profile-and-optimize/server/profile) re-export the canonical implementations from `tools/pipeline/gb300/contention/contention_cli.py`, `tools/ai_tuning/ai_tuning.py`, and `tools/pipeline/submission/profile/profile_cli.py` respectively. The profile-and-optimize-native libraries follow the same pattern: each ships a thin `<library>/cli.py` that re-exports from `tools/<library>/<library>_cli.py`. Only `selector` carries its implementation in the package itself. The shims exist so the MCP surface can resolve `<repo_root>/<library>/cli.py` the same way for every library.
 
-The contract is small on purpose. Every verb fits the same schema, every safety class derives from a single flag, and every verb exposes a JSON output mode. New operator-grade workflows add a verb here; lower-level helpers stay as importable Python and do not get a CLI surface unless an operator workflow needs them.
+The contract is small on purpose. Every verb fits the same schema, every safety class derives from a single flag, and every verb exposes a JSON output mode. New operator-grade workflows add a verb here. Lower-level helpers stay as importable Python and do not get a CLI surface unless an operator workflow needs them.
 
 ## Conventions
 
-- **Library names**: `selector`, `contention`, `ai_tuning`, `profile`, `perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`, `k8s_launch`, `perf_tune_report`, `known_good_config`. Each is invokable as `python -m <library>`. The `selector` package additionally ships the `mlperf-selector` console script and `perf_tune_report` ships the `perftunereport` console script; the remaining ten packages are invoked through `python -m <library>` only.
+- **Library names**: `selector`, `contention`, `ai_tuning`, `profile`, `perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`, `k8s_launch`, `perf_tune_report`, `known_good_config`. Each is invokable as `python -m <library>`. The `selector` package additionally ships the `mlperf-selector` console script and `perf_tune_report` ships the `perftunereport` console script. The remaining ten packages are invoked through `python -m <library>` only.
 - **MCP tool names**: `<library>_<verb>` with hyphenated verbs converted to underscores (`gate-256n` -> `selector_gate_256n`).
 - **Safety classes** derive from the verb's flag set:
   - `read_only` - no `--i-understand-*` flag and no `--out-dir`-by-default writes.
   - `writes_artifacts` - takes `--out-dir` and writes there (no ack flag), or carries `--i-understand-this-stages-artifacts`.
   - `submits_jobs` - carries `--i-understand-this-submits-jobs`.
-  - `pulls_data` - carries `--i-understand-this-pulls-license-gated-data`. Defined for license-gated dataset pulls; no active verb currently uses it.
+  - `pulls_data` - carries `--i-understand-this-pulls-license-gated-data`. Defined for license-gated dataset pulls. No active verb currently uses it.
   - `substitutes_nodes` - carries `--i-understand-this-substitutes-nodes`. Mutates Slurm cluster state (node drain/resume) without submitting new jobs. Used by `slurm drain`, `slurm resume`, and `slurm quiet_window`.
 - **Output mode**: every verb supports `--json` for machine-consumable output. Verbs that only print human text MUST still expose `--json` (return a single-key payload at minimum).
-- **Help line**: `--help` returns at least one paragraph; the first line is a single-sentence description that fits in the verb table below.
+- **Help line**: `--help` returns at least one paragraph. The first line is a single-sentence description that fits in the verb table below.
 - **Dry-run pattern**: every verb that can mutate state defaults to dry-run when no `--i-understand-*` flag is set. The `--dry-run` flag is also accepted explicitly for symmetry.
 
 ## Verb matrix
@@ -37,12 +37,12 @@ Every verb in this table has the columns shown, plus a "Required flags" and "Opt
 | `ai_tuning` | `report` | `read_only` | Build a bounded JSON tuning report from raw results, ledger, and fabric evidence. |
 | `ai_tuning` | `finalize` | `writes_artifacts` | Assemble or dry-run a benchmark result bundle from a tuned run. |
 | `ai_tuning` | `proposal` | `read_only` | Proposal helpers (subverb: validate / diff). |
-| `ai_tuning` | `template-patch` | `writes_artifacts` | Template patch helpers (subverb: validate; --apply mutates files). |
+| `ai_tuning` | `template-patch` | `writes_artifacts` | Template patch helpers (subverb: validate, --apply mutates files). |
 | `ai_tuning` | `experiment` | `writes_artifacts` | Experiment ledger helpers (subverb: create / update / summary / submit / poll / collect). The `submit` subverb takes its own `--i-understand-this-submits-jobs` ack flag. |
 | `profile` | `host-overhead` | `writes_artifacts` | py-spy CPU sampler for the rank-0 process (subverb: top / record / dump). |
 | `profile` | `profile-diff` | `writes_artifacts` | Diff two nsys-rep files (or pre-extracted nsys-stats CSV dirs) and emit per-area NVTX / kernel / CUDA-API / NCCL delta tables. |
 | `perf_baseline` | `record` | `writes_artifacts` | Register a new perf-baseline entry under `experiments/artifacts/perf-baselines/`. |
-| `perf_baseline` | `diff` | `writes_artifacts` | Diff a current measurement against a registered baseline; emit per-dimension delta + verdict. |
+| `perf_baseline` | `diff` | `writes_artifacts` | Diff a current measurement against a registered baseline. Emit per-dimension delta + verdict. |
 | `evidence` | `init` | `writes_artifacts` | Scaffold a new immutable evidence bundle directory (SOURCE.md, summary.md, commands/). |
 | `slurm` | `triage` | `read_only` | Triage a failed Slurm job by parsing sacct + slurm-<jobid>.out against the failure-signature catalog. |
 | `slurm` | `drain` | `substitutes_nodes` | Drain a comma-list of Slurm node names (`scontrol update State=DRAIN`) on a Slurm-on-K8s cluster, with full evidence-bundle capture. |
@@ -55,7 +55,7 @@ Every verb in this table has the columns shown, plus a "Required flags" and "Opt
 | `perf_tune_report` | `cell_run` | `submits_jobs` | Run one cell via vllm-sweep, aiperf, or aa backend (ack-gated). |
 | `perf_tune_report` | `campaign_run` | `submits_jobs` | Campaign-level orchestrator: loops a matrix YAML, running the full drain -> deploy -> bench -> aggregate -> render pipeline per cell (ack-gated). |
 | `perf_tune_report` | `atlas_aggregate` | `writes_artifacts` | Aggregate per-cell normalized.json into atlas.jsonl + coverage summary. |
-| `perf_tune_report` | `report_render` | `writes_artifacts` | Render the perf-report PDF from a campaign's atlas.jsonl; omitted SoL/kernel/DCGM pages surfaced loudly. |
+| `perf_tune_report` | `report_render` | `writes_artifacts` | Render the perf-report PDF from a campaign's atlas.jsonl. Omitted SoL/kernel/DCGM pages surfaced loudly. |
 | `perf_tune_report` | `report_smoke` | `read_only` | Render the PDF from the bundled synthetic fixture (no cluster needed). |
 | `perf_tune_report` | `publish_to_lake` | `writes_artifacts` | Publish a campaign's atlas + provenance as Parquet to the perf-lake object store. |
 | `perf_tune_report` | `import_perf_bench` | `writes_artifacts` | Import an existing inference-perf-bench bundle into a perf-report campaign as cells/<cell-id>/normalized.json. |
@@ -67,7 +67,7 @@ Every verb in this table has the columns shown, plus a "Required flags" and "Opt
 | `perf_tune_report` | `import_workloads` | `writes_artifacts` | Import a bench-all-workloads output dir into dataset-tagged per-workload campaign cells. |
 | `perf_tune_report` | `dcgm_correlate` | `writes_artifacts` | Fold a frozen DCGM measurement YAML into a campaign cell's dcgm_correlation.json (byte-grounded workload-level SoL). |
 | `perf_tune_report` | `graph_diff` | `writes_artifacts` | Diff two torch.compile dynamo+inductor log dumps and emit a structured graph_diff.json + per-graph unified diffs. |
-| `perf_tune_report` | `kernel_profile` | `submits_jobs` | Capture per-kernel CUDA profile from a live vLLM pod via the nsys-sidecar (ack-gated; adds an ephemeral container). |
+| `perf_tune_report` | `kernel_profile` | `submits_jobs` | Capture per-kernel CUDA profile from a live vLLM pod via the nsys-sidecar (ack-gated. Adds an ephemeral container). |
 | `perf_tune_report` | `kernel_reproducer_scaffold` | `writes_artifacts` | Scaffold a standalone CUDA/CUTLASS kernel reproducer (.cu + build script) for white-box kernel debugging. |
 | `perf_tune_report` | `capture_plan` | `writes_artifacts` | Build an exact-variant capture-reuse plan for a target campaign from local atlas rows + capture artifacts. |
 | `perf_tune_report` | `materialize_capture_reuse` | `writes_artifacts` | Copy exact-match capture artifacts from a capture_plan JSON into target cells with provenance. |
@@ -124,10 +124,10 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `ai_tuning optimizer`
 
-- Description: Optimizer-backed proposal helpers; takes a subverb (`propose` | `status` | `history` | `compare` | `import-hyp`) plus subverb-specific flags. The subverb is a nested argparse subparser; all flags are on the subverb parsers, not on the optimizer parent.
+- Description: Optimizer-backed proposal helpers. Takes a subverb (`propose` | `status` | `history` | `compare` | `import-hyp`) plus subverb-specific flags. The subverb is a nested argparse subparser. All flags are on the subverb parsers, not on the optimizer parent.
 - Safety: `writes_artifacts`
 - Required flags: subverb (`propose` | `status` | `history` | `compare` | `import-hyp`)
-- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set; every subverb accepts an output path).
+- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set. Every subverb accepts an output path).
 - Output mode: `--json`
 - Ack flag: none
 
@@ -151,7 +151,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `ai_tuning proposal`
 
-- Description: Proposal helpers; takes a subverb (`validate` | `diff`) plus subverb-specific flags. The subverb is a nested argparse subparser; all `--*` flags are on the subverb parsers, not on the `proposal` parent.
+- Description: Proposal helpers. Takes a subverb (`validate` | `diff`) plus subverb-specific flags. The subverb is a nested argparse subparser. All `--*` flags are on the subverb parsers, not on the `proposal` parent.
 - Safety: `read_only`
 - Required flags: subverb (`validate` | `diff`)
 - Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set).
@@ -160,7 +160,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `ai_tuning template-patch`
 
-- Description: Template patch helpers; takes a subverb (`validate`) plus subverb-specific flags. The validate subverb has an apply mode that mutates files, so the umbrella safety class is `writes_artifacts`.
+- Description: Template patch helpers. Takes a subverb (`validate`) plus subverb-specific flags. The validate subverb has an apply mode that mutates files, so the umbrella safety class is `writes_artifacts`.
 - Safety: `writes_artifacts`
 - Required flags: subverb (`validate`)
 - Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set).
@@ -169,34 +169,34 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `ai_tuning experiment`
 
-- Description: Experiment ledger helpers; takes a subverb (`create` | `update` | `summary` | `submit` | `poll` | `collect`) plus subverb-specific flags. The submit subverb carries its own ack flag at the subparser level; pass it through `args` when actually submitting. The umbrella stays `writes_artifacts` so the MCP runtime does not auto-append the ack flag to read-only subverbs (summary, poll).
+- Description: Experiment ledger helpers. Takes a subverb (`create` | `update` | `summary` | `submit` | `poll` | `collect`) plus subverb-specific flags. The submit subverb carries its own ack flag at the subparser level. Pass it through `args` when actually submitting. The umbrella stays `writes_artifacts` so the MCP runtime does not auto-append the ack flag to read-only subverbs (summary, poll).
 - Safety: `writes_artifacts`
 - Required flags: subverb (`create` | `update` | `summary` | `submit` | `poll` | `collect`)
-- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set; the submit subverb requires its own ack flag for actual submission).
+- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set. The submit subverb requires its own ack flag for actual submission).
 - Output mode: `--json`
-- Ack flag: none (subverb-level only; the submit subverb owns its own ack flag).
+- Ack flag: none (subverb-level only. The submit subverb owns its own ack flag).
 
 ### `profile host-overhead`
 
-- Description: py-spy CPU sampler for the rank-0 process; takes a subverb (`top` | `record` | `dump`) plus subverb-specific flags.
+- Description: py-spy CPU sampler for the rank-0 process. Takes a subverb (`top` | `record` | `dump`) plus subverb-specific flags.
 - Safety: `writes_artifacts`
 - Required flags: subverb (`top` | `record` | `dump`)
-- Optional flags: subverb-specific (see [`tools/pipeline/submission/profile/host_overhead.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/host_overhead.py); every subverb supports `--json`).
+- Optional flags: subverb-specific (see [`tools/pipeline/submission/profile/host_overhead.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/host_overhead.py). Every subverb supports `--json`).
 - Output mode: `--json`
 - Ack flag: none
 
 ### `profile profile-diff`
 
-- Description: Diff two nsys-rep files (or pre-extracted nsys-stats CSV dirs) and emit per-area NVTX / kernel / CUDA-API / NCCL delta tables. The legacy `--json PATH` flag has been renamed to `--json-out PATH`; the bare `--json` is now a no-op flag accepted so the MCP runtime's auto-appended `--json` does not error.
+- Description: Diff two nsys-rep files (or pre-extracted nsys-stats CSV dirs) and emit per-area NVTX / kernel / CUDA-API / NCCL delta tables. The legacy `--json PATH` flag has been renamed to `--json-out PATH`. The bare `--json` is now a no-op flag accepted so the MCP runtime's auto-appended `--json` does not error.
 - Safety: `writes_artifacts`
-- Required flags: (none; `--baseline` / `--baseline-csv-dir` mutually exclusive, same for candidate)
+- Required flags: (none, `--baseline` / `--baseline-csv-dir` mutually exclusive, same for candidate)
 - Optional flags: `--baseline`, `--baseline-csv-dir`, `--candidate`, `--candidate-csv-dir`, `--baseline-label`, `--candidate-label`, `--out`, `--json-out`, `--limit`, `--scratch`, `--json`
 - Output mode: `--json`
 - Ack flag: none
 
 ### `perf_baseline record`
 
-- Description: Register a new perf-baseline entry under `experiments/artifacts/perf-baselines/` (workload-agnostic; family + measurement name are operator-supplied).
+- Description: Register a new perf-baseline entry under `experiments/artifacts/perf-baselines/` (workload-agnostic. Family + measurement name are operator-supplied).
 - Safety: `writes_artifacts`
 - Required flags: `--family`, `--measurement`, `--source`
 - Optional flags: `--value`, `--unit`, `--schema`, `--notes`, `--repo-root`, `--json`
@@ -205,7 +205,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_baseline diff`
 
-- Description: Diff a current measurement against a registered baseline; emit per-dimension delta + GREEN/YELLOW/RED verdict.
+- Description: Diff a current measurement against a registered baseline. Emit per-dimension delta + GREEN/YELLOW/RED verdict.
 - Safety: `writes_artifacts`
 - Required flags: `--baseline`, `--current`
 - Optional flags: `--tolerance-percent`, `--tolerance-absolute`, `--repo-root`, `--json`
@@ -330,7 +330,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report report_render`
 
-- Description: Render the perf-report PDF from a campaign's atlas.jsonl. Omitted SoL/kernel/DCGM pages and empty charts are surfaced loudly (why + how-to-fix) on a completeness page + report_status.json; `--strict` exits non-zero when SoL is incomplete or 0 plot-ready points.
+- Description: Render the perf-report PDF from a campaign's atlas.jsonl. Omitted SoL/kernel/DCGM pages and empty charts are surfaced loudly (why + how-to-fix) on a completeness page + report_status.json, `--strict` exits non-zero when SoL is incomplete or 0 plot-ready points.
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`
 - Optional flags: `--out`, `--title`, `--variants-line`, `--data-source-line`, `--strict`, `--allow-ungrounded`, `--campaigns-dir`, `--json`
@@ -357,7 +357,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report import_perf_bench`
 
-- Description: Import an existing inference-perf-bench bundle into a perf-report campaign as cells/<cell-id>/normalized.json. Auto-detects the bundle pattern (vLLM bench-serve text format or drive_load.py JSONL); metadata sourced from the bundle's inference_perfbench_v1.json with `--model` / `--hardware` / ... overrides for any missing field. Records each cell's own ISL/OSL shape (per-number exact shape, no smoothing).
+- Description: Import an existing inference-perf-bench bundle into a perf-report campaign as cells/<cell-id>/normalized.json. Auto-detects the bundle pattern (vLLM bench-serve text format or drive_load.py JSONL). Metadata sourced from the bundle's inference_perfbench_v1.json with `--model` / `--hardware` / ... overrides for any missing field. Records each cell's own ISL/OSL shape (per-number exact shape, no smoothing).
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`, `--bundle`
 - Optional flags: `--cell-id`, `--model`, `--hardware`, `--quant`, `--tensor-parallel`, `--parallel-strategy`, `--mtp`, `--max-num-batched-tokens`, `--max-num-seqs`, `--patched-vllm-enabled`, `--notes`, `--concurrency`, `--dry-run`, `--campaigns-dir`, `--json`
@@ -375,7 +375,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report import_ncu`
 
-- Description: Import an ncu per-kernel bundle (with capture_sources.json declaring 'ncu' + ncu-profiles/*-sol.csv + *-raw.csv pairs) into a perf-report campaign as cells/<cell-id>/ncu_kernels.json, which the renderer's Speed-of-Light roofline scatter consumes. Handles both ncu wide and long/melted CSV shapes; `--set=basic` kernels import with measured %SoL but null arithmetic intensity. `--hw-key` selects the sol-ceilings.yaml hardware row (default b200_sm100).
+- Description: Import an ncu per-kernel bundle (with capture_sources.json declaring 'ncu' + ncu-profiles/*-sol.csv + *-raw.csv pairs) into a perf-report campaign as cells/<cell-id>/ncu_kernels.json, which the renderer's Speed-of-Light roofline scatter consumes. Handles both ncu wide and long/melted CSV shapes, `--set=basic` kernels import with measured %SoL but null arithmetic intensity. `--hw-key` selects the sol-ceilings.yaml hardware row (default b200_sm100).
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`, `--cell-id`, `--bundle`
 - Optional flags: `--hw-key`, `--dry-run`, `--campaigns-dir`, `--json`
@@ -384,7 +384,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report import_roofline_sweep`
 
-- Description: Import an always-on prefill+decode roofline sweep bundle (decode_sweep.jsonl + prefill_sweep.jsonl) into a campaign. Emits cells/<id>-decode + <id>-prefill normalized.json (AtlasCell rows carrying per-(phase, concurrency/ISL) DCGM PROF utilization plus analytical roofline coords) and a roofline_sweep.json the prefill/decode roofline renderer page consumes. Metadata defaults from roofline_sweep_manifest.json; override hardware/TP/quant/kv-dtype via flags.
+- Description: Import an always-on prefill+decode roofline sweep bundle (decode_sweep.jsonl + prefill_sweep.jsonl) into a campaign. Emits cells/<id>-decode + <id>-prefill normalized.json (AtlasCell rows carrying per-(phase, concurrency/ISL) DCGM PROF utilization plus analytical roofline coords) and a roofline_sweep.json the prefill/decode roofline renderer page consumes. Metadata defaults from roofline_sweep_manifest.json. Override hardware/TP/quant/kv-dtype via flags.
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`, `--bundle`
 - Optional flags: `--cell-id`, `--model`, `--hardware`, `--quant`, `--kv-dtype`, `--kv-cache-dtype`, `--model-config`, `--tensor-parallel`, `--parallel-strategy`, `--mtp`, `--max-num-batched-tokens`, `--cache-mode`, `--dataset`, `--cudagraph-mode`, `--enforce-eager`, `--gpu-memory-utilization`, `--image`, `--delivery`, `--overlay-mode`, `--patch-files`, `--data-parallel`, `--pipeline-parallel`, `--dry-run`, `--campaigns-dir`, `--json`
@@ -393,7 +393,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report import_variant_ab`
 
-- Description: Import a cross-engine variant A/B bundle (one `<arm>/c<C>-t<T>.txt` per arm) into a campaign as one cells/<arm>/normalized.json per arm, trial-averaged and engine-tagged (vllm-sweep | sglang-sweep) so both engines' arms are first-class and cross-engine-comparable. Per-arm zymtrace SoL is auto-ingested when the bundle declares capture sources. This is the first-class form of the variant-A/B path that `import_perf_bench` auto-dispatches; it feeds `champion_select`. `--require-plot-ready` hard-fails if any arm lacks the throughput-scatter fields a strict publish needs.
+- Description: Import a cross-engine variant A/B bundle (one `<arm>/c<C>-t<T>.txt` per arm) into a campaign as one cells/<arm>/normalized.json per arm, trial-averaged and engine-tagged (vllm-sweep | sglang-sweep) so both engines' arms are first-class and cross-engine-comparable. Per-arm zymtrace SoL is auto-ingested when the bundle declares capture sources. This is the first-class form of the variant-A/B path that `import_perf_bench` auto-dispatches. It feeds `champion_select`. `--require-plot-ready` hard-fails if any arm lacks the throughput-scatter fields a strict publish needs.
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`, `--bundle`, `--model`
 - Optional flags: `--hardware`, `--quant`, `--tensor-parallel`, `--parallel-strategy`, `--mtp`, `--max-num-batched-tokens`, `--cache-mode`, `--notes`, `--dataset`, `--cudagraph-mode`, `--enforce-eager`, `--gpu-memory-utilization`, `--kv-cache-dtype`, `--image`, `--delivery`, `--overlay-mode`, `--patch-files`, `--data-parallel`, `--pipeline-parallel`, `--require-plot-ready`, `--dry-run`, `--campaigns-dir`, `--json`
@@ -429,7 +429,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report graph_diff`
 
-- Description: Diff two torch.compile dynamo+inductor log dumps and emit a structured graph_diff.json + per-graph unified diffs. The operator pre-collects each side's log via `TORCH_LOGS=+dynamo,+inductor,+graph_breaks`; this verb is read-only on the cluster (parses local log files only).
+- Description: Diff two torch.compile dynamo+inductor log dumps and emit a structured graph_diff.json + per-graph unified diffs. The operator pre-collects each side's log via `TORCH_LOGS=+dynamo,+inductor,+graph_breaks`. This verb is read-only on the cluster (parses local log files only).
 - Safety: `writes_artifacts`
 - Required flags: `--side-a-log`, `--side-b-log`, `--output-dir`
 - Optional flags: `--side-a-label`, `--side-b-label`, `--notes`, `--dry-run`, `--json`
@@ -510,7 +510,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report trend_view`
 
-- Description: Longitudinal (model, variant_key) perf/quality trend across campaigns: group atlas rows by the stable capture-signature variant key + concurrency, order by captured_at, flag regressions, and show the serving image (engine-version axis). Local-first; same row shape as the lake's atlas_v1.variant_key for a published-lake pull.
+- Description: Longitudinal (model, variant_key) perf/quality trend across campaigns: group atlas rows by the stable capture-signature variant key + concurrency, order by captured_at, flag regressions, and show the serving image (engine-version axis). Local-first. Same row shape as the lake's atlas_v1.variant_key for a published-lake pull.
 - Safety: `writes_artifacts`
 - Required flags: (none)
 - Optional flags: `--metric`, `--concurrency`, `--regression-pct`, `--hardware`, `--out`, `--campaigns-dir`, `--lake-dir`, `--json`
@@ -519,7 +519,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report value_view`
 
-- Description: Render the value-prop ledger: join the curated value-findings.yaml registry with live perf-lake campaigns (sol_rigor + verdict tier) into a grouped DONE / IN-PROGRESS / NOT-DONE / CLOSED-NEGATIVE table. Read-only on the lake; flags any finding whose backing campaign is missing locally or ungrounded. Writes markdown to `--out` (or stdout).
+- Description: Render the value-prop ledger: join the curated value-findings.yaml registry with live perf-lake campaigns (sol_rigor + verdict tier) into a grouped DONE / IN-PROGRESS / NOT-DONE / CLOSED-NEGATIVE table. Read-only on the lake. Flags any finding whose backing campaign is missing locally or ungrounded. Writes markdown to `--out` (or stdout).
 - Safety: `writes_artifacts`
 - Required flags: (none)
 - Optional flags: `--registry`, `--out`, `--format`, `--title`, `--gpu-hr`, `--campaigns-dir`, `--json`
@@ -537,7 +537,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report fleet_leaderboard`
 
-- Description: Render the cross-model fleet leaderboards from local campaigns: a latency-tier leaderboard, a peak tok/s/GPU throughput leaderboard, and a perf Pareto frontier for model selection. Auto-discovers every model's AA + roofline cells; re-run after new campaigns publish.
+- Description: Render the cross-model fleet leaderboards from local campaigns: a latency-tier leaderboard, a peak tok/s/GPU throughput leaderboard, and a perf Pareto frontier for model selection. Auto-discovers every model's AA + roofline cells. Re-run after new campaigns publish.
 - Safety: `writes_artifacts`
 - Required flags: (none)
 - Optional flags: `--hardware`, `--gpu-hr`, `--out`, `--campaigns-dir`, `--json`
@@ -546,7 +546,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report champion_select`
 
-- Description: Select the production champion: from a campaign's atlas + per-cell SoL artifacts, rank the cross-engine (vLLM + SGLang) variant arms under the focus metric (tok/s/GPU or median TPOT) + a TPOT SLO, pick the baseline + top-X, summarize each across the SoL ladder, and emit a tiered (DRAFT/VERDICT) production recommendation. A VERDICT requires the variance, multi-workload, and accuracy gates AND byte-grounding of the champion; anything short is a DRAFT. Writes CHAMPION.md + champion_select.json. Pure post-processing - no cluster runs.
+- Description: Select the production champion: from a campaign's atlas + per-cell SoL artifacts, rank the cross-engine (vLLM + SGLang) variant arms under the focus metric (tok/s/GPU or median TPOT) + a TPOT SLO, pick the baseline + top-X, summarize each across the SoL ladder, and emit a tiered (DRAFT/VERDICT) production recommendation. A VERDICT requires the variance, multi-workload, and accuracy gates AND byte-grounding of the champion. Anything short is a DRAFT. Writes CHAMPION.md + champion_select.json. Pure post-processing - no cluster runs.
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`
 - Optional flags: `--focus`, `--focus-c`, `--top`, `--baseline`, `--metric`, `--slo-rel`, `--slo-abs-ms`, `--trials`, `--same-node`, `--require-workloads`, `--workloads-present`, `--accuracy-gate`, `--accuracy-floor`, `--out`, `--title`, `--dry-run`, `--campaigns-dir`, `--json`
@@ -564,7 +564,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `known_good_config check`
 
-- Description: Check a deploy's serve args contain every required flag for a model; fail-closed on a missing boot-blocker. Backs the [`inference-known-good-config`](/plugins/profile-and-optimize/skills/inference-known-good-config/SKILL.md) skill.
+- Description: Check a deploy's serve args contain every required flag for a model. Fail-closed on a missing boot-blocker. Backs the [`inference-known-good-config`](/plugins/profile-and-optimize/skills/inference-known-good-config/SKILL.md) skill.
 - Safety: `read_only`
 - Required flags: `--model`
 - Optional flags: `--registry`, `--serve-args`, `--deploy-file`, `--require-registered`, `--json`
@@ -573,16 +573,16 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ## MCP-surface derivation
 
-The MCP server walks all 8 CLI parsers and registers one MCP tool per verb listed above (51 contract-derived tools total; plus 2 auxiliary search tools registered separately by the FastMCP runtime = 53 MCP tools). The canonical counts live in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `_TOTAL_*` constants. Tool naming and safety derivation:
+The MCP server walks all 8 CLI parsers and registers one MCP tool per verb listed above (51 contract-derived tools total. Plus 2 auxiliary search tools registered separately by the FastMCP runtime = 53 MCP tools). The canonical counts live in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `_TOTAL_*` constants. Tool naming and safety derivation:
 
 - Tool name: `<library>_<verb_with_underscores>` (e.g. `selector_gate_256n`, `perf_tune_report_report_render`).
 - Safety: copied from this contract's "Safety" column verbatim.
 - Ack required: `True` whenever the verb has a non-empty "Ack flag" entry above.
 - JSON parsing: `True` whenever the verb's "Output mode" is `--json`.
 
-Every safety class in this contract is one of the five allowed values (`read_only`, `writes_artifacts`, `submits_jobs`, `pulls_data`, `substitutes_nodes`); [`tools/profile_and_optimize_mcp/tests/test_server_smoke.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/tests/test_server_smoke.py) asserts the live MCP-derived surface matches the canonical counts and safety classes.
+Every safety class in this contract is one of the five allowed values (`read_only`, `writes_artifacts`, `submits_jobs`, `pulls_data`, `substitutes_nodes`), [`tools/profile_and_optimize_mcp/tests/test_server_smoke.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/tests/test_server_smoke.py) asserts the live MCP-derived surface matches the canonical counts and safety classes.
 
 ## Out of scope
 
 - Lower-level Python helpers (e.g. `selector.scoring`) keep their import-only API and do not get CLI verbs.
-- Subverbs (e.g. `o11y print-queries` vs `o11y ingest`) are documented inside the parent verb spec; they do not appear as separate rows in the matrix.
+- Subverbs (e.g. `o11y print-queries` vs `o11y ingest`) are documented inside the parent verb spec. They do not appear as separate rows in the matrix.

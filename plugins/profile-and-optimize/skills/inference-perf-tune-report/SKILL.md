@@ -5,7 +5,7 @@ description: >-
   Build a multi-page benchmark report PDF (scatter panels + per-concurrency
   heatmap tables) from `vllm bench sweep serve_workload` and/or AIPerf outputs,
   in the GLM-5.1 reference layout (5x2 scatter facet by max_num_batched_tokens +
-  3x2 heatmap tables for C={8,16,32} x {tok/s/GPU, TTFT}; first-class
+  3x2 heatmap tables for C={8,16,32} x {tok/s/GPU, TTFT}. First-class
   failed/partial cells). Also renders the cross-engine (vLLM + SGLang) CHAMPION
   page 8: baseline vs top-X variants + the overlaid roofline + a
   RECOMMENDED-FOR-PRODUCTION pick via `champion_select`. Backed by the
@@ -46,7 +46,7 @@ GLM-5.1 reference layout:
 
 > **Steady-state window:** the report only renders what the sweep measured. A throughput
 > sweep cell needs `num_prompts >= 2*c` or its high-c throughput is undercounted
-> ~1.6-1.8x (ramp/drain-dominated window; `docs/METHODOLOGY.md` trap 4). The
+> ~1.6-1.8x (ramp/drain-dominated window, `docs/METHODOLOGY.md` trap 4). The
 > `import_roofline_sweep` importer flags `steady_window_undercount` + WARNs on any cell
 > `< 2c` - heed it before publishing the report.
 
@@ -54,12 +54,12 @@ GLM-5.1 reference layout:
   8192, 16384}) x 2 columns of scatter panes -- left=TTFT vs request
   throughput, right=tok/s/user vs tok/s/GPU. Inline-labels selected
   profiling concurrencies (default {1, 8, 32}). Color encodes (hardware,
-  TP); circle marker = EP, X marker = TP; hollow markers indicate MTP.
+  TP). Circle marker = EP, X marker = TP. Hollow markers indicate MTP.
 - **Page 2**: 3 rows (C in {8, 16, 32}) x 2 columns of heatmap tables
   showing output tok/s/GPU and TTFT avg (ms) for every (variant, mbt)
   combo, with gray cells for missing / failed / partial measurements.
 
-The renderer is workload-agnostic; it ingests any
+The renderer is workload-agnostic. It ingests any
 [`AtlasCell`](/plugins/profile-and-optimize/server/tools/perf_tune_report/schema.py)-shaped JSONL.
 Backends (vllm-sweep + AIPerf) normalize into the same schema.
 
@@ -238,8 +238,8 @@ warm best-case, the SLA point is the customer-commitment number.
 campaign without a config block -- `discover_tpm_config` falls back to a default
 SLA (TTFT<=2000ms / TPOT<=50ms / `gpus_per_node=8`) and a default cost table
 (representative public on-demand list rates per GPU: H100 $6.16 / H200 $6.31 /
-B200 $8.60; GB300 unset). Declare a `tpm:`/`cost:`
-block in the campaign `config.yaml` only to override (per field; cost is overlaid).
+B200 $8.60. GB300 unset). Declare a `tpm:`/`cost:`
+block in the campaign `config.yaml` only to override (per field. Cost is overlaid).
 `report_render` and `publish_to_lake` read it via `discover_tpm_config`, so all
 three surfaces emit the same peak + sla points. The SLA point is still left unset
 (not invented) for a group whose rows lack a decode metric (TPOT/ITL) at/under
@@ -251,9 +251,9 @@ overrides/extends the default cost table behind the `$/1M tok` PDF column and th
 `cost_v1` economics/TCO lake table (`$/1M output|total`, plus `tokens_per_watt` +
 `power_watts_per_gpu` when DCGM power is captured -- a `cost:` block cannot
 synthesize tokens-per-watt). Default rates: H100/H200/B200 = representative public
-list rates; **GB300 = $12.00/GPU-hr ESTIMATE (no public list rate)**. To
+list rates, **GB300 = $12.00/GPU-hr ESTIMATE (no public list rate)**. To
 derive `tokens_per_watt` the cell's DCGM power capture must record BOTH the bench
-window AND the node (per-node `DCGM_FI_DEV_POWER_USAGE`); a window-only artifact
+window AND the node (per-node `DCGM_FI_DEV_POWER_USAGE`). A window-only artifact
 cannot be re-queried later. The atlas
 also carries per-cell `mean_input_tokens`/`mean_output_tokens` (ISL/OSL, derived
 from the bench `Total input/generated tokens` lines -> `tpm_v1.mean_isl/mean_osl`),
@@ -280,7 +280,7 @@ perf_tune_report_dcgm_correlate --campaign <slug> --cell-id <cell> \
 Capture DCGM (SM/DRAM/tensor/GR + NVLINK bytes) concurrently with each cell's
 bench window so the means are real (see the experiment-isolation rule). A run
 that skips it publishes at `sol_rigor=L1` (`dcgm_grounded=false`) - valid and
-comparable, just less tight; prefer L3/L4 when DCGM/ncu are available.
+comparable, just less tight. Prefer L3/L4 when DCGM/ncu are available.
 
 ### Phase D3: prefill/decode roofline (page 7) - always-on
 
@@ -317,7 +317,7 @@ labeled) + the 75% line. For a model not in the built-in registry, pass
 `model_config.json`) so the analytical axis engages instead of the DCGM-proxy
 fallback. **Page 7 is now a strict-publish gate:** a throughput/mixed serving
 campaign with plot-ready points but no page 7 is REFUSED under `publish_to_lake
---strict` (the default; `--no-strict` records the gap). The rendered PDF also
+--strict` (the default, `--no-strict` records the gap). The rendered PDF also
 carries a **"Source under test"** page (vLLM/SGLang commit + delivery + infr patch
 + GitHub URL) from the bundle's `experiment_provenance_v1` block + `source-registry.yaml`.
 The campaign's recorded `delivery` is the code-under-test identity: a number
@@ -347,7 +347,7 @@ recommendation is **DRAFT** unless the champion passes the variance (`--same-nod
 + `--trials>=3`), multi-workload (`--workloads-present` covers the canonical
 suite), and accuracy (`--accuracy-gate pass`) gates AND is L3 byte-grounded --
 then it is a **VERDICT**. This is the deliverable that makes the prod choice
-obvious; run it before Phase E so page 8 lands in the PDF.
+obvious. Run it before Phase E so page 8 lands in the PDF.
 
 ### Phase E: render the PDF
 
@@ -359,10 +359,10 @@ perf_tune_report_report_render \
 ```
 
 `report_render` always renders + records `sol_complete` / `focus` / `sol_rigor`
-(it never refuses); `publish_to_lake --strict` is the opt-in gate if you want
+(it never refuses), `publish_to_lake --strict` is the opt-in gate if you want
 publish to refuse a `dcgm_grounded=false` or otherwise incomplete campaign.
 
-Default output path is `<campaign>/report.pdf`; override with `--out`.
+Default output path is `<campaign>/report.pdf`. Override with `--out`.
 
 The renderer embeds UTC provenance into the PDF (`CreationDate`/`ModDate`
 metadata + `Keywords` + a page-1 footer carrying `campaign=<run-id>`,
@@ -423,7 +423,7 @@ default, ship a config, or appear in a report.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
-- **Regime:** warm vs cold; latency vs throughput tier.
+- **Regime:** warm vs cold. Latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
@@ -432,7 +432,7 @@ The rendered PDF carries up to **four pages**, the last of which is the
 Speed-of-Light Roofline page. It draws automatically when:
 
 1. The campaign has at least one valid `cells/*/kernels.json` (page 3
-   precondition; zymtrace per-category data). A zymtrace L1 empty-now right after
+   precondition. Zymtrace per-category data). A zymtrace L1 empty-now right after
    the window is ClickHouse ingest lag, not absence - poll and requery
    after the flush (see
    [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md)).
@@ -447,8 +447,8 @@ loud "Report completeness" page in the PDF (with the exact reason + how to
 populate it), printed as a `WARNING:` on stderr, and returned in the
 `report_render` JSON `render_status` block (`sol_complete`, `focus`,
 `sol_rigor`, `omitted_pages`). `sol_complete=true` when ANY SoL page (4 zymtrace
-/ 5 ncu / 6 DCGM) renders; `sol_rigor` records the highest level present.
-Publish lands the row regardless (always-publish policy); pass
+/ 5 ncu / 6 DCGM) renders, `sol_rigor` records the highest level present.
+Publish lands the row regardless (always-publish policy). Pass
 `publish_to_lake --strict` only when you want a missing roofline or 0
 throughput-scatter points (non-`latency` focus) to be a hard refusal. When the
 YAML is found but malformed the renderer still raises `SoLCeilingsMalformed`
@@ -458,7 +458,7 @@ Per `server/AGENTS.md` "Speed-of-light framing", every campaign
 SHOULD also carry a `<campaign>/sol-summary.md` doc with the
 workload-level HBM-roofline calc and a link to the relevant grounding
 doc. The SoL summary
-is operator-written today; the page-4 visualisation is the auto-rendered
+is operator-written today. The page-4 visualisation is the auto-rendered
 companion.
 
 ## Asset validation (review + FAIL LOUD)
@@ -469,8 +469,8 @@ champion pages) is a DELIVERABLE held to `server/AGENTS.md` "Validate every gene
 data (`SoLCeilingsMalformed` / `KernelsJsonMalformed` raises, the degenerate-PDF guard that raises on
 a <10KB report, and the `methodology_problems` `--strict` gate that refuses an incomplete/`unknown`
 descriptor), and the agent **REVIEWS** the rendered PDF -- opens it, confirms every panel is accurate
-(numbers + identities + matched comparisons trace to the campaign; curves physically plausible;
-failed/partial cells shown as such; nothing mislabeled) -- and **rebuilds** it if wrong; never ship a
+(numbers + identities + matched comparisons trace to the campaign. Curves physically plausible,
+failed/partial cells shown as such. Nothing mislabeled) -- and **rebuilds** it if wrong. Never ship a
 broken/confusing report with a caveat.
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
@@ -482,7 +482,7 @@ measured win is the new floor, not the finish -- so **do everything we can to fi
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
 Rank the candidate breakthrough levers by value x cost (the GRIND FRONTIER, `perftunereport
-value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses;
+value_view`), pursue the top, bank the rest with evidence. Record WHY a refuted lever loses,
 update the standing frontier in the active bundle's `HANDOFF.md`. Never conclude
 "exhausted/optimal/done" without an explicit next-lever frontier (an empty frontier AND a
 documented SoL wall only). Delete this section ONLY if the skill produces no measurements.
@@ -496,7 +496,7 @@ metric-isolated (median TPOT/ITL for decode-latency claims), against a
 production-representative baseline, and (for which-kernel claims) backed by nsys/ncu
 per-kernel data. Under the always-publish policy a `verdict`-tier campaign
 missing this provenance is **auto-downgraded to `draft` and still lands** (the
-honest tier is recorded on `campaign_v1`); pass `publish_to_lake --strict` if you
+honest tier is recorded on `campaign_v1`). Pass `publish_to_lake --strict` if you
 want the unsupported verdict claim to refuse instead.
 
 ## Experiment isolation & traceability (mandatory)
@@ -512,7 +512,7 @@ experiment to use:
 - **`cell_run` cells that submit cluster workloads MUST use experiment-unique
   serve names + the `experiment=<id-slug>` label** and MUST NOT reuse
   standing/platform/migration names (forbidden list in the `server/AGENTS.md` rule).
-  Cluster-scoped PV names are global; a collision silently breaks another
+  Cluster-scoped PV names are global. A collision silently breaks another
   owner's PVC binding.
 - **`publish_to_lake` is mandatory**, not optional - a campaign is "done"
   once the atlas + campaign rows are written AND `report.pdf` contains a
@@ -523,7 +523,7 @@ experiment to use:
   `sol_rigor` (`L4` ncu | `L3` DCGM | `L1` zymtrace-proxy | `none`).
   `publish_to_lake` **never refuses** by default - a `dcgm_grounded=false` /
   latency-bound / proxy / no-SoL / 0-plot-ready run lands with the gap RECORDED
-  on `campaign_v1` + warned; an unsupported `verdict_tier=verdict`
+  on `campaign_v1` + warned. An unsupported `verdict_tier=verdict`
   auto-downgrades to `draft`. The one hard requirement is that `report_render`
   ran first. Pass `--strict` only when you want publish to refuse an incomplete
   campaign. Run `perf_tune_report_dcgm_correlate` (or the `inference-dcgm-correlate`
@@ -537,7 +537,7 @@ experiment to use:
 
 - [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) -- the
   per-deployment AIPerf runbook the `aiperf` backend wraps. Use it when
-  you only need to benchmark one deployment with one config; come here
+  you only need to benchmark one deployment with one config. Come here
   when you have an atlas to compare.
 - [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) /
   [`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-baseline-diff/SKILL.md) -- record a

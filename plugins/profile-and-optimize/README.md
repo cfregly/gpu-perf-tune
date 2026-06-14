@@ -11,7 +11,7 @@ measurement-rigor canon the skills enforce.
 
 ## Skills
 
-One directory per skill under [`skills/`](skills/); each contains a `SKILL.md`
+One directory per skill under [`skills/`](skills/). Each contains a `SKILL.md`
 (frontmatter: name, description, triggers, allowed tools) and optional assets.
 Start from [`skills/_template/SKILL.md`](skills/_template/SKILL.md) when adding
 a new one.
@@ -31,7 +31,7 @@ points:
   report-renderer extras).
 
 [`.mcp.json`](.mcp.json) declares the bundled server plus optional `grafana` and
-`github` servers. Tokens and URLs come from env vars; Claude Code skips any
+`github` servers. Tokens and URLs come from env vars. Claude Code skips any
 server whose env vars are unset, so configure only what you use.
 
 ### Operator-side optional MCPs

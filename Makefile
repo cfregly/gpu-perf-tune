@@ -29,8 +29,8 @@ help:
 	@printf '  make lint-tool-counts        Assert every doc that names a tool / library / aux-tool count agrees with the canonical constants in mcp_surface.py\n'
 	@printf '  make lint-versions           Assert README + plugin-README version headers match plugin.json version\n'
 	@printf '  make release                 Tag the current release commit vX.Y.Z (read from plugin.json) + push main + tag atomically (tagging rigidity)\n'
-	@printf '  make pytest                  Run the bundled pytest suite sequentially (~77 profile-and-optimize-native tests in <1s; requires `bash server/install.sh --with-dev` first)\n'
-	@printf '  make pytest-xdist            Same as `make pytest` but with `-n auto` (pytest-xdist parallel); slower for the ~77-test set due to worker-startup overhead; use only if you specifically want xdist semantics\n'
+	@printf '  make pytest                  Run the bundled pytest suite sequentially (~700 profile-and-optimize-native tests in <1s; requires `bash server/install.sh --with-dev` first)\n'
+	@printf '  make pytest-xdist            Same as `make pytest` but with `-n auto` (pytest-xdist parallel); slower for the ~700-test set due to worker-startup overhead; use only if you specifically want xdist semantics\n'
 	@printf '  make freshness               Per-skill freshness report based on last_validated frontmatter; YELLOW > 90d, RED > 180d\n'
 	@printf '  make bootstrap               One-shot Cursor/dev-clone setup: server venv + skill symlinks + ~/.cursor/mcp.json snippet (pass FULL=1 / DEV=1 to forward --full / --with-dev)\n'
 	@printf '  make print-mcp-snippet       Print the ~/.cursor/mcp.json `profile_and_optimize` block with the venv path resolved to this checkout (read-only)\n'
@@ -97,7 +97,7 @@ pytest:
 	  echo '[FAIL] pytest not installed; run: bash $(SERVER_DIR)/install.sh --with-dev'; \
 	  exit 2; \
 	fi
-	# Sequential pytest. The 77 profile-and-optimize-native tests average ~2ms each;
+	# Sequential pytest. The 700 profile-and-optimize-native tests average ~2ms each;
 	# pytest-xdist worker-process startup makes `-n auto` ~3.5x slower than
 	# sequential for this test set (1.58s xdist vs 0.45s sequential). The
 	# xdist dep stays in the `dev` extras for ad-hoc parallel runs against

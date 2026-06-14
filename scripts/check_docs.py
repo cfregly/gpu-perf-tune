@@ -9,12 +9,20 @@ Reads .doccheck.json at the repo root and checks, over the configured docs:
      or a draft marker (TODO / FIXME / TBD)
   3. every relative markdown link resolves to a real file
   4. (linters) the rule count the README states equals the count in code
+  5. (scores) every marquee score the README documents as a runnable command is
+     re-run and must still print that score. A command of the form
+     `python -m <module> <path> ... # ... NN/100` (or a bare `python <script>.py
+     ...`, denominator 100 or 10) is executed and its printed score is compared
+     to the one in the comment, so a rule change that moves a score cannot ship
+     while the README still advertises the old number. Opt in per repo with
+     "score_modules" in .doccheck.json (the allowlist of scorers the gate may
+     run); absent that key the check is a no-op.
 
 It also scans every shipped .md/.txt in the repo for em/en dashes and prose
-semicolons, the de-slop rules every repo's writing guide mandates (perf-tune's
-AGENTS.md and METHODOLOGY.md), over the whole tree rather than just the
-configured docs. Code spans, inline code, links, and entities are exempt from
-the semicolon scan, so a semicolon in a shell command or URL is left alone.
+semicolons, the de-slop rules every repo's writing guide mandates, over the
+whole tree rather than just the configured docs. Code spans, inline code,
+links, and entities are exempt from the semicolon scan, so a semicolon in a
+shell command or URL is left alone.
 
 Unlike the deslop prose linter, this gate scans code blocks too: install
 commands are exactly where placeholders and stale names hide. A repo that
@@ -32,6 +40,8 @@ import fnmatch
 import json
 import os
 import re
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -186,12 +196,67 @@ def check_rule_count(cfg: dict) -> list[str]:
     return out
 
 
+def _score_cmd_re(modules: list[str]) -> re.Pattern:
+    """Regex for a README command that documents its own score. Only the
+    scorers named in 'score_modules' are matchable, so the gate never runs an
+    arbitrary documented command. Handles `python -m <module>` and a bare
+    `python <script>.py`, with a trailing `# ... NN/100` or `# ... NN/10`."""
+    alt = "|".join(re.escape(m) for m in modules)
+    return re.compile(
+        r"(?P<full>python3? +(?:-m +)?(?:" + alt + r")\b[^\n#]*?)"
+        r" *#[^\n]*?(?P<score>\d+) */ *(?P<denom>100|10)\b")
+
+
+def check_score_claims(cfg: dict) -> list[str]:
+    """Re-run every README command that documents its own score and fail if the
+    live score drifted from the printed one. This is the gate the naive harness
+    '39' silently becoming '23' slipped past: the rule COUNT was checked, the
+    example SCORE was not. Driven by 'score_modules' in .doccheck.json (a no-op
+    when that key is absent). Set 'score_scan': false to disable."""
+    modules = cfg.get("score_modules") or []
+    if not modules or not cfg.get("score_scan", True):
+        return []
+    pattern = _score_cmd_re(modules)
+    out: list[str] = []
+    for d in cfg.get("docs", ["README.md"]):
+        path = ROOT / d
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for m in pattern.finditer(text):
+            full = m.group("full")
+            claimed, denom = int(m.group("score")), m.group("denom")
+            argv = shlex.split(full)
+            if not argv:
+                continue
+            argv = [sys.executable] + argv[1:]
+            try:
+                proc = subprocess.run(argv, cwd=ROOT, capture_output=True,
+                                      text=True, timeout=300)
+            except Exception as exc:  # noqa: BLE001
+                out.append(f"{d}:{_line(text, m.start())}: '{full}' did not run "
+                           f"({type(exc).__name__})")
+                continue
+            sm = re.search(rf"(\d+) */ *{denom}\b", proc.stdout)
+            if not sm:
+                err = (proc.stderr.strip().splitlines()[-1:] or [""])[0]
+                out.append(f"{d}:{_line(text, m.start())}: '{full}' documents "
+                           f"{claimed}/{denom} but printed no score ({err[:80]})")
+                continue
+            actual = int(sm.group(1))
+            if actual != claimed:
+                out.append(f"{d}:{_line(text, m.start())}: '{full}' documents "
+                           f"{claimed}/{denom} but the command scores {actual}/{denom}")
+    return out
+
+
 def main() -> int:
     cfg = load_config()
     findings: list[str] = []
     for d in cfg.get("docs", ["README.md"]):
         findings += check_doc(ROOT / d, cfg)
     findings += check_rule_count(cfg)
+    findings += check_score_claims(cfg)
     findings += check_dashes(cfg)
     findings += check_semicolons(cfg)
     if not findings:

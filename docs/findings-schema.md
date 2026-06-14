@@ -101,11 +101,11 @@ Numbering (`C1`, `H1`, `M1`, `L1`) is auto-assigned in input order.
 
 ## When to use which verb
 
-- **`findings_record`** — append a finding to an evidence bundle's
+- **`findings_record`** - append a finding to an evidence bundle's
   `findings.yaml` (created if missing). Operator-callable.
-- **`findings_render`** — convert `findings.yaml` to a presentable
+- **`findings_render`** - convert `findings.yaml` to a presentable
   `findings.md` for sharing or attaching to a ticket. Read-only.
-- **`findings_diff`** — compare two `findings.yaml` files (e.g.,
+- **`findings_diff`** - compare two `findings.yaml` files (e.g.,
   yesterday's bundle vs today's) and report drift. Read-only.
 
 ## Contact

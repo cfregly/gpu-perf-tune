@@ -63,11 +63,11 @@ inputs.
 
 Two run modes:
 
-- **`synthetic`** (default) — AIPerf synthesizes the prompt at the target
+- **`synthetic`** (default) - AIPerf synthesizes the prompt at the target
   token mean (`--synthetic-input-tokens-mean`). Faithful to AA's
   "generate a fresh prompt to fill the token budget" approach and to the
   original reproducer script.
-- **`dataset-replay`** — a generated JSONL of real-text prompts (sized to
+- **`dataset-replay`** - a generated JSONL of real-text prompts (sized to
   the o200k_base token budget) is replayed identically
   (`--input-file ... --custom-dataset-type mooncake_trace` with the
   `text_input` field), giving deterministic cross-endpoint comparability.
@@ -91,7 +91,7 @@ Rules for reasoning models:
 1. **Report TTFO with its COVERAGE, not TTFT.** AIPerf averages TTFO over only the
    requests that emitted an answer token; on synthetic filler a reasoning model can
    exhaust the whole budget thinking, so always pair `ttfo_avg_ms` with `ttfo_coverage`
-   (= ttfo.count/ttft.count) — a low-coverage TTFO is an answered-subset stat. The
+   (= ttfo.count/ttft.count) - a low-coverage TTFO is an answered-subset stat. The
    perf-report runners persist `ttfo_avg_ms` + `ttfo_coverage` +
    `reasoning_token_count` (schema `atlas_v1`); a TTFT-only number under-reports answer
    latency by the whole think phase (a 0.10 s "TTFT" can hide a ~4 s answer latency).
@@ -135,13 +135,13 @@ Rules for reasoning models:
 
 Do **not** use this skill for:
 
-- An agentic-coding replay dataset against an **in-cluster** vLLM endpoint —
+- An agentic-coding replay dataset against an **in-cluster** vLLM endpoint -
   that is
   [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
   (mooncake-trace multi-turn replay, not AA synthetic shapes).
-- Quality / accuracy evaluation (GPQA, MMLU-Pro, Terminal-Bench) — use
+- Quality / accuracy evaluation (GPQA, MMLU-Pro, Terminal-Bench) - use
   [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md).
-- Training performance benchmarking — out of scope for this plugin.
+- Training performance benchmarking - out of scope for this plugin.
 
 This skill is distinct from `inference-perf-bench` precisely because AA's
 synthetic fixed-shape methodology is a different workload than an agentic
@@ -158,29 +158,29 @@ multi-turn replay dataset.
 
 The skill **fails closed** if any of these are not satisfied.
 
-1. **AIPerf reachable** — `aiperf` on PATH, or `uv` (the script falls back
+1. **AIPerf reachable** - `aiperf` on PATH, or `uv` (the script falls back
    to `uv run --with aiperf --python 3.13 aiperf`, which fetches aiperf
    ephemerally), or `AIPERF_BIN` set. Canonical install:
-   `uv tool install aiperf` — this lands the `aiperf` shim in `~/.local/bin`
+   `uv tool install aiperf` - this lands the `aiperf` shim in `~/.local/bin`
    (already on PATH; run `uv tool update-shell` once if that dir isn't on
    PATH yet). Inside a venv you can instead `pip install aiperf` (PyPI
    package `aiperf`, Python >=3.10; macOS and Linux x86_64 install from
-   prebuilt wheels — Linux aarch64 needs a C toolchain, e.g.
+   prebuilt wheels - Linux aarch64 needs a C toolchain, e.g.
    `build-essential`, for the `crick` dependency). The reproducer prefers a
    real `aiperf` on PATH over the uv fallback.
-2. **Endpoint URL + auth** — `URL` (default `https://api.inference.wandb.ai`)
+2. **Endpoint URL + auth** - `URL` (default `https://api.inference.wandb.ai`)
    and, for the W&B gateway, `WANDB_INFERENCE_API_KEY` (or `API_KEY`). The
    key is read from the environment and never written to the campaign config
    or evidence bundle.
-3. **`tiktoken`** (dataset-replay only, recommended) — for exact
+3. **`tiktoken`** (dataset-replay only, recommended) - for exact
    `o200k_base` token-budget sizing. Without it the generator falls back to
    a ~0.75 tokens/word heuristic and warns loudly.
-4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** (perf_tune_report integration only) — set by the
+4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** (perf_tune_report integration only) - set by the
    bundled MCP server; campaigns land under `./campaigns/` by default.
 
 ## Interaction style
 
-Iterative — confirm parameters, optionally generate the dataset, run the
+Iterative - confirm parameters, optionally generate the dataset, run the
 shapes one at a time, report TTFT / output-speed / throughput per shape,
 then (optionally) bridge to the perf_tune_report campaign pipeline. Pause at each
 gate; never auto-advance past a failed shape.
@@ -272,11 +272,11 @@ AA cells flow through `atlas_aggregate -> report_render -> publish_to_lake`
 unchanged because the runner records `backend=aiperf` provenance and stashes
 the AA shape/mode in each row's `extra`.
 
-### Phase 2.5: prefill/decode roofline (page 7) — always-on
+### Phase 2.5: prefill/decode roofline (page 7) - always-on
 
 AA campaigns are serving-throughput campaigns, so they MUST carry the
 prefill/decode roofline (the "what C maxes the TFLOPs / is decode >=75% HBM /
-which sharding degree" answers — `publish_to_lake --strict` refuses a
+which sharding degree" answers - `publish_to_lake --strict` refuses a
 throughput/mixed serving campaign that omits page 7). Against the same AA pod,
 before teardown, capture + import the sweep with your deploy's roofline-sweep
 script (same step as `inference-perf-tune-report` Phase D3):
@@ -304,19 +304,19 @@ Then re-render (`report_render`) so page 7 + `roofline_v1` land. See
   endpoint, so the standalone script defaults to the W&B public gateway. The
   documented dev-vs-prod ~3x throughput skew (per
   [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) Safety) means an
-  in-cluster service URL and the public gateway are NOT interchangeable —
+  in-cluster service URL and the public gateway are NOT interchangeable -
   report which one was measured.
 - **Provider field rejection.** If the endpoint rejects `min_tokens` /
   `ignore_eos`, set `EXTRA_OUTPUT_CONTROLS=0` (script) /
   `cell.aa.extra_output_controls: false` (campaign). Output length then
-  becomes a cap, not an "at least N answer tokens" guarantee — note this in
+  becomes a cap, not an "at least N answer tokens" guarantee - note this in
   the result.
 
 ## Full-context reporting (no bare numbers)
 
 Per `docs/METHODOLOGY.md` "Full-context reporting" (no bare numbers): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -324,8 +324,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 Every result table this skill produces MUST carry a `%SoL` column alongside
 absolute throughput / latency, per `docs/METHODOLOGY.md` "Speed-of-light
@@ -359,4 +359,4 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
   (in-cluster multi-turn replay counterpart);
   [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md)
   (renders the campaign PDF).
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) — full-context reporting + Speed-of-light framing.
+- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - full-context reporting + Speed-of-light framing.

@@ -31,36 +31,36 @@ Run quality and accuracy evaluations against a live inference
 endpoint to validate that a model deployment is fit for promotion.
 Three benchmark families:
 
-- **GPQA** — graduate-level Q&A; runs inside the model pod via
+- **GPQA** - graduate-level Q&A; runs inside the model pod via
   [lm-eval-harness](https://github.com/EleutherAI/lm-evaluation-harness).
-- **MMLU-Pro** — broad multi-task understanding; runs inside the model
+- **MMLU-Pro** - broad multi-task understanding; runs inside the model
   pod via lm-eval-harness.
-- **ExternalEval** — externally operated; cockpit surfaces contact info
+- **ExternalEval** - externally operated; cockpit surfaces contact info
   and endpoint details, operator coordinates with the ExternalEval
   operator out-of-band.
 
 The eval workflow itself (task selection, in-pod lm-eval-harness
 invocation, monitoring, results download, ExternalEval handoff) is
 summarized under "Workflow" below; this skill's main job is the
-cockpit-specific glue — the evidence bundle and the perf-baseline
+cockpit-specific glue - the evidence bundle and the perf-baseline
 tie-in.
 
 ## When to use
 
-- Before promoting a new model to staging or prod — validate quality
+- Before promoting a new model to staging or prod - validate quality
   alongside the perf check
   ([`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)).
 - After vLLM version bumps, quantization changes (NVFP4 vs FP8 vs
-  BF16), KV-cache-dtype changes — ensure no quality regression.
+  BF16), KV-cache-dtype changes - ensure no quality regression.
 - Regression check against published baselines (HuggingFace model
   card, paper numbers).
 - Pairing perf-vs-quality A/B for proposed config changes.
 
 Do **not** use this skill for:
 
-- Inference performance measurement — that is
+- Inference performance measurement - that is
   [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md).
-- Terminal-Bench 2.0 / SWE-Bench Verified at scale — those are larger
+- Terminal-Bench 2.0 / SWE-Bench Verified at scale - those are larger
   evaluation-harness runs driven by a dedicated eval pipeline; this
   skill covers the in-pod lm-eval-harness path only.
 
@@ -133,7 +133,7 @@ diff confirm that a perf regression isn't masked by a quality gain
 Per the canon "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md` "Full-context reporting"): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -141,13 +141,13 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 Quality-eval scores (lm-eval-harness MMLU/GSM8K/etc.) are not directly
 roofline-bound, so this skill does NOT add a `%SoL` column to its
 output. Per `docs/METHODOLOGY.md` "Speed-of-light framing", the
-methodology applies to *measurement-producing perf skills* — eval
+methodology applies to *measurement-producing perf skills* - eval
 accuracy is orthogonal. When eval pairs with perf
 ([`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)) for a
 quant-quality-vs-throughput comparison, the perf side carries `%SoL`
@@ -169,8 +169,8 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Source-of-truth references
 
-- Pair: [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) — the
+- Pair: [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) - the
   perf counterpart for full pre-promotion validation.
 - [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md)
-  — ties eval scores to a perf-baseline registry entry (Phase C).
-- `docs/METHODOLOGY.md` — full-context reporting + verdict rigor.
+ - ties eval scores to a perf-baseline registry entry (Phase C).
+- `docs/METHODOLOGY.md` - full-context reporting + verdict rigor.

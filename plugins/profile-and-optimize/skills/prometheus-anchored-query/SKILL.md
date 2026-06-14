@@ -46,8 +46,8 @@ Use it for ad-hoc questions ("what's the IB traffic on `<node>` right now?" / "i
 
 Do **not** use this skill for:
 
-- Already-vetted queries — call `mcp__prometheus_mcp__query_prometheus` directly (or run them from whatever dashboarding UI they live in); the anchor pass adds nothing when the query shape is already known.
-- Log queries — this skill emits PromQL only. The MCP server also fronts a log datasource via `query_loki_logs`, but anchored log queries are out of scope here.
+- Already-vetted queries - call `mcp__prometheus_mcp__query_prometheus` directly (or run them from whatever dashboarding UI they live in); the anchor pass adds nothing when the query shape is already known.
+- Log queries - this skill emits PromQL only. The MCP server also fronts a log datasource via `query_loki_logs`, but anchored log queries are out of scope here.
 
 ## Example prompts
 
@@ -75,10 +75,10 @@ Operators replaying a perf-bench run via this skill should anchor against these 
 ## Prerequisites
 
 1. **Prometheus MCP reachable** (`PROMETHEUS_MCP_URL` set).
-2. **Operator question or metric+labels** — one of:
+2. **Operator question or metric+labels** - one of:
    - Free-form question (skill derives metric + labels via knowledge base).
    - Explicit `--metric <name> --labels <json>`.
-3. **Time range** — `--time-range "now-Nh..now"` or absolute UTC range. Default `now-1h..now`.
+3. **Time range** - `--time-range "now-Nh..now"` or absolute UTC range. Default `now-1h..now`.
 4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for the payload bundle path (falls back to `${PWD}/prometheus-bundles/<run-id>/`).
 
 ## Interaction style
@@ -106,7 +106,7 @@ The knowledge-base response tells us:
 - Whether the metric exists in the Prometheus MCP's catalog.
 - The available labels for that metric.
 - The expected cardinality (so we don't accidentally select 100k series).
-- The canonical datasource UID for this metric on this cluster (the MCP can front several datasources — e.g. per-cluster Prometheus instances plus a log backend — so every query tool takes an explicit `datasourceUid`).
+- The canonical datasource UID for this metric on this cluster (the MCP can front several datasources - e.g. per-cluster Prometheus instances plus a log backend - so every query tool takes an explicit `datasourceUid`).
 - Any noted caveats (sampling rate, retention, legacy renames).
 
 If the knowledge base does NOT cover the metric: stop. Report what's missing. Per [`mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) "Contention And O11y Pattern" step 3, running uncovered PromQL is unsafe.
@@ -179,17 +179,17 @@ Print:
 
 Per `docs/METHODOLOGY.md` "Full-context reporting": every number this
 skill emits (throughput, latency, TPOT/ITL, BW, %SoL, speedup, efficiency, goodput, acceptance
-rate, scaling efficiency, thermal/failure rate — whatever it reports) MUST carry its full
+rate, scaling efficiency, thermal/failure rate - whatever it reports) MUST carry its full
 measurement-context descriptor, and every comparison MUST be matched on it. A bare number is a
-defect — it cannot set a default, ship a config, or appear in a report.
+defect - it cannot set a default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound — e.g. accuracy/acceptance — omit `%SoL` but keep the rest of the descriptor.)
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound - e.g. accuracy/acceptance - omit `%SoL` but keep the rest of the descriptor.)
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
 
@@ -207,7 +207,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Safety
 
-- **Knowledge base first is mandatory.** Phase 1 cannot be skipped — fail fast, no silent fallbacks. The whole point of the skill is to enforce that discipline.
+- **Knowledge base first is mandatory.** Phase 1 cannot be skipped - fail fast, no silent fallbacks. The whole point of the skill is to enforce that discipline.
 - **No high-cardinality queries.** If the knowledge base reports the proposed query would return >10k series, the skill refuses to run it. Operator narrows the selector and retries.
 - **Raw payload preservation.** Per [`perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md), every saved query records the datasource UID, the exact PromQL, the time range, the response time, and the source label.
 - **Read-only.** The skill never mutates state through the Prometheus MCP; never creates dashboards / annotations / alerts (those would need `create_*` tools which are not in `allowed-tools`).
@@ -218,6 +218,6 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Source-of-truth references
 
-- [`server/docs/mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) — "Contention And O11y Pattern" (the workflow this skill generalizes).
-- [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md) — raw-payload provenance contract.
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) — measurement canon (full-context reporting, verdict rigor).
+- [`server/docs/mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) - "Contention And O11y Pattern" (the workflow this skill generalizes).
+- [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md) - raw-payload provenance contract.
+- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor).

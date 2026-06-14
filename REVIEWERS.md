@@ -36,8 +36,8 @@ The MINOR / MAJOR distinction is the single most-confusing thing for new contrib
 | Existing skill's workflow extends (new phase, new MCP tool used) | MINOR | Operator sees changed behavior; consumers may rely on the new behavior. |
 | Existing skill's prose tightens, typo, link fix | PATCH | No behavior change. |
 | MCP server added to `.mcp.json` | MINOR | New external dependency surfaces. |
-| MCP server removed from `.mcp.json` | MAJOR | Breaking — any skill that referenced it is now broken. |
-| Skill removed | MAJOR | Breaking — `/<skill-name>` slash command no longer exists. |
+| MCP server removed from `.mcp.json` | MAJOR | Breaking - any skill that referenced it is now broken. |
+| Skill removed | MAJOR | Breaking - `/<skill-name>` slash command no longer exists. |
 | Skill renamed | MAJOR | Breaking. Even if you add an alias, the old name disappears. |
 | MCP tool prefix renamed (e.g. `prometheus` -> `prometheus_mcp`) | MAJOR for cross-version compat, MINOR if it was a typo fix in the same release as the introduction. |
 | Bundled server contract / tool surface changed | PATCH if no tool surface change; MINOR if new tools / verbs; MAJOR if removed / renamed tools. |
@@ -78,8 +78,8 @@ Reviewer must reject any PR that:
 
 ## What `WARN`-class lint issues are OK to land
 
-- A typo or link drift discovered in CI on the same PR — fix it inline; no separate PR needed.
-- A new SKILL.md that exceeds 500 lines by 5-10 — request progressive-disclosure refactor (move detail to a sibling file), but do not block if the skill is otherwise clean.
+- A typo or link drift discovered in CI on the same PR - fix it inline; no separate PR needed.
+- A new SKILL.md that exceeds 500 lines by 5-10 - request progressive-disclosure refactor (move detail to a sibling file), but do not block if the skill is otherwise clean.
 
 ## What ERROR-class issues block
 

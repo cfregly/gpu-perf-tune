@@ -50,16 +50,16 @@ A single perf measurement is a number with no shoulder. A registered baseline ca
 
 ## When to use
 
-- After a fabric benchmark run (e.g. the upstream `nccl-tests` suite) on a fresh cluster / driver / firmware release — register the per-N busBW numbers as the new baseline.
-- After an `nvbandwidth` link sweep — register the per-node heatmap.
-- After a green MLPerf training run — register the step-time + MFU.
-- After a kernel-level profile capture — register the top-N kernel-time table.
+- After a fabric benchmark run (e.g. the upstream `nccl-tests` suite) on a fresh cluster / driver / firmware release - register the per-N busBW numbers as the new baseline.
+- After an `nvbandwidth` link sweep - register the per-node heatmap.
+- After a green MLPerf training run - register the step-time + MFU.
+- After a kernel-level profile capture - register the top-N kernel-time table.
 - Anytime the operator hits a perf number worth remembering.
 
 Do **not** use this skill for:
 
-- One-shot debugging measurements that don't need to be remembered — those go in `experiments/artifacts/<family>/<run-id>/` directly without registration.
-- Per-run results that change with every run by design (e.g. live goodput counters) — record those as ordinary run artifacts, not baselines.
+- One-shot debugging measurements that don't need to be remembered - those go in `experiments/artifacts/<family>/<run-id>/` directly without registration.
+- Per-run results that change with every run by design (e.g. live goodput counters) - record those as ordinary run artifacts, not baselines.
 
 ## Example prompts
 
@@ -72,11 +72,11 @@ Do **not** use this skill for:
 
 ## Prerequisites
 
-1. **Source data** — operator names `--source <path>` (file or directory). Must be readable.
-2. **Family + measurement-name** — `--family <name>` (e.g. `llama31_8b`, `gb300-cluster`, `deepseek-v3-inference`) + `--measurement <name>` (e.g. `nccl_busbw`, `step_time`, `nvlink_pairwise_bw`).
-3. **Value** — `--value <number>` for scalar baselines, or `--source` for structured baselines (the source file IS the baseline payload).
-4. **Optional units** — `--unit <gb/s | ms | tokens/s | mfu>`.
-5. **Optional schema** — `--schema <path-to-json-schema>` for structured baselines. Skill validates the source against the schema.
+1. **Source data** - operator names `--source <path>` (file or directory). Must be readable.
+2. **Family + measurement-name** - `--family <name>` (e.g. `llama31_8b`, `gb300-cluster`, `deepseek-v3-inference`) + `--measurement <name>` (e.g. `nccl_busbw`, `step_time`, `nvlink_pairwise_bw`).
+3. **Value** - `--value <number>` for scalar baselines, or `--source` for structured baselines (the source file IS the baseline payload).
+4. **Optional units** - `--unit <gb/s | ms | tokens/s | mfu>`.
+5. **Optional schema** - `--schema <path-to-json-schema>` for structured baselines. Skill validates the source against the schema.
 6. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for the registry path.
 
 ## Interaction style
@@ -102,12 +102,12 @@ Ask: "Register?" One confirmation.
 
 Collect in parallel:
 
-- `Bash(date -u +%Y-%m-%dT%H:%M:%SZ)` — registration time.
-- `Bash(hostname)` — workstation that recorded it.
-- `Bash(uname -a)` — workstation kernel.
-- `Bash(git -C ${PROFILE_AND_OPTIMIZE_REPO_ROOT} rev-parse HEAD)` — current SHA of the bundled server checkout.
-- `Bash(sha256sum <source>)` — content hash of the source payload.
-- Operator identity: `${USER}` — recorded for the audit trail, not as an ownership claim.
+- `Bash(date -u +%Y-%m-%dT%H:%M:%SZ)` - registration time.
+- `Bash(hostname)` - workstation that recorded it.
+- `Bash(uname -a)` - workstation kernel.
+- `Bash(git -C ${PROFILE_AND_OPTIMIZE_REPO_ROOT} rev-parse HEAD)` - current SHA of the bundled server checkout.
+- `Bash(sha256sum <source>)` - content hash of the source payload.
+- Operator identity: `${USER}` - recorded for the audit trail, not as an ownership claim.
 
 ### Phase 2: schema validate (if provided)
 
@@ -196,7 +196,7 @@ ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/perf-baselines/
 
 Per `docs/METHODOLOGY.md` "Full-context reporting": every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -204,8 +204,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 Per `docs/METHODOLOGY.md` "Speed-of-light framing", `baseline.json`
 SHOULD carry an optional `sol_pct` field per measurement, computed at
@@ -223,7 +223,7 @@ SoL deltas against an immutable reference). Schema fragment:
 ```
 
 - `sol_ceiling_key` is the YAML path used to source the peak (e.g.
-  `b200_sm100.nvlink5_tbps`, `gb300_nvl72.nvfp4_dense_pflops`) — sourced
+  `b200_sm100.nvlink5_tbps`, `gb300_nvl72.nvfp4_dense_pflops`) - sourced
   from `configs/sol-ceilings.yaml`; never inline.
 - `sol_ceiling_value` is the value snapshotted at record time so future
   diffs are stable even if the YAML's peak number is later updated.
@@ -259,6 +259,6 @@ captured against a production-representative config. Record the tier + provenanc
 
 ## Source-of-truth references
 
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) — measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
-- [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md) — raw-payload provenance rules.
-- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) — fail-fast + artifact-durability rules.
+- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
+- [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md) - raw-payload provenance rules.
+- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - fail-fast + artifact-durability rules.

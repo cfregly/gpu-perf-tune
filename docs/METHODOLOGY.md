@@ -9,7 +9,7 @@ or "Keep it tight (no AI-slop)".
 Every performance claim is labeled either **DRAFT** (a single observation, an
 extrapolation, or a number whose capture hygiene is unverified) or **VERDICT**
 (reproduced, capture-validated, and stated with its full context). A DRAFT must
-name what would promote it — the missing rerun, the counter to check, the
+name what would promote it - the missing rerun, the counter to check, the
 control to hold. Never let a DRAFT number travel without its label.
 
 ## Full-context reporting
@@ -32,7 +32,7 @@ Measured throughput is graded against hardware ceilings, not against vibes.
 [`configs/sol-ceilings.yaml`](../configs/sol-ceilings.yaml) is the single source
 of truth for published peaks (FLOPS, memory and interconnect bandwidth, per chip
 variant, with datasheet citations). Never inline these numbers in skills or
-reports — load the YAML and reference by key path. A "%SoL" figure names the
+reports - load the YAML and reference by key path. A "%SoL" figure names the
 ceiling it is a percentage of.
 
 ## Asset validation
@@ -46,9 +46,9 @@ not validation.
 ## Kernel-work classification
 
 Before optimizing a kernel, classify it: **K**nown-good (matches roofline
-expectation — move on), **R**educible (algorithmic or fusion headroom),
+expectation - move on), **R**educible (algorithmic or fusion headroom),
 **H**idden (launch/sync overhead, not compute), **P**arallelism-starved
-(occupancy / load-balance), or **A**ttribution-error (the profiler is lying —
+(occupancy / load-balance), or **A**ttribution-error (the profiler is lying -
 fix capture hygiene first). Climbing the wrong category wastes the engagement.
 
 ## Capture hygiene
@@ -70,8 +70,8 @@ that ends "done" is a report that ends the engagement; a report that ends
 ## Value proposition
 
 Every change states what it buys: tokens/s/GPU, $/M-tokens, time-to-train, or
-joules/token — before-vs-after, with the workload it was measured on. Work that
-cannot state its value proposition is exploration (fine — label it as such).
+joules/token - before-vs-after, with the workload it was measured on. Work that
+cannot state its value proposition is exploration (fine - label it as such).
 
 ## De-slop (writing style)
 

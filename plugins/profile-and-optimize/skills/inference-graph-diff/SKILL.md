@@ -28,13 +28,13 @@ allowed-tools:
 Diff the **compiled torch FX / Inductor graphs** between two vLLM
 configs to surface exactly which compilation choices changed. The most
 common need: "I added `pass_config.fuse_allreduce_rms=true`;
-which graph nodes were affected?" — torch.compile decisions are not
+which graph nodes were affected?" - torch.compile decisions are not
 visible in the vllm startup logs alone.
 
 Three diff layers cover the stack:
-- `inference-kernel-profile` (nsys `.nsys-rep` timelines — runtime)
+- `inference-kernel-profile` (nsys `.nsys-rep` timelines - runtime)
 - `analyze-zymtrace-workload` (per-category kernel time)
-- This skill (the COMPILATION graph — build-time)
+- This skill (the COMPILATION graph - build-time)
 
 ## When to use
 
@@ -49,9 +49,9 @@ Three diff layers cover the stack:
 
 Do **not** use this skill for:
 
-- Runtime timeline analysis — use nsys or zymtrace instead
-- Per-request latency breakdown — those are different layers
-- **SGLang arms** — this skill is **vLLM-specific** (it diffs vLLM's
+- Runtime timeline analysis - use nsys or zymtrace instead
+- Per-request latency breakdown - those are different layers
+- **SGLang arms** - this skill is **vLLM-specific** (it diffs vLLM's
   `torch.compile` FX / Inductor graph dumps via `TORCH_LOGS=+dynamo,+inductor`).
   SGLang has a different compilation/fusion model (no vLLM `compilation_config` /
   `cudagraph_mode`), so this skill fails closed on an SGLang arm. To compare two
@@ -152,7 +152,7 @@ experiments/artifacts/inference-perf-bench/<bundle>/
 
 ## Skill maturity
 
-This skill is **research-grade** (v0.1 — same status as the
+This skill is **research-grade** (v0.1 - same status as the
 nsys-sidecar approach). The recipe is documented but not yet wrapped in
 a dedicated MCP verb because the dump-format depends on torch version.
 A future v1.x of profile_and_optimize could add a `perf_tune_report_graph_diff` verb
@@ -168,13 +168,13 @@ op with a library/`sm100f` tensor-core kernel raises both R (R2→R1) and H (tow
 When a graph diff backs a custom-kernel comparison, **note the R/H delta in
 `graph_diff.json` `notes`** and carry the candidate + baseline `(K,R,H,P,A)` coordinates
 into the bundle's `SOURCE.md`/`summary.md`. The graph diff shows R/H *changed*; it does
-NOT prove the new path engages tensor cores or hits its roofline — defer that H + P
+NOT prove the new path engages tensor cores or hits its roofline - defer that H + P
 proof to [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md), the
 gate's enforcement point. A win over a strictly-lower-H/R baseline stays a **DRAFT, never
 a VERDICT**. If the comparison campaign reaches L4 (an ncu roofline renders), the
 candidate + baseline `(K,R,H,P,A)` must also be emitted as a structured `krhpa:` block
 in `config.yaml` (see [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)
-for the YAML) — `publish_to_lake` fails closed without it.
+for the YAML) - `publish_to_lake` fails closed without it.
 
 ## Cross-references
 
@@ -187,7 +187,7 @@ for the YAML) — `publish_to_lake` fails closed without it.
 Per the canon "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md` "Full-context reporting"): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -195,8 +195,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 A graph diff is structural, not a measurement, so it is exempt from the %SoL
 requirement. If you pair it with a perf measurement (tok/s, latency, speedup),

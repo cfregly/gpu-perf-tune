@@ -3,7 +3,7 @@ name: inference-perf-bench
 last_validated: 2026-06-07
 description: >-
   Canonical inference perf-bench skill (formal name; the colloquial alias
-  is `ai-bench` — identical behaviour). Drives NVIDIA AIPerf + the
+  is `ai-bench` - identical behaviour). Drives NVIDIA AIPerf + the
   replay-playback dataset against an in-cluster vLLM endpoint to
   measure TTFT, ITL, throughput, tok/s/user, request latency, and prefix
   cache hit rate. Iterative 9-phase workflow. Use when promoting a model to
@@ -36,7 +36,7 @@ Drive inference performance benchmarks against an in-cluster inference
 endpoint using NVIDIA's [AIPerf](https://github.com/ai-dynamo/aiperf)
 tool and the `replay-playback` HuggingFace dataset of
 recorded multi-turn agentic-coding conversations (the dataset may be
-gated — confirm your HF token has access before starting). Runs from
+gated - confirm your HF token has access before starting). Runs from
 an in-cluster bench pod for accurate latency measurement; supports
 concurrency sweeps, multi-model comparison, and server-side metric
 capture.
@@ -47,31 +47,31 @@ capture.
 > sweeps use `num_prompts=2*c` (e.g. 128 @ c=64). See `docs/METHODOLOGY.md` trap 4.
 
 The core benchmark loop is a standard 9-phase AIPerf workflow (Phase B
-below). This file does not belabor the per-phase mechanics — it adds
+below). This file does not belabor the per-phase mechanics - it adds
 the cockpit-specific cross-references (perf-baseline registry, perf-lake
 export, evidence bundle scaffolding) that turn a bench run into a
 durable, comparable result.
 
 ## When to use
 
-- Before promoting a new model to staging or prod — validate
+- Before promoting a new model to staging or prod - validate
   performance on dev before promotion.
 - After vllmArgs tuning, vLLM version bumps, or KV cache dtype
-  changes — re-measure to confirm no regression.
+  changes - re-measure to confirm no regression.
 - Side-by-side comparison of two model configs (NVFP4 vs FP8,
   EAGLE3 on/off, different tensor-parallel sizes, etc.).
 
 Do **not** use this skill for:
 
-- Training perf measurement (step-time / MFU / scaling-efficiency) —
+- Training perf measurement (step-time / MFU / scaling-efficiency) -
   out of scope for this skill, which measures serving-side
   TTFT / ITL / throughput.
-- NCCL collective-bandwidth measurement — use the upstream
+- NCCL collective-bandwidth measurement - use the upstream
   `nccl-tests` suite.
 - Quality / accuracy evaluation (GPQA, MMLU-Pro,
-  Terminal-Bench, SWE-Bench) — use
+  Terminal-Bench, SWE-Bench) - use
   [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md).
-- Model deployment / promotion itself — creating or updating standing
+- Model deployment / promotion itself - creating or updating standing
   deployments is a platform operation outside this plugin's scope.
 
 ## Example prompts
@@ -88,19 +88,19 @@ Do **not** use this skill for:
 
 Standard bench prerequisites plus the cockpit's provenance contract:
 
-1. **`HF_TOKEN`** — a HuggingFace read token with access to the
+1. **`HF_TOKEN`** - a HuggingFace read token with access to the
    `replay-playback` dataset.
-2. **`kubectl` context for a dev cluster** — run
+2. **`kubectl` context for a dev cluster** - run
    `kubectl config use-context <ctx>` before invoking.
-3. **Namespace** — the namespace where the bench pod (e.g.
+3. **Namespace** - the namespace where the bench pod (e.g.
    `my-perf-bench`) lands.
-4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** — set by the bundled MCP server at install
+4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** - set by the bundled MCP server at install
    time. The cockpit writes the result bundle under
    `${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/inference-perf-bench/<UTC-ts>/`.
 
 ## Interaction style
 
-Iterative — the 9-phase runbook pauses naturally at each
+Iterative - the 9-phase runbook pauses naturally at each
 phase. After Phase 5 (the actual benchmark run) completes, hand off to
 the bridge skills below before deleting the bench pod.
 
@@ -120,7 +120,7 @@ This creates `experiments/artifacts/inference-perf-bench/<run-id>/` with
 under `commands/` for the reproducibility-grade-evidence rule
 (`server/AGENTS.md`).
 
-### Phase A.5: pre-bench — quiet Slurm (Slurm-on-K8s clusters only)
+### Phase A.5: pre-bench - quiet Slurm (Slurm-on-K8s clusters only)
 
 If the inference deployment runs on a Slurm-on-K8s cluster where slurmd worker
 pods (`slurm-b200-*`, etc.) co-host the vLLM replicas on the same GPU
@@ -194,7 +194,7 @@ perftunereport publish_to_lake --campaign <id>              # atlas_v1 + campaig
 **Always-on prefill/decode roofline.** Before publish, also run the gated
 `*-deploy/profiling/roofline-sweep.sh` (decode-concurrency + prefill-ISL sweep with
 per-cell in-pod `dcgmi` PROF) and `import_roofline_sweep` so the campaign carries **page 7**
-(per-GPU roofline + HBM%/tensor%/SM%-vs-concurrency — the "what C maxes the TFLOPs / is decode
+(per-GPU roofline + HBM%/tensor%/SM%-vs-concurrency - the "what C maxes the TFLOPs / is decode
 >=75% HBM / which sharding degree" answers; per-(c,ISL) DCGM lands in `atlas_v1.extra_json`).
 Sweep every candidate config (TP / KV-dtype) so page 7 overlays them. See
 [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md) Phase D3.
@@ -202,7 +202,7 @@ Sweep every candidate config (TP / KV-dtype) so page 7 overlays them. See
 **Always-publish with focus + sol_rigor.** EVERY run publishes a
 `sol_complete` roofline and records `focus` (set it in the campaign YAML) +
 `sol_rigor` (`L4` ncu | `L3` DCGM | `L1` zymtrace-proxy | `none`). The DCGM +
-zymtrace capture below RAISES `sol_rigor` toward L3/L4 — it is not a
+zymtrace capture below RAISES `sol_rigor` toward L3/L4 - it is not a
 publish gate. `publish_to_lake` **never refuses** by default: a latency-bound /
 proxy / `dcgm_grounded=false` run is a first-class published result, with the
 gap RECORDED on `campaign_v1` + warned (pass `--strict` only when you want
@@ -229,7 +229,7 @@ re-import + re-aggregate + re-render.
   bench pod (e.g. `my-perf-bench`) via `kubectl run` / `kubectl delete`.
   No other cluster mutation.
 - **No public-gateway traffic by default.** Phase 5 runs against the
-  cluster-internal service DNS, never a public gateway —
+  cluster-internal service DNS, never a public gateway -
   a public gateway adds variable cross-region overhead that
   contaminates measurements (dev-vs-prod throughput skews of 3x have
   been traced to exactly this).
@@ -251,7 +251,7 @@ Traceability" rule (and `docs/METHODOLOGY.md`):
   `experiment=<id-slug>`. NEVER reuse standing/platform/migration names
   (standing deploys, shared `*-cache` PVCs, anything labeled
   `migration=*`). Cluster-scoped PV
-  names are global — a collision silently breaks another owner's PVC.
+  names are global - a collision silently breaks another owner's PVC.
 - Tear down by label (`kubectl delete deploy,pod,pvc,secret -l
   experiment=<id-slug>`); pre-clear the attacher finalizer on `Retain`
   experiment PVs before deleting. Verify standing/migration objects are
@@ -270,7 +270,7 @@ Traceability" rule (and `docs/METHODOLOGY.md`):
 Per the methodology canon "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md`): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -278,8 +278,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 Every result table this skill produces MUST carry a `%SoL` column
 alongside the absolute throughput / latency numbers. Per the
@@ -290,7 +290,7 @@ alongside the absolute throughput / latency numbers. Per the
   per-token footprint). Per-token footprint depends on model;
   e.g. GLM-5.1 NVFP4 at ISL=4096 / OSL=512 is ~7 GB/token.
 - Source of all peak numbers: `configs/sol-ceilings.yaml`
-  — cite by key path (`b200_sm100.hbm3e_tbps`, etc.); never inline.
+ - cite by key path (`b200_sm100.hbm3e_tbps`, etc.); never inline.
 - Per-run sol-summary doc lives at `<campaign>/sol-summary.md` and
   carries the workload-level %SoL row. The perf-report PDF page 4
   picks it up automatically when zymtrace per-category data is also
@@ -315,7 +315,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 Per `server/AGENTS.md` "Verdict rigor: DRAFT vs VERDICT", tier every bench number.
 A single sweep is a **DRAFT**. Promote to a **VERDICT** only when variance-controlled
 (same-node, >=3 trials, mean +/- std), metric-isolated (median TPOT/ITL for
-decode-latency claims — output tok/s at small num_prompts is TTFT-dominated, NOT
+decode-latency claims - output tok/s at small num_prompts is TTFT-dominated, NOT
 decode), and against a production-representative baseline (cudagraph-on, shipped
 backend; never an eager strawman). Mark the campaign `verdict_tier` accordingly; the
 perf-lake writer gates `verdict_tier=verdict` on this provenance.
@@ -338,4 +338,4 @@ assuming the backend is blocked; report the winner PER concurrency regime.
   skill); [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md)
   (quality-side counterpart).
 - Bridge: [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md).
-- `server/AGENTS.md` — fail-fast + provenance rules.
+- `server/AGENTS.md` - fail-fast + provenance rules.

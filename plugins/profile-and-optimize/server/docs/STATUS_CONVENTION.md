@@ -41,9 +41,9 @@ immediately routed to the current authoritative one.
 There is no automated status-header linter in this repo today; the
 header is enforced in review. Two related gates do run:
 
-- `python3 tools/shared/audit/audit_repo.py` — the repo-layout audit
+- `python3 tools/shared/audit/audit_repo.py` - the repo-layout audit
   that protects durable artifacts in the working tree.
-- `make check-doc-links` (from the repo root) — verifies that every
+- `make check-doc-links` (from the repo root) - verifies that every
   doc link resolves.
 
 New docs MUST land with a `Status:` header regardless.

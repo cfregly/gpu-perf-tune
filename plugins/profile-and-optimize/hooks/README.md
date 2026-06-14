@@ -3,11 +3,11 @@
 Canonical, version-controlled copy of the `beforeShellExecution` guard hooks.
 Two gates:
 
-1. **Perf-lake teardown gate** (`perflake-teardown-gate.sh`) — asks for human
+1. **Perf-lake teardown gate** (`perflake-teardown-gate.sh`) - asks for human
    confirmation before an experiment teardown (`scancel`, `helm uninstall`,
    `kubectl delete` with an `experiment=` label) destroys the evidence of an
    experiment whose bundle has not been published yet.
-2. **Provenance commit gate** (`provenance-commit-gate.sh`) — surfaces a
+2. **Provenance commit gate** (`provenance-commit-gate.sh`) - surfaces a
    missing/invalid source-attribution block in a staged experiment-bundle
    `SOURCE.md` before `git commit` lands it.
 
@@ -16,8 +16,8 @@ Two gates:
 | File | Role |
 | --- | --- |
 | `perflake-teardown-gate.sh` | Smart teardown gate. For a matched teardown command it resolves the owning evidence bundle and ALLOWS silently if the bundle is already published (or carries a `perf-lake: intentional-gap` / `perf-lake: published` marker), else returns **`ask`** so a human decides. Resolution is local + fast: it matches the recorded `experiment=<slug>` label (or run-id directory name) in `SOURCE.md`/`summary.md` or the deploy manifest; it never hits the network. Fail-OPEN on a non-teardown / parse error (never wedge normal work); fail-SAFE (`ask`) on an unresolvable teardown (never silently destroy evidence). |
-| `provenance-commit-gate.sh` | On `git commit`, audits staged experiment-bundle `SOURCE.md` files for a valid provenance block — the commit-time analog of the `publish_to_lake --strict` source gate. Phased enforcement via `$PROVENANCE_COMMIT_GATE` (`off` default / `ask` / `deny`). Fail-OPEN on any parse error or non-commit command. |
-| `claude-hook-adapter.sh` | Claude Code bridge: wraps a guard so it runs as a `PreToolUse`(Bash) command hook — projects Claude's `tool_input.command`/`cwd` to the guard's Cursor-style `{command,cwd}` stdin and translates the guard's `{permission}` verdict to Claude's `{hookSpecificOutput:{permissionDecision}}`. Fail-closed (a missing/erroring guard denies). Used ONLY by `hooks.json` (Claude); Cursor calls the guards directly, so the guard scripts are unchanged across runtimes. |
+| `provenance-commit-gate.sh` | On `git commit`, audits staged experiment-bundle `SOURCE.md` files for a valid provenance block - the commit-time analog of the `publish_to_lake --strict` source gate. Phased enforcement via `$PROVENANCE_COMMIT_GATE` (`off` default / `ask` / `deny`). Fail-OPEN on any parse error or non-commit command. |
+| `claude-hook-adapter.sh` | Claude Code bridge: wraps a guard so it runs as a `PreToolUse`(Bash) command hook - projects Claude's `tool_input.command`/`cwd` to the guard's Cursor-style `{command,cwd}` stdin and translates the guard's `{permission}` verdict to Claude's `{hookSpecificOutput:{permissionDecision}}`. Fail-closed (a missing/erroring guard denies). Used ONLY by `hooks.json` (Claude); Cursor calls the guards directly, so the guard scripts are unchanged across runtimes. |
 | `hooks.json` / `cursor-hooks.json` | `hooks.json` = the Claude Code plugin-hooks manifest (`PreToolUse`(Bash) -> `claude-hook-adapter.sh <guard>`). `cursor-hooks.json` = the ready-to-paste Cursor `beforeShellExecution` manifest for `~/.cursor/hooks.json`. |
 
 Both guard scripts are bash 3.2-compatible (macOS `/bin/bash`): no `mapfile`,

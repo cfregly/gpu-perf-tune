@@ -52,7 +52,7 @@ The three sibling skills cover complementary kernel-profile dimensions:
 **Sequencing note:** for the decode/latency tier, run
 [`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md)
 FIRST. If at c=1 it returns "host-bound" (GPU idle >> busy per step, as GLM-5.1
-does), per-kernel SoL is **moot** — the kernels are a small fraction of TPOT and
+does), per-kernel SoL is **moot** - the kernels are a small fraction of TPOT and
 are launch-latency-scale at one token. Only escalate to this skill when the
 budget says kernel-bound, or for the prefill/throughput tier.
 
@@ -71,12 +71,12 @@ budget says kernel-bound, or for the prefill/throughput tier.
 
 Do **not** use this skill for:
 
-- Continuous always-on capture — kernel replay is 10-100x slow per
+- Continuous always-on capture - kernel replay is 10-100x slow per
   replayed kernel; ncu is a per-shot tool.
-- Untargeted "give me everything" sweeps — without `--kernel-name`
+- Untargeted "give me everything" sweeps - without `--kernel-name`
   scoping, ncu will replay EVERY kernel, which on a busy vLLM pod is
   a heavy operation that risks Kubelet liveness-probe failures.
-- Multi-pod fleet capture — this skill targets ONE pod at a time.
+- Multi-pod fleet capture - this skill targets ONE pod at a time.
 
 ## Sidecar image
 
@@ -107,7 +107,7 @@ failure. Mitigate by:
 
 **On a multi-replica deploy**, a temporary per-replica capacity dip
 during ncu replay is usually acceptable, so
-`--launch-count 5` + `--set full` is safe — the slow replica is just
+`--launch-count 5` + `--set full` is safe - the slow replica is just
 1 of N and the Service load-balancer distributes around it.
 
 **Fallback**: if even the conservative path is too risky, spin a sister
@@ -129,7 +129,7 @@ ncu is a CUPTI client, so on GB300 nodes it can record **0 kernels** for the sam
 vLLM torch profiler do: a CUDA 12.9 serve image against the node's CUDA 13.0 driver
 makes CUPTI fail to init (`CUPTI_ERROR_INVALID_DEVICE`). This is NOT permission
 (`RmProfilingAdminOnly:0`), NOT a missing lib (`libcupti.so.12` present + linked), and NOT a
-wrong-process attach — it is a CUDA major-version toolkit-vs-driver skew. If ncu returns 0 kernels,
+wrong-process attach - it is a CUDA major-version toolkit-vs-driver skew. If ncu returns 0 kernels,
 grep the launch log for `CUDA versions. CUPTI/Runtime/Driver`: a 12.x-toolkit / 13.x-driver
 split needs a CUDA-13-aligned image or zymtrace (non-CUPTI), not more attach tuning.
 
@@ -140,7 +140,7 @@ namespace). Use this NGC-tools path on GB300 for both nsys and ncu;
 the legacy in-image / apt paths are superseded there. Verified end-to-end on
 a GB300 MoE deploy (per-kernel Compute(SM)/Occupancy resolved).
 
-## ncu capture-hygiene (empty-rep / non-deterministic gates) — empty != tooling limit
+## ncu capture-hygiene (empty-rep / non-deterministic gates) - empty != tooling limit
 
 Beyond Gate 0 (CUPTI), three ncu traps on a vLLM stack each yield "No kernels were profiled" or a
 non-deterministic-count failure; NONE is a tooling limit (each reproduced + fixed on a
@@ -150,14 +150,14 @@ DeepSeek-V4-Flash GB300 deploy). Canon: `docs/METHODOLOGY.md` "Capture hygiene".
    imports a module that runs `direct_register_custom_op` at load (`mhc.tilelang`, `fp8_utils`, …),
    ncu `--profile-from-start off` + an in-script `torch.cuda.cudart().cudaProfilerStart()` captures
    **0 kernels** (the custom-op/triton registration perturbs the CUPTI profiler-start hook). FIX: do
-   NOT rely on cudaProfilerStart — profile from start and exclude warmup with
+   NOT rely on cudaProfilerStart - profile from start and exclude warmup with
    `--launch-skip <warmup> --launch-count N` + `--kernel-name` scoping:
    ```bash
    M=256 N=4096 K=8192 ncu --kernel-name 'regex:sm100_fp8_fp4_gemm' \
      --launch-skip 3 --launch-count 1 --set full --target-processes application-only \
      --export out -- python3 one_op.py     # one_op.py warms the op 3x then loops; ncu skips the 3 warmups
    ```
-2. **`-- env VAR=v python3` defeats `--target-processes application-only`** — ncu profiles the `env`
+2. **`-- env VAR=v python3` defeats `--target-processes application-only`** - ncu profiles the `env`
    process, not its python child → 0 kernels. FIX: set the env on the ncu process itself
    (`VAR=v ncu … -- python3 …`), never via an `env` wrapper after `--`.
 3. **TP=N MoE+sparse in-engine `--replay-mode application` is non-deterministic.** A large MoE +
@@ -193,7 +193,7 @@ process.
 
 **Exception: latency/canary deploys often have NO zymtrace
 injection.** A canary that runs with no `CUDA_INJECTION64_PATH` in its env
-escapes Blocker 1 — ncu launch-mode (or the preload+TCP attach below) works
+escapes Blocker 1 - ncu launch-mode (or the preload+TCP attach below) works
 directly on it without a separate sister-deploy. Check the target's
 env (`kubectl get deploy <name> -o jsonpath='{...env...}'`) before assuming a
 sister is required. The sister-deploy is only mandatory for the
@@ -209,11 +209,11 @@ The deprecated `--attach <PID>` flag was removed in ncu 2026.x:
 
 The modern ncu interaction modes (per `ncu --help`) are:
 
-- `--mode launch-and-attach` (default) — wrap the application at
+- `--mode launch-and-attach` (default) - wrap the application at
   process startup
-- `--mode launch` — launch the application and suspend for a later
+- `--mode launch` - launch the application and suspend for a later
   attach
-- `--mode attach` — connect to a process pre-instrumented with
+- `--mode attach` - connect to a process pre-instrumented with
   ncu's injection library, via TCP (`--hostname` + `--port`)
 
 The only path that works against an **already-running** vllm process
@@ -250,22 +250,22 @@ ncu --mode attach --hostname 127.0.0.1 --port 49152 \
 ```
 
 Multiple captures against the same long-lived sister pod are
-supported — vllm stays warm; the sidecar runs ncu N times sequentially.
+supported - vllm stays warm; the sidecar runs ncu N times sequentially.
 
 ### Reference helm + capture scaffolding
 
 A reusable sister-deploy scaffold (one directory per model) contains:
 
-- `values-ncu-sister.yaml` — helm values overrides
-- `install.sh` — `helm upgrade --install` wrapper
-- `capture.sh` — full capture flow (wait-ready, warmup, sidecar
+- `values-ncu-sister.yaml` - helm values overrides
+- `install.sh` - `helm upgrade --install` wrapper
+- `capture.sh` - full capture flow (wait-ready, warmup, sidecar
   attach, N-kernel loop, extract, helm uninstall). Flags:
   `--launch-count N`, `--set basic|full`, `--roofline-min` (AI-roofline
   `--metrics` set only), `--replay-mode kernel|application|range`, and
   `--campaign <slug> --cell-id <cell>` to auto-import the result into a
   perf-report campaign cell.
-- `README.md` — runbook + canonical 5-kernel list
-- a replay-mode-application runbook — the ack-gated path past the
+- `README.md` - runbook + canonical 5-kernel list
+- a replay-mode-application runbook - the ack-gated path past the
   TP=8 NVFP4 `ContextSaveFailed` kernel-replay blocker (use
   `--replay-mode application --roofline-min`).
 
@@ -298,7 +298,7 @@ DeepSeek):
 | `nvjet_tst_.*_2cta` | MoE / GEMM | NVFP4 Tensor Core compute |
 | `triton_red_fused` | Triton-fused | Mixed |
 
-## Recipe (deprecated — DO NOT USE on prod-direct)
+## Recipe (deprecated - DO NOT USE on prod-direct)
 
 An earlier recipe used `ncu --attach $VLLM_PID` against the
 zymtrace-instrumented production pod. That recipe is preserved below
@@ -390,7 +390,7 @@ ipb["kernel_internals"] = {
 ```
 
 The `inference_perfbench_v1` schema treats `kernel_internals` as
-optional — bundles without it are unaffected.
+optional - bundles without it are unaffected.
 
 ### 8. Cleanup
 
@@ -408,7 +408,7 @@ sample-share from `zymtrace-anchored-query`. Example join:
 
 ```
 Kernel                                  zymtrace samples %  nsys total ms  ncu DRAM %  ncu SM %  Verdict
-flashinfer trtllm_allreduce_fusion      14.2%               1,847          88%          12%      Memory-bound; comm-bound (good — kernel is at-the-roof)
+flashinfer trtllm_allreduce_fusion      14.2%               1,847          88%          12%      Memory-bound; comm-bound (good - kernel is at-the-roof)
 fmhaSm100fKernel...Persistent           8.7%                1,144          47%          81%      Compute-bound (room for compute-side tuning)
 multimem_all_reduce_kernel              5.3%                694            91%           9%      Memory-bound; comm-bound (at-the-roof)
 bmm_E2m1_E2m1E2m1                       6.9%                901            61%          74%      Mixed (canonical NVFP4 BMM: balanced)
@@ -436,15 +436,15 @@ This skill is the preferred follow-up for the proper roofline scatter. Per the c
 "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md` "Full-context reporting"): every number this skill emits MUST carry its full
 measurement-context descriptor, and every comparison MUST be matched on it. A bare number is a
-defect — it cannot set a default, ship a config, or appear in a report.
+defect - it cannot set a default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 This skill is the **preferred path** to a real per-kernel
 arithmetic-intensity-vs-roofline scatter plot per
@@ -508,37 +508,37 @@ the end.) Notes:
   real roofline point. `--set=basic` collects neither, so AI is null and page
   5 renders a hollow "%SoL only / AI unmeasured" marker placed at SM% x the
   kernel family's compute ceiling (`category_ceiling_map` in
-  `configs/sol-ceilings.yaml`) — the y is honest, the x is a
+  `configs/sol-ceilings.yaml`) - the y is honest, the x is a
   placeholder. AI is never fabricated.
-- **SM-busy% is NOT %-of-FLOP-SoL — never conclude "at-roof" from `--set basic`.** The
+- **SM-busy% is NOT %-of-FLOP-SoL - never conclude "at-roof" from `--set basic`.** The
   `--set basic` `sm__throughput.avg.pct_of_peak` ("SM busy") can read 88-92% while the kernel is at
-  <15% of its FLOP-roofline — a persistent / split-K / spinning kernel keeps SMs busy doing little
+  <15% of its FLOP-roofline - a persistent / split-K / spinning kernel keeps SMs busy doing little
   tensor work. To decide at-roof vs headroom you MUST run `--set full` and compare achieved TFLOPS
   to the FLOP ceiling (`fp8_dense_pflops` / `nvfp4_dense_pflops` / `bf16_dense_pflops`). WORKED
   EXAMPLE: the DeepSeek-V4-Flash FP8 GEMM (`sm100_fp8_fp4_gemm_1d1d`, ~70% of decode compute) read
   88-92% SM (`--set basic`, which mislabeled it "at-roof") but `--set full` showed only **1-14.5% of
-  the FP8 FLOP-SoL** (M=1→256) — the kernel is concurrency-starved, not exhausted; the throughput
+  the FP8 FLOP-SoL** (M=1→256) - the kernel is concurrency-starved, not exhausted; the throughput
   tier was the real headroom, not a kernel rewrite.
 - **TP=8 NVFP4 blocker.** Multi-pass kernel-replay fails at TP=8 NVFP4
   (`ContextSaveFailed`); see the replay-mode-application runbook in the
   sister-deploy scaffolding above for the `--replay-mode application` path that
   gets to a full AI-grounded point.
 
-## Kernel rubric (K/R/H/P/A) — this skill is the H + P enforcement point
+## Kernel rubric (K/R/H/P/A) - this skill is the H + P enforcement point
 
 When this capture backs a **custom-kernel** comparison (a candidate kernel vs a
 baseline), apply the kernel rubric (see `docs/METHODOLOGY.md`
 "Kernel-work classification"). ncu is the **only** profiler in the
 sibling set that can prove the two axes a kernel win actually turns on:
 
-- **H (hardware specialization)** — the `Compute (SM) Throughput [%]` and tensor-pipe
+- **H (hardware specialization)** - the `Compute (SM) Throughput [%]` and tensor-pipe
   active % (from the SpeedOfLight section) reveal whether a kernel engages the
   frontier path. On SM100 the production libraries are H4 (`sm100f` tensor cores /
   NVFP4 tensor cores via `bmm_E2m1`, `nvjet_tst_*` in the canonical 5-kernel set). A
   candidate kernel that shows **near-zero tensor-pipe activity / SM% dominated by FMA**
-  is H1 — and an H1 candidate cannot beat an H3-H4 baseline on a K3-K4 op no matter
+  is H1 - and an H1 candidate cannot beat an H3-H4 baseline on a K3-K4 op no matter
   how it schedules. Read tensor-core engagement off ncu BEFORE believing any win.
-- **P (performance target)** — the roofline (%SoL via the FLOPS + `dram__bytes.sum`
+- **P (performance target)** - the roofline (%SoL via the FLOPS + `dram__bytes.sum`
   counters, "Speed-of-light reporting" above) is the P-axis: P4 means at/above the
   best library; a kernel far below its family ceiling that still "wins" an e2e A/B is
   winning on something other than GPU work (re-check methodology).
@@ -546,7 +546,7 @@ sibling set that can prove the two axes a kernel win actually turns on:
 **The gate, operationally:** record `(K,R,H,P,A)` for the candidate AND the named
 baseline in the bundle's `SOURCE.md`/`summary.md`. A speedup over a baseline at
 strictly lower H or R (e.g. a tensor-core candidate vs a generic-Triton baseline when
-production runs the `sm100f` library) is a **DRAFT, never a VERDICT** — it fails the
+production runs the `sm100f` library) is a **DRAFT, never a VERDICT** - it fails the
 "Fair baseline" clause. The canonical worked failure: warp-decode (K4/R2/H1) beat
 generic Triton in microbench but ncu/zymtrace confirmed it never engaged tensor cores,
 and it lost 1.51x to FlashInfer-TRTLLM (K4/R1/H4) on real GPU time.
@@ -554,7 +554,7 @@ and it lost 1.51x to FlashInfer-TRTLLM (K4/R1/H4) on real GPU time.
 **Emit it as a structured `krhpa:` block (not just prose).** When the campaign
 renders an L4 ncu roofline (page 5, `sol_rigor=L4`), `perftunereport publish_to_lake`
 FAILS CLOSED unless the campaign `config.yaml` carries a `krhpa:` block
-classifying both arms — prose in `SOURCE.md`/`summary.md` alone does not satisfy
+classifying both arms - prose in `SOURCE.md`/`summary.md` alone does not satisfy
 the gate for an L4 campaign. Add to the campaign config:
 
 ```yaml

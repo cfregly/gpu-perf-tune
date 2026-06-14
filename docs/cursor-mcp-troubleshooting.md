@@ -2,9 +2,9 @@
 
 This document covers the common failure modes for the `profile_and_optimize` MCP server (and optional sibling servers) when used inside Cursor's MCP panel, and the one-liner that resolves each:
 
-1. **`profile_and_optimize` plugin: `spawn .../v1.0.1/server/.venv/bin/python ENOENT`** — stale plugin path after a marketplace version bump.
-2. **Env-var-gated optional servers: `Connection closed`** — expected behavior when the gating env var is unset.
-3. **OAuth-backed MCPs (e.g., `github`): "Logout" badge** — OAuth token / session cookie expiry.
+1. **`profile_and_optimize` plugin: `spawn .../v1.0.1/server/.venv/bin/python ENOENT`** - stale plugin path after a marketplace version bump.
+2. **Env-var-gated optional servers: `Connection closed`** - expected behavior when the gating env var is unset.
+3. **OAuth-backed MCPs (e.g., `github`): "Logout" badge** - OAuth token / session cookie expiry.
 
 If you are arriving here from a screenshot of red badges in the Cursor MCP panel, walk down this list in order.
 
@@ -35,7 +35,7 @@ make refresh-symlinks
 
 then, **inside Cursor**, open the MCP panel (`Settings -> MCP` or the gear icon next to the chat input), find the `profile_and_optimize` server, and toggle the green slider off and then on. That forces Cursor to re-read the new server descriptor from disk.
 
-If the badge is still red after the toggle, fully restart Cursor (`Cmd-Q` on macOS) — the in-memory cache is cleared on cold start.
+If the badge is still red after the toggle, fully restart Cursor (`Cmd-Q` on macOS) - the in-memory cache is cleared on cold start.
 
 ### Why this isn't a `make` target
 
@@ -100,7 +100,7 @@ If the auth flow fails or hangs, the fallback is to remove and re-add the server
 
 ### Note on optional servers
 
-Only `profile_and_optimize`, `grafana`, and `github` ship in the plugin's [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json). Optional servers (e.g. `prometheus_mcp`, `zymtrace`) do not ship in the plugin install — if you want them, add their entries to your own `~/.cursor/mcp.json` (Cursor) or `~/.claude/settings.json` (Claude Code).
+Only `profile_and_optimize`, `grafana`, and `github` ship in the plugin's [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json). Optional servers (e.g. `prometheus_mcp`, `zymtrace`) do not ship in the plugin install - if you want them, add their entries to your own `~/.cursor/mcp.json` (Cursor) or `~/.claude/settings.json` (Claude Code).
 
 ## 4. `.mcp.json` env-var-placeholder entries park as red `Connection closed`
 
@@ -110,7 +110,7 @@ A server declared in [`../plugins/profile-and-optimize/.mcp.json`](/plugins/prof
 
 ### Root cause
 
-The manifest entry references an env var via `${VAR}` (no `:-default` fallback). When you haven't exported `VAR` before launching Cursor, Cursor expands the placeholder to the literal string `${VAR}` and passes it to Docker / npx / the binary, which fails before any MCP handshake. Cursor reports this as `Connection closed`. (Claude Code skips servers whose env vars are unset; Cursor does not — hence the asymmetry.)
+The manifest entry references an env var via `${VAR}` (no `:-default` fallback). When you haven't exported `VAR` before launching Cursor, Cursor expands the placeholder to the literal string `${VAR}` and passes it to Docker / npx / the binary, which fails before any MCP handshake. Cursor reports this as `Connection closed`. (Claude Code skips servers whose env vars are unset; Cursor does not - hence the asymmetry.)
 
 ### Fix (option 1: export the env vars)
 
@@ -145,5 +145,5 @@ The manifest keeps `profile_and_optimize` (bundled, mandatory), `grafana`, and `
 
 ## Related
 
-- [`../CONTRIBUTING.md`](/CONTRIBUTING.md#release-ritual) — release ritual including `make refresh-symlinks`
-- [`../plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json) — server declarations
+- [`../CONTRIBUTING.md`](/CONTRIBUTING.md#release-ritual) - release ritual including `make refresh-symlinks`
+- [`../plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json) - server declarations

@@ -1,6 +1,6 @@
 # Contributing to `profile-and-optimize`
 
-Thanks for considering a contribution. This repo ships **agent skills** — markdown files following the open [Agent Skills standard](https://agentskills.io/) — packaged as a Claude Code plugin marketplace. The same skills work in Claude Code and Cursor.
+Thanks for considering a contribution. This repo ships **agent skills** - markdown files following the open [Agent Skills standard](https://agentskills.io/) - packaged as a Claude Code plugin marketplace. The same skills work in Claude Code and Cursor.
 
 This document covers:
 
@@ -68,11 +68,11 @@ make refresh-symlinks
 
 `make refresh-symlinks` wraps [`scripts/install-skills-into-cursor.sh`](/scripts/install-skills-into-cursor.sh); it is idempotent and prints a summary like `Summary: <N> linked, <M> already-linked (skipped), 0 refused`. The Cursor symlinks point at the in-repo `plugins/profile-and-optimize/skills/<skill>/` directories, so re-running after a `git pull` is enough to surface any SKILL.md changes that landed in the new version.
 
-`make refresh-symlinks` is deliberately **not** wired into `make all` — `make all` is the local gate you run before pushing, and it needs to stay portable across workstations where `~/.cursor/` may not exist.
+`make refresh-symlinks` is deliberately **not** wired into `make all` - `make all` is the local gate you run before pushing, and it needs to stay portable across workstations where `~/.cursor/` may not exist.
 
 ### Cursor upgrade sequence (one shot)
 
-If you run the bundled MCP server from a dev clone (not the Claude Code cache), there is one more thing to refresh after a version bump: the `profile_and_optimize` entry in `~/.cursor/mcp.json` points at the bundled venv, and a moved/rebuilt checkout can leave it stale (the recurring `spawn ... ENOENT` / `No module named profile_and_optimize_mcp` failure — see [`docs/cursor-mcp-troubleshooting.md`](/docs/cursor-mcp-troubleshooting.md)). The full sequence:
+If you run the bundled MCP server from a dev clone (not the Claude Code cache), there is one more thing to refresh after a version bump: the `profile_and_optimize` entry in `~/.cursor/mcp.json` points at the bundled venv, and a moved/rebuilt checkout can leave it stale (the recurring `spawn ... ENOENT` / `No module named profile_and_optimize_mcp` failure - see [`docs/cursor-mcp-troubleshooting.md`](/docs/cursor-mcp-troubleshooting.md)). The full sequence:
 
 ```bash
 git pull origin main                 # refresh the dev clone
@@ -103,16 +103,16 @@ If `git status -sb` shows `behind > 0` or the target tag exists on origin (someo
 
 A good skill is:
 
-- **One task** — a single coherent workflow with a clear start and end.
-- **Iterative** — pauses for operator input at every gate; never auto-advances past a red.
-- **Trigger-discoverable** — the `description` frontmatter lists the phrases an operator would naturally type to invoke this skill.
-- **Read-only by default** — mutating actions require an explicit ack flag (fail fast, no silent fallbacks).
+- **One task** - a single coherent workflow with a clear start and end.
+- **Iterative** - pauses for operator input at every gate; never auto-advances past a red.
+- **Trigger-discoverable** - the `description` frontmatter lists the phrases an operator would naturally type to invoke this skill.
+- **Read-only by default** - mutating actions require an explicit ack flag (fail fast, no silent fallbacks).
 
 A bad skill is:
 
-- A vague "helper" — three different tasks bundled into one. Split into three skills.
-- A wrapper around a single tool with no value-add — just use the tool directly.
-- A skill that duplicates incident-triage or general ops tooling — this repo is scoped to inference profiling and optimization.
+- A vague "helper" - three different tasks bundled into one. Split into three skills.
+- A wrapper around a single tool with no value-add - just use the tool directly.
+- A skill that duplicates incident-triage or general ops tooling - this repo is scoped to inference profiling and optimization.
 
 Before writing: search the [`plugins/profile-and-optimize/skills/`](/plugins/profile-and-optimize/skills) directory for overlap. If your task is incident-triage-shaped rather than perf-shaped, it probably belongs in a different plugin.
 
@@ -127,13 +127,13 @@ Before writing: search the [`plugins/profile-and-optimize/skills/`](/plugins/pro
 Start from the template at [`plugins/profile-and-optimize/skills/_template/SKILL.md`](/plugins/profile-and-optimize/skills/_template/SKILL.md). Every skill must include:
 
 - YAML frontmatter: `name` (matches dir), `description` (<=1024 chars, third-person, includes WHAT + WHEN trigger phrases), `allowed-tools` (YAML list of specific tool selectors).
-- `## Purpose` — what the skill does and why, in plain English.
-- `## When to use` and `## Example prompts` — trigger discoverability.
-- `## Prerequisites` — env vars, repo paths, Slurm reservations, etc. Fails closed.
-- `## Interaction style` — iterative pattern (one step, report, ask).
-- `## Workflow` — numbered phases. Each phase is a tool call sequence with a `report and ask` checkpoint.
-- `## Safety` — ack flags, fail-closed gates, forbidden actions.
-- `## Source-of-truth references` — cite repo docs by relative path; never duplicate.
+- `## Purpose` - what the skill does and why, in plain English.
+- `## When to use` and `## Example prompts` - trigger discoverability.
+- `## Prerequisites` - env vars, repo paths, Slurm reservations, etc. Fails closed.
+- `## Interaction style` - iterative pattern (one step, report, ask).
+- `## Workflow` - numbered phases. Each phase is a tool call sequence with a `report and ask` checkpoint.
+- `## Safety` - ack flags, fail-closed gates, forbidden actions.
+- `## Source-of-truth references` - cite repo docs by relative path; never duplicate.
 
 Keep the body under 500 lines. Use progressive disclosure (link to sibling files for deep reference content).
 
@@ -201,9 +201,9 @@ Skills reference MCP tools via `mcp__<server-key>__<tool-name>` in the `allowed-
 | Prometheus (optional) | `prometheus_mcp` | `mcp__prometheus_mcp__<tool>` |
 | zymtrace (optional) | `zymtrace` | `mcp__zymtrace__<tool>` |
 
-Only the first three (`profile_and_optimize`, `grafana`, `github`) are declared in [`plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json). The optional servers are configured per-operator — add them to your own `~/.cursor/mcp.json` or `~/.claude/settings.json` if you use them; skills that reference an optional server fall back to the documented bash-tool path when it is absent.
+Only the first three (`profile_and_optimize`, `grafana`, `github`) are declared in [`plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json). The optional servers are configured per-operator - add them to your own `~/.cursor/mcp.json` or `~/.claude/settings.json` if you use them; skills that reference an optional server fall back to the documented bash-tool path when it is absent.
 
-If you need a new MCP server not in this list, add it to `.mcp.json` first (with env-var placeholders for tokens / URLs — never check in real tokens) and update this table.
+If you need a new MCP server not in this list, add it to `.mcp.json` first (with env-var placeholders for tokens / URLs - never check in real tokens) and update this table.
 
 ## How to add or change a bundled MCP verb
 
@@ -232,7 +232,7 @@ The `plugins/profile-and-optimize/server/` directory is the **source of truth** 
 
 ## Code of conduct
 
-Be respectful and constructive in issues and reviews. Contributions are credited through the git author line; keep skill content impersonal — skills describe workflows, not individual ownership.
+Be respectful and constructive in issues and reviews. Contributions are credited through the git author line; keep skill content impersonal - skills describe workflows, not individual ownership.
 
 ## Contact
 

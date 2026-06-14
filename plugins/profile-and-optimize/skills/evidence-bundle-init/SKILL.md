@@ -29,16 +29,16 @@ allowed-tools:
 
 Set up a new evidence bundle directory under `experiments/artifacts/<family>/<run-id>/` with the skeleton reproducibility-grade evidence requires:
 
-- `SOURCE.md` — operator identity, cluster, git SHA, UTC timestamp, the original prompt / intent.
-- `summary.md` — verdict skeleton operator fills in as the experiment progresses.
-- `commands/` — directory for the four-file `<NN>-<step>.{cmd,stdout,stderr,exit}` tuples one per shell command run during the experiment.
+- `SOURCE.md` - operator identity, cluster, git SHA, UTC timestamp, the original prompt / intent.
+- `summary.md` - verdict skeleton operator fills in as the experiment progresses.
+- `commands/` - directory for the four-file `<NN>-<step>.{cmd,stdout,stderr,exit}` tuples one per shell command run during the experiment.
 - `.gitkeep` markers so the directory layout survives an empty commit.
 
 This skill is the operator-facing convenience over `mkdir + cat > SOURCE.md`. Half a minute of friction is enough that people skip the discipline; this skill makes it 5 seconds.
 
 ## Experiment isolation & traceability (required for any cluster-touching experiment)
 
-The bundle's run-id IS the **experiment-id** — the single join key across the evidence bundle, the cluster objects, and the perf-lake. When the experiment creates cluster resources:
+The bundle's run-id IS the **experiment-id** - the single join key across the evidence bundle, the cluster objects, and the perf-lake. When the experiment creates cluster resources:
 
 - Every Deployment/Pod/PVC/PV/Secret/ConfigMap/Service MUST use an experiment-unique name derived from the id (e.g. `glm51-expt-deepep-ll`, PV `glm51-deepep-expt-pv`) and carry the label `experiment=<id-slug>`.
 - NEVER reuse a standing/platform/migration name (e.g. a shared `*-inference*` deployment, a standing `*-cache*` PV, or anything labeled `migration=*`). Cluster-scoped PV names are global; a collision silently breaks another owner's PVC.
@@ -54,13 +54,13 @@ the observations".
 
 Scaffold these in any measurement bundle:
 
-- `findings/01-observations.md` — **measured tables ONLY** (DCGM SM/tensor/DRAM %, tok/s, TPOT, AA
+- `findings/01-observations.md` - **measured tables ONLY** (DCGM SM/tensor/DRAM %, tok/s, TPOT, AA
   numbers). No interpretation, no "because". Each number is reproducible from `commands/`.
-- `findings/02-mechanisms.md` — one item per claim, formatted `OBSERVATION -> MECHANISM (causal) ->
+- `findings/02-mechanisms.md` - one item per claim, formatted `OBSERVATION -> MECHANISM (causal) ->
   CONFIDENCE (+ what would raise it)`. A mechanism claim ("decode plateaus at 41% HBM because the
-  sparse-MoE+MLA kernel mix has low DRAM efficiency") needs a profile (DCGM/zymtrace/nsys/ncu) —
+  sparse-MoE+MLA kernel mix has low DRAM efficiency") needs a profile (DCGM/zymtrace/nsys/ncu) -
   the rooflines are the observation; the mechanism is the separately-evidenced interpretation.
-- `findings/00-ANSWERS-*.md` (optional) — the live-sync handout that answers the reviewer's questions
+- `findings/00-ANSWERS-*.md` (optional) - the live-sync handout that answers the reviewer's questions
   directly, each pointing at 01/02.
 - A ` ```provenance ` block (`experiment_provenance_v1`) in `SOURCE.md` pinning the exact
   vLLM/SGLang commit + delivery + patch, so the rendered roofline carries a source link (see
@@ -94,9 +94,9 @@ This repo's reproducibility-grade-evidence convention requires that significant 
 
 Do **not** use this skill for:
 
-- One-off shell commands whose output you'll throw away — no bundle needed.
-- Adding to an existing bundle — just `cd` into the bundle and add files.
-- Benchmark families whose runbooks define their own bundle layout and naming conventions — follow those; this skill is the generic scaffolder.
+- One-off shell commands whose output you'll throw away - no bundle needed.
+- Adding to an existing bundle - just `cd` into the bundle and add files.
+- Benchmark families whose runbooks define their own bundle layout and naming conventions - follow those; this skill is the generic scaffolder.
 
 ## Example prompts
 
@@ -110,9 +110,9 @@ Do **not** use this skill for:
 ## Prerequisites
 
 1. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for the bundle path. The skill writes to `${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/<family>/<run-id>/`.
-2. **Family** — `--family <name>` (e.g. `cluster-health`, `nccl-tests`, `gpu-burn`, `campaign/llama31_8b`).
-3. **Run-id** — `--run-id <slug>` (default: `<UTC-timestamp>` if not supplied).
-4. **Operator intent** — `--intent "<one-line description>"` (gets written into `SOURCE.md`).
+2. **Family** - `--family <name>` (e.g. `cluster-health`, `nccl-tests`, `gpu-burn`, `campaign/llama31_8b`).
+3. **Run-id** - `--run-id <slug>` (default: `<UTC-timestamp>` if not supplied).
+4. **Operator intent** - `--intent "<one-line description>"` (gets written into `SOURCE.md`).
 
 ## Interaction style
 
@@ -132,11 +132,11 @@ If the bundle already exists, **stop**. Bundles are immutable; new captures use 
 
 In parallel:
 
-- `Bash(date -u +%Y-%m-%dT%H:%M:%SZ)` — UTC timestamp.
-- `Bash(hostname)` — workstation hostname.
-- `Bash(whoami)` — operator user.
-- `Bash(git -C ${PROFILE_AND_OPTIMIZE_REPO_ROOT} rev-parse HEAD)` — current SHA of the bundled server tree.
-- `Bash(git -C ${PROFILE_AND_OPTIMIZE_REPO_ROOT} remote get-url origin)` — repo remote URL for the Provenance section.
+- `Bash(date -u +%Y-%m-%dT%H:%M:%SZ)` - UTC timestamp.
+- `Bash(hostname)` - workstation hostname.
+- `Bash(whoami)` - operator user.
+- `Bash(git -C ${PROFILE_AND_OPTIMIZE_REPO_ROOT} rev-parse HEAD)` - current SHA of the bundled server tree.
+- `Bash(git -C ${PROFILE_AND_OPTIMIZE_REPO_ROOT} remote get-url origin)` - repo remote URL for the Provenance section.
 
 ### Phase 2: write the skeleton
 
@@ -199,7 +199,7 @@ Write ${bundle}/SOURCE.md with:
 
   ## Cross-references
 
-  - `docs/METHODOLOGY.md` — the measurement-methodology canon.
+  - `docs/METHODOLOGY.md` - the measurement-methodology canon.
 
 Write ${bundle}/summary.md with:
   # Summary
@@ -276,6 +276,6 @@ ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/<family>/<run-id>/
 
 ## Source-of-truth references
 
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) — the measurement-methodology canon every bundle feeds.
-- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) — bundled-server discovery contract.
-- All sibling skills that write artifacts — they all assume the bundle this skill creates.
+- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - the measurement-methodology canon every bundle feeds.
+- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - bundled-server discovery contract.
+- All sibling skills that write artifacts - they all assume the bundle this skill creates.

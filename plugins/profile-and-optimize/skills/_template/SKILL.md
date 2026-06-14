@@ -46,7 +46,7 @@ Do **not** use this skill for:
 - <Overlapping skill or out-of-scope scenario 1>
 - <Overlapping skill or out-of-scope scenario 2>
 
-Cross-check the existing skills under `plugins/profile-and-optimize/skills/` before shipping — if your task overlaps with an existing skill, explain why a new one is warranted.
+Cross-check the existing skills under `plugins/profile-and-optimize/skills/` before shipping - if your task overlaps with an existing skill, explain why a new one is warranted.
 
 ## Example prompts
 
@@ -102,7 +102,7 @@ If this skill emits a performance claim, tier it per the
 "Verdict rigor: DRAFT vs VERDICT" rule. Default every number to **DRAFT** (label it
 provisional). Promote to a **VERDICT** only for a decision-grade claim AND only when
 it is: variance-controlled (same-node, >=3 trials, mean +/- std), metric-isolated
-(median TPOT/ITL for decode-latency claims — NOT output tok/s at small num_prompts),
+(median TPOT/ITL for decode-latency claims - NOT output tok/s at small num_prompts),
 compared to a production-representative baseline, and (for which-kernel claims)
 backed by nsys/ncu per-kernel data. Under the always-publish policy
 a campaign published as `verdict_tier=verdict` without this provenance is
@@ -117,7 +117,7 @@ baseline along the five axes (K complexity / R representation / H hardware speci
 / P perf target / A automation) and record both coordinate tuples in the bundle. A win
 over a strictly-lower-H/R baseline
 (e.g. beating generic Triton when production runs the `sm100f` tensor-core library) is a
-**DRAFT, never a VERDICT** — the H + P proof (tensor-core engagement + roofline) comes
+**DRAFT, never a VERDICT** - the H + P proof (tensor-core engagement + roofline) comes
 from [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md). Delete
 this section if the skill never touches custom kernels.
 
@@ -127,15 +127,15 @@ If this skill emits ANY performance number, it MUST carry the number's full
 measurement-context descriptor and match every comparison on it, per
 [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md)
 "Full-context reporting". A bare `tok/s` / TPOT / BW / %SoL / speedup is a
-defect — it cannot set a default, ship a config, or appear in a report. Cite all that apply:
+defect - it cannot set a default, ship a config, or appear in a report. Cite all that apply:
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 Mechanically enforced for atlas-emitting paths by `methodology_problems()` (descriptor + per-row
 ISL/OSL shape) and `shape_label_problems()` (no shared shape over heterogeneous cells) in the
 perf-report `lake_writer.py` (publish/render `--strict` fail-closed). Delete this section ONLY if the
@@ -215,12 +215,12 @@ Delete this section ONLY if the skill never feeds a PR / shareable artifact.
 ## Safety
 
 - **<Ack flag mandatory / read-only / fail-closed condition>** per [`server/docs/mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md).
-- **<No silent fallbacks>** — fail fast rather than silently degrading.
-- **<If this skill queries/consumes zymtrace: empty != gap.>** A zymtrace query empty right after a bench is usually ClickHouse INGEST LAG (async flush), not absence — wait + requery for the freshest data before concluding. See [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md). Delete if the skill never touches zymtrace.
+- **<No silent fallbacks>** - fail fast rather than silently degrading.
+- **<If this skill queries/consumes zymtrace: empty != gap.>** A zymtrace query empty right after a bench is usually ClickHouse INGEST LAG (async flush), not absence - wait + requery for the freshest data before concluding. See [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md). Delete if the skill never touches zymtrace.
 - <Other forbidden actions: e.g. "read-only against external systems; no writes".>
 
 ## Source-of-truth references
 
 - [`<runbook or doc path inside server/>`](../../server/<path>).
 - [`<related skill>`](../<related-skill>/SKILL.md).
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) — the measurement-methodology canon.
+- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - the measurement-methodology canon.

@@ -5,7 +5,7 @@ Audience: contributors implementing or reviewing any of the 12 contract-bearing 
 
 This document is the single source of truth for the operator-facing CLI verbs the active surface exposes. The CLIs under [`selector/`](/plugins/profile-and-optimize/server/selector), [`contention/`](/plugins/profile-and-optimize/server/contention), [`ai_tuning/`](/plugins/profile-and-optimize/server/ai_tuning), [`profile/`](/plugins/profile-and-optimize/server/profile), [`perf_baseline/`](/plugins/profile-and-optimize/server/perf_baseline), [`evidence/`](/plugins/profile-and-optimize/server/evidence), [`slurm/`](/plugins/profile-and-optimize/server/slurm), [`experiments/`](/plugins/profile-and-optimize/server/experiments), [`findings/`](/plugins/profile-and-optimize/server/findings), [`k8s_launch/`](/plugins/profile-and-optimize/server/k8s_launch), [`perf_tune_report/`](/plugins/profile-and-optimize/server/perf_tune_report), and [`known_good_config/`](/plugins/profile-and-optimize/server/known_good_config) implement every verb listed below; the MCP server in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) introspects the same parsers and registers one MCP tool per verb (76 in total).
 
-The 4 cluster-performance libraries inherited from the original seed (`selector`, `contention`, `ai_tuning`, `profile`) account for 27 verbs. The 8 profile-and-optimize-native libraries (`perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`, `k8s_launch`, `perf_tune_report`, `known_good_config`) account for the remaining 49 verbs, with `perf_tune_report` — the inference perf-tuning campaign engine — carrying 29 of them.
+The 4 cluster-performance libraries inherited from the original seed (`selector`, `contention`, `ai_tuning`, `profile`) account for 27 verbs. The 8 profile-and-optimize-native libraries (`perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`, `k8s_launch`, `perf_tune_report`, `known_good_config`) account for the remaining 49 verbs, with `perf_tune_report` - the inference perf-tuning campaign engine - carrying 29 of them.
 
 Three of the seed libraries are shim packages: [`contention/`](/plugins/profile-and-optimize/server/contention), [`ai_tuning/`](/plugins/profile-and-optimize/server/ai_tuning), and [`profile/`](/plugins/profile-and-optimize/server/profile) re-export the canonical implementations from `tools/pipeline/gb300/contention/contention_cli.py`, `tools/ai_tuning/ai_tuning.py`, and `tools/pipeline/submission/profile/profile_cli.py` respectively. The profile-and-optimize-native libraries follow the same pattern: each ships a thin `<library>/cli.py` that re-exports from `tools/<library>/<library>_cli.py`. Only `selector` carries its implementation in the package itself. The shims exist so the MCP surface can resolve `<repo_root>/<library>/cli.py` the same way for every library.
 
@@ -411,7 +411,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report import_workloads`
 
-- Description: Import a bench-all-workloads output dir (one `<tag>-c<c>.txt` per workload x concurrency + bench-workloads.json) into per-workload campaign cells, each row tagged with its dataset + typed ISL/OSL — closing dataset=unknown at the source so the full multi-workload suite lands on aggregate and publish.
+- Description: Import a bench-all-workloads output dir (one `<tag>-c<c>.txt` per workload x concurrency + bench-workloads.json) into per-workload campaign cells, each row tagged with its dataset + typed ISL/OSL - closing dataset=unknown at the source so the full multi-workload suite lands on aggregate and publish.
 - Safety: `writes_artifacts`
 - Required flags: `--bench-dir`, `--campaign`, `--model`, `--hardware`, `--tensor-parallel`
 - Optional flags: `--quant`, `--parallel-strategy`, `--max-num-batched-tokens`, `--kv-cache-dtype`, `--image`, `--cudagraph-mode`, `--gpu-memory-utilization`, `--bench-backend`, `--dry-run`, `--campaigns-dir`, `--json`
@@ -420,7 +420,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report dcgm_correlate`
 
-- Description: Fold a frozen DCGM measurement YAML (dcgm_frozen_v1) into a campaign cell's cells/<cell-id>/dcgm_correlation.json — the byte/FLOP workload-level Speed-of-Light grounding the renderer's DCGM page consumes. When the cell has a kernels.json, the per-category cross-attribution page is also populated. This is the byte-grounding step that flips a campaign from sol_complete-only to dcgm_grounded=true.
+- Description: Fold a frozen DCGM measurement YAML (dcgm_frozen_v1) into a campaign cell's cells/<cell-id>/dcgm_correlation.json - the byte/FLOP workload-level Speed-of-Light grounding the renderer's DCGM page consumes. When the cell has a kernels.json, the per-category cross-attribution page is also populated. This is the byte-grounding step that flips a campaign from sol_complete-only to dcgm_grounded=true.
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`, `--cell-id`, `--frozen-yaml`
 - Optional flags: `--kernels-json`, `--ceilings`, `--dry-run`, `--campaigns-dir`, `--json`
@@ -447,7 +447,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report kernel_reproducer_scaffold`
 
-- Description: Scaffold a standalone CUDA/CUTLASS kernel reproducer (.cu + build script) for white-box kernel debugging — Track B of the [`inference-kernel-whitebox-debug`](/plugins/profile-and-optimize/skills/inference-kernel-whitebox-debug/SKILL.md) skill. Emits a self-contained harness parameterized by the GEMM dims + mirage tree + GPU arch: it instantiates the kernel template, feeds controlled inputs, and diffs against a host GEMM. The operator transcribes the exact template params from the codegen site into the marked block. Read-only on the cluster (writes local artifacts only).
+- Description: Scaffold a standalone CUDA/CUTLASS kernel reproducer (.cu + build script) for white-box kernel debugging - Track B of the [`inference-kernel-whitebox-debug`](/plugins/profile-and-optimize/skills/inference-kernel-whitebox-debug/SKILL.md) skill. Emits a self-contained harness parameterized by the GEMM dims + mirage tree + GPU arch: it instantiates the kernel template, feeds controlled inputs, and diffs against a host GEMM. The operator transcribes the exact template params from the codegen site into the marked block. Read-only on the cluster (writes local artifacts only).
 - Safety: `writes_artifacts`
 - Required flags: `--kernel-name`, `--header`, `--output-dir`
 - Optional flags: `--mma-m`, `--mma-n`, `--batch`, `--out-dim`, `--k`, `--mirage-tree`, `--arch`, `--dry-run`, `--json`
@@ -501,7 +501,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report tpm_summary`
 
-- Description: Roll a campaign's atlas.jsonl into a per-hardware tokens-per-minute (TPM) capacity summary for pricing / capacity discussions. For each (model, hardware, quant, TP, strategy, MTP) group it reports a peak-capacity point and — when `--ttft-sla-ms` / `--tpot-sla-ms` are supplied — a latency-SLA-bounded point, each at per-GPU, per-replica, and per-node bases, for both output-only and total TPM. Pure post-processing of already-measured atlas data (no cluster runs).
+- Description: Roll a campaign's atlas.jsonl into a per-hardware tokens-per-minute (TPM) capacity summary for pricing / capacity discussions. For each (model, hardware, quant, TP, strategy, MTP) group it reports a peak-capacity point and - when `--ttft-sla-ms` / `--tpot-sla-ms` are supplied - a latency-SLA-bounded point, each at per-GPU, per-replica, and per-node bases, for both output-only and total TPM. Pure post-processing of already-measured atlas data (no cluster runs).
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`
 - Optional flags: `--ttft-sla-ms`, `--tpot-sla-ms`, `--gpus-per-node`, `--context`, `--out-dir`, `--campaigns-dir`, `--json`
@@ -546,7 +546,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report champion_select`
 
-- Description: Select the production champion: from a campaign's atlas + per-cell SoL artifacts, rank the cross-engine (vLLM + SGLang) variant arms under the focus metric (tok/s/GPU or median TPOT) + a TPOT SLO, pick the baseline + top-X, summarize each across the SoL ladder, and emit a tiered (DRAFT/VERDICT) production recommendation. A VERDICT requires the variance, multi-workload, and accuracy gates AND byte-grounding of the champion; anything short is a DRAFT. Writes CHAMPION.md + champion_select.json. Pure post-processing — no cluster runs.
+- Description: Select the production champion: from a campaign's atlas + per-cell SoL artifacts, rank the cross-engine (vLLM + SGLang) variant arms under the focus metric (tok/s/GPU or median TPOT) + a TPOT SLO, pick the baseline + top-X, summarize each across the SoL ladder, and emit a tiered (DRAFT/VERDICT) production recommendation. A VERDICT requires the variance, multi-workload, and accuracy gates AND byte-grounding of the champion; anything short is a DRAFT. Writes CHAMPION.md + champion_select.json. Pure post-processing - no cluster runs.
 - Safety: `writes_artifacts`
 - Required flags: `--campaign`
 - Optional flags: `--focus`, `--focus-c`, `--top`, `--baseline`, `--metric`, `--slo-rel`, `--slo-abs-ms`, `--trials`, `--same-node`, `--require-workloads`, `--workloads-present`, `--accuracy-gate`, `--accuracy-floor`, `--out`, `--title`, `--dry-run`, `--campaigns-dir`, `--json`

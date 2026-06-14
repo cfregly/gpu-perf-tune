@@ -17,13 +17,13 @@ asynchronously, on an interval that is typically seconds but can be ~minutes
 under load. The zymtrace MCP (`topfunctions` / `flamegraph`) and direct
 ClickHouse `SELECT`s read whatever has landed **so far**. So a query issued at,
 or just after, the end of a bench window can legitimately return **zero rows
-even though the workload was profiled correctly** — the frames simply are not
+even though the workload was profiled correctly** - the frames simply are not
 queryable *yet*.
 
 This is the sibling of the nsys "empty != blind spot" gate
 (`docs/METHODOLOGY.md`): there an empty `cuda_gpu_kern_sum`
 is a capture-hygiene bug; here an empty query is **ingest lag**, and the fix is
-to wait for the flush and requery for the freshest data — NOT to declare a gap.
+to wait for the flush and requery for the freshest data - NOT to declare a gap.
 
 ## The three things an empty result can mean (rank them in this order)
 
@@ -64,7 +64,7 @@ done
   (`PROFILING-RUNBOOK.md`).
 - The wait is **advisory**: it delays until data is present or the poll is
   exhausted; it does not fabricate data. After the poll, the existing empty-output
-  check is what decides a real gap — now legitimately, because you waited.
+  check is what decides a real gap - now legitimately, because you waited.
 
 ## For the importer (consumes already-captured TSVs)
 

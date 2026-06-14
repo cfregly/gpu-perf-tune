@@ -48,7 +48,7 @@ GLM-5.1 reference layout:
 > sweep cell needs `num_prompts >= 2*c` or its high-c throughput is undercounted
 > ~1.6-1.8x (ramp/drain-dominated window; `docs/METHODOLOGY.md` trap 4). The
 > `import_roofline_sweep` importer flags `steady_window_undercount` + WARNs on any cell
-> `< 2c` — heed it before publishing the report.
+> `< 2c` - heed it before publishing the report.
 
 - **Page 1**: 5 rows (one per `max_num_batched_tokens` in {1024, 2048, 4096,
   8192, 16384}) x 2 columns of scatter panes -- left=TTFT vs request
@@ -264,7 +264,7 @@ from the bench `Total input/generated tokens` lines -> `tpm_v1.mean_isl/mean_osl
 ### Phase D2: byte-ground every cell to raise sol_rigor (recommended, not a gate)
 
 DCGM byte-grounding raises a campaign's `sol_rigor` from `L1` (zymtrace proxy)
-to `L3` (byte-grounded) — it is **recorded, not gated** (the
+to `L3` (byte-grounded) - it is **recorded, not gated** (the
 always-publish policy: a `dcgm_grounded=false` campaign still publishes, with
 the gap visible on the `campaign_v1` row). For each plot-ready cell, produce a
 `dcgm_correlation.json` (renderer pages 6 + 6b) via the
@@ -279,16 +279,16 @@ perf_tune_report_dcgm_correlate --campaign <slug> --cell-id <cell> \
 
 Capture DCGM (SM/DRAM/tensor/GR + NVLINK bytes) concurrently with each cell's
 bench window so the means are real (see the experiment-isolation rule). A run
-that skips it publishes at `sol_rigor=L1` (`dcgm_grounded=false`) — valid and
+that skips it publishes at `sol_rigor=L1` (`dcgm_grounded=false`) - valid and
 comparable, just less tight; prefer L3/L4 when DCGM/ncu are available.
 
-### Phase D3: prefill/decode roofline (page 7) — always-on
+### Phase D3: prefill/decode roofline (page 7) - always-on
 
 The phase-separated roofline + per-(c,ISL) DCGM utilization (the "what
 concurrency maxes the TFLOPs" + "is decode >=75% HBM bandwidth" questions, always
 wanted). Capture with the gated `*-deploy/profiling/roofline-sweep.sh` (a
 decode-concurrency sweep + a prefill-ISL sweep, each with per-cell in-pod
-`dcgmi dmon` PROF — SM/tensor/DRAM/NVLINK), then ingest:
+`dcgmi dmon` PROF - SM/tensor/DRAM/NVLINK), then ingest:
 
 ```text
 roofline-sweep.sh <ns> <pod> <out> <model> <tokenizer> \
@@ -324,7 +324,7 @@ The campaign's recorded `delivery` is the code-under-test identity: a number
 from this campaign may be cited as evidence only for THAT delivery, never cross-tier (an
 `overlay`/offline-prepped run is not evidence for an `infr-patch`, even if the kernels match).
 
-### Phase D4: champion selection (page 8) — the production pick
+### Phase D4: champion selection (page 8) - the production pick
 
 The "what do we ship" synthesis. When the campaign holds a baseline + variant
 arms (e.g. a cross-engine A/B imported via `perf_tune_report_import_variant_ab` from a
@@ -417,7 +417,7 @@ elsewhere (e.g. on a shared filesystem).
 Per the methodology canon "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md`): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -425,15 +425,15 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 The rendered PDF carries up to **four pages**, the last of which is the
 Speed-of-Light Roofline page. It draws automatically when:
 
 1. The campaign has at least one valid `cells/*/kernels.json` (page 3
    precondition; zymtrace per-category data). A zymtrace L1 empty-now right after
-   the window is ClickHouse ingest lag, not absence — poll and requery
+   the window is ClickHouse ingest lag, not absence - poll and requery
    after the flush (see
    [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md)).
 2. The renderer finds `configs/sol-ceilings.yaml` on the
@@ -452,7 +452,7 @@ Publish lands the row regardless (always-publish policy); pass
 `publish_to_lake --strict` only when you want a missing roofline or 0
 throughput-scatter points (non-`latency` focus) to be a hard refusal. When the
 YAML is found but malformed the renderer still raises `SoLCeilingsMalformed`
-and aborts — same no-silent-degradation contract as `KernelsJsonMalformed`.
+and aborts - same no-silent-degradation contract as `KernelsJsonMalformed`.
 
 Per `server/AGENTS.md` "Speed-of-light framing", every campaign
 SHOULD also carry a `<campaign>/sol-summary.md` doc with the
@@ -514,20 +514,20 @@ experiment to use:
   standing/platform/migration names (forbidden list in the `server/AGENTS.md` rule).
   Cluster-scoped PV names are global; a collision silently breaks another
   owner's PVC binding.
-- **`publish_to_lake` is mandatory**, not optional — a campaign is "done"
+- **`publish_to_lake` is mandatory**, not optional - a campaign is "done"
   once the atlas + campaign rows are written AND `report.pdf` contains a
   Speed-of-Light roofline page. Capturing DCGM + zymtrace during the cells
   raises the roofline rigor (see the Speed-of-light reporting section + Phase D2).
 - **Always-publish with focus + sol_rigor.** EVERY run publishes a
   `sol_complete` roofline with a recorded `focus` (latency|throughput|mixed) +
   `sol_rigor` (`L4` ncu | `L3` DCGM | `L1` zymtrace-proxy | `none`).
-  `publish_to_lake` **never refuses** by default — a `dcgm_grounded=false` /
+  `publish_to_lake` **never refuses** by default - a `dcgm_grounded=false` /
   latency-bound / proxy / no-SoL / 0-plot-ready run lands with the gap RECORDED
   on `campaign_v1` + warned; an unsupported `verdict_tier=verdict`
   auto-downgrades to `draft`. The one hard requirement is that `report_render`
   ran first. Pass `--strict` only when you want publish to refuse an incomplete
   campaign. Run `perf_tune_report_dcgm_correlate` (or the `inference-dcgm-correlate`
-  skill) per cell (Phase D2) to raise `sol_rigor` to L3 — it raises rigor, it is
+  skill) per cell (Phase D2) to raise `sol_rigor` to L3 - it raises rigor, it is
   not a gate.
 - Tear down cell workloads by label and verify standing/migration objects are
   untouched. Record the campaign-id + `s3://perf-lake/...` paths in the parent

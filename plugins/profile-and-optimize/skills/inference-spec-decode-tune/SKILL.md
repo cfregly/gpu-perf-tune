@@ -70,12 +70,12 @@ stable-training pass on a brand-new draft (use `inference-spec-decode-train`).
 The reference implementation (a GLM-5.1 EAGLE3 tuner) lays these artifacts down
 in the deploy bundle (e.g. under `deploy/gb300/`):
 
-- `tuning-space.eagle3-draft.json` — the search space + objective (serving
+- `tuning-space.eagle3-draft.json` - the search space + objective (serving
   acceptance) + proxy (training acc) + hyperband rungs (in samples-consumed).
-- `tune-trial.sh` — one trial: maps `global_batch -> (BS, accum)` on the 4-GPU
+- `tune-trial.sh` - one trial: maps `global_batch -> (BS, accum)` on the 4-GPU
   node (BS<=4; BS=8 OOM'd), launches a training arm (`e3bs-arm.yaml`), reads
   proxy-acc at a matched-sample cap (`read-acc0.sh`), `promote`s to serving eval.
-- `tune-driver.py` — the loop: `--strategy hyperband` (default) | `grid` |
+- `tune-driver.py` - the loop: `--strategy hyperband` (default) | `grid` |
   `random` | `tpe` (optuna), `--seed-from` prior arms, durable `tune-ledger.json`,
   `--dry-run` (zero cluster spend).
 - serving objective: `eagle3_vllm_eval.py` +
@@ -84,16 +84,16 @@ in the deploy bundle (e.g. under `deploy/gb300/`):
 
 ## Workflow
 
-### Phase 0 — state objective + space + strategy
+### Phase 0 - state objective + space + strategy
 
 - Objective of record = **measured serving acceptance length** (NOT the proxy).
 - Proxy = training `acc=` at matched samples (drives the cheap hyperband rungs).
 - Strategy (all selectable via `--strategy`; pick by search-space size):
-  - `hyperband` (default) — successive-halving bandit; best GPU-efficiency (early-kills weak arms). Use it unless you have a reason not to.
-  - `grid` — exhaustive over the categorical grid; `random` — uniform-draw baseline. Both dependency-free.
-  - `tpe` — Bayesian, model-based search; sample-efficient on LARGER / continuous spaces. **Opt-in**: needs `pip install optuna` (the other three are dependency-free; tpe exits with a clear message if optuna is absent).
+  - `hyperband` (default) - successive-halving bandit; best GPU-efficiency (early-kills weak arms). Use it unless you have a reason not to.
+  - `grid` - exhaustive over the categorical grid; `random` - uniform-draw baseline. Both dependency-free.
+  - `tpe` - Bayesian, model-based search; sample-efficient on LARGER / continuous spaces. **Opt-in**: needs `pip install optuna` (the other three are dependency-free; tpe exits with a clear message if optuna is absent).
 
-### Phase 1 — dry-run the plan (no spend)
+### Phase 1 - dry-run the plan (no spend)
 
 ```text
 tune-driver.py --strategy hyperband --seed-from <prior-arms.json> --dry-run
@@ -102,7 +102,7 @@ tune-driver.py --strategy hyperband --seed-from <prior-arms.json> --dry-run
 Prints the bracket, the per-config `(BS, accum, lr)` mapping, and the rung
 read-caps. Confirm the bracket before any GPU spend.
 
-### Phase 2 — run the proxy search (cheap rungs)
+### Phase 2 - run the proxy search (cheap rungs)
 
 ```text
 tune-driver.py --strategy hyperband --seed-from <prior-arms.json>
@@ -113,19 +113,19 @@ each rung from the SAME run's log, early-kills the bottom `(1 - 1/eta)` to save
 GPU, lets survivors train on. Every rung read is appended to `tune-ledger.json`
 (durable across churn).
 
-### Phase 3 — promote survivors to measured serving acceptance (the objective)
+### Phase 3 - promote survivors to measured serving acceptance (the objective)
 
 For the top-K survivors, run `eagle3_vllm_eval.py` against the GB300
 serving deploy and read `vllm:spec_decode_*` -> mean acceptance length. The
-**champion is decided here**, on measured serving acceptance — the proxy only
+**champion is decided here**, on measured serving acceptance - the proxy only
 ranked candidates for promotion.
 
-### Phase 4 — gate + record
+### Phase 4 - gate + record
 
 Gate the champion vs the standing config with `perf_baseline_diff`. On a real
 win, record the new champion baseline + publish to the perf-lake (serving
 acceptance/throughput IS perf-lake-eligible). On a within-noise tie, report "no
-improvement" — never round a proxy win up to a serving win.
+improvement" - never round a proxy win up to a serving win.
 
 ## Verdict rigor (DRAFT vs VERDICT)
 
@@ -138,17 +138,17 @@ improvement" — never round a proxy win up to a serving win.
 Per the methodology canon "Every performance number carries its full context (no bare
 numbers)" (`docs/METHODOLOGY.md`, "Full-context reporting"): every number this
 skill emits (throughput, latency, TPOT/ITL, BW, %SoL, speedup, efficiency, goodput, acceptance
-rate, scaling efficiency, thermal/failure rate — whatever it reports) MUST carry its full
+rate, scaling efficiency, thermal/failure rate - whatever it reports) MUST carry its full
 measurement-context descriptor, and every comparison MUST be matched on it. A bare number is a
-defect — it cannot set a default, ship a config, or appear in a report.
+defect - it cannot set a default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound — e.g. accuracy/acceptance — omit `%SoL` but keep the rest of the descriptor.)
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound - e.g. accuracy/acceptance - omit `%SoL` but keep the rest of the descriptor.)
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
 
@@ -179,11 +179,11 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Source-of-truth references
 
-- [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md) — the serving-config
+- [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md) - the serving-config
   sibling + the `--optimizer` hook this skill realizes.
-- [`inference-spec-decode-train`](/plugins/profile-and-optimize/skills/inference-spec-decode-train/SKILL.md) — the
+- [`inference-spec-decode-train`](/plugins/profile-and-optimize/skills/inference-spec-decode-train/SKILL.md) - the
   single-head trainer this loops around.
-- The `ai_tuning_*` MCP family — the MLPerf-training cousin (same engines,
+- The `ai_tuning_*` MCP family - the MLPerf-training cousin (same engines,
   different contract).
 
 ## Contact

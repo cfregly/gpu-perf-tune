@@ -40,12 +40,12 @@ shape the workload-agnostic
 expects. The bridge fixes three pain points:
 
 1. The upstream `perf-bench` skill's report is a markdown table per
-   model — not a JSON payload the registry can hash and diff.
+   model - not a JSON payload the registry can hash and diff.
 2. The metric set (TTFT p50/p95/p99, ITL p50, tok/s, tok/s/user,
    request latency p50, prefix cache hit rate delta, GPU cache
    utilization peak) needs a stable schema name so future diffs find
    apples-to-apples baselines.
-3. Per-metric regression tolerances differ — TTFT regressions of 5%
+3. Per-metric regression tolerances differ - TTFT regressions of 5%
    are usually real, throughput regressions of 3% may be capacity
    contention, prefix cache hit rate movements should be expressed as
    absolute percentage points (not percent-of-percent).
@@ -116,7 +116,7 @@ This bridge does NOT add a new MCP verb. It wraps the existing
 
 The two top-level fields `kernel_class_gpu_pct` and `cpu_spinpoll_pct`
 are **optional**. They surface profile-grade signals that the upstream
-`perf-bench` runbook does not produce on its own — they are populated
+`perf-bench` runbook does not produce on its own - they are populated
 when the operator also captures a [zymtrace](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md)
 or Nsight-Systems profile against the same time window.
 
@@ -143,7 +143,7 @@ is `null`, the bridge skips that metric in `Phase 2: per-metric diff
 with tolerances` and emits a `NULL_LEGACY_BASELINE` row in the diff
 output so the operator can see which fields were unmeasured. This keeps
 existing `inference_perfbench_v1` baselines registered before these
-fields existed diff-compatible with new bundles that include them — the
+fields existed diff-compatible with new bundles that include them - the
 registry never breaks.
 
 When a true breaking change is needed (e.g. metric-shape restructure of
@@ -156,7 +156,7 @@ When a true breaking change is needed (e.g. metric-shape restructure of
 | --- | --- | --- | --- |
 | `throughput_toks_per_s` | 3% | regression = current < baseline | Throughput is the headline metric; small regressions are real |
 | `ttft_p50_ms` | 5% | regression = current > baseline | TTFT is sensitive to scheduler / cache cold-start; 5% is the usual signal floor |
-| `ttft_p95_ms` | 10% | regression = current > baseline | Tail latency wider band — outlier-prone |
+| `ttft_p95_ms` | 10% | regression = current > baseline | Tail latency wider band - outlier-prone |
 | `ttft_p99_ms` | 15% | regression = current > baseline | Same |
 | `itl_p50_ms` | 3% | regression = current > baseline | ITL is decode-bound; small regressions are real |
 | `tps_per_user` | 3% | regression = current < baseline | Per-user throughput; same band as overall throughput |
@@ -176,11 +176,11 @@ the metric is reported as `NULL_LEGACY_BASELINE` and skipped (see
 
 - After an [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
   run completes (Phase 9 of the upstream runbook).
-- Periodic regression sweep — weekly cron diffs each registered
+- Periodic regression sweep - weekly cron diffs each registered
   baseline against the most recent run.
-- Pre-promotion gate — block staging or prod promotion if the diff
+- Pre-promotion gate - block staging or prod promotion if the diff
   verdict is RED.
-- Pairing perf vs quality — register the baseline with `--notes
+- Pairing perf vs quality - register the baseline with `--notes
   "GPQA=<score>; MMLU-Pro=<score>"` from the
   [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md) run so
   future diffs can confirm the regression is not masked by a quality
@@ -188,10 +188,10 @@ the metric is reported as `NULL_LEGACY_BASELINE` and skipped (see
 
 Do **not** use this skill for:
 
-- MLPerf training step-time / MFU baselines — use
+- MLPerf training step-time / MFU baselines - use
   [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) directly
   with `--family <bench>` and a custom schema.
-- One-off diagnostic measurements — register a baseline only when the
+- One-off diagnostic measurements - register a baseline only when the
   measurement is worth remembering.
 
 ## Example prompts
@@ -204,9 +204,9 @@ Do **not** use this skill for:
 
 ## Prerequisites
 
-1. **Source bundle path** — `--source <path>` pointing at an
+1. **Source bundle path** - `--source <path>` pointing at an
    `experiments/artifacts/inference-perf-bench/<run-id>/` directory.
-2. **Model name** — `--model <served-model-name>` (matches the value
+2. **Model name** - `--model <served-model-name>` (matches the value
    returned by the model's `/v1/models` endpoint).
 3. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for the registry path.
 
@@ -224,14 +224,14 @@ verdict (diff).
 
 Read the upstream perf-bench output:
 
-- `experiments/artifacts/inference-perf-bench/<run-id>/perf-bench-report-*.md` — parse the per-concurrency rows.
-- `experiments/artifacts/inference-perf-bench/<run-id>/aiperf-c<N>.log` — extract the headline metrics per concurrency.
-- `experiments/artifacts/inference-perf-bench/<run-id>/<model>-metrics-pre.prom` and `<model>-metrics-post.prom` — extract `vllm:prefix_cache_hit_rate`, `vllm:gpu_cache_usage_perc`, `vllm:num_requests_running`, `vllm:avg_generation_throughput_toks_per_s`.
+- `experiments/artifacts/inference-perf-bench/<run-id>/perf-bench-report-*.md` - parse the per-concurrency rows.
+- `experiments/artifacts/inference-perf-bench/<run-id>/aiperf-c<N>.log` - extract the headline metrics per concurrency.
+- `experiments/artifacts/inference-perf-bench/<run-id>/<model>-metrics-pre.prom` and `<model>-metrics-post.prom` - extract `vllm:prefix_cache_hit_rate`, `vllm:gpu_cache_usage_perc`, `vllm:num_requests_running`, `vllm:avg_generation_throughput_toks_per_s`.
 
 If the operator also captured a paired profile bundle (zymtrace or
 Nsight) against the same window, source the two optional fields:
 
-- `experiments/artifacts/zymtrace-bundles/<run-id>/response.json` (or any sibling bundle that follows the [zymtrace-anchored-query](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) layout) — derive `kernel_class_gpu_pct` from the GPU-side `event_kind = 'cuda'` query response, bucketed per the kernel-class regex appendix in that skill. Derive `cpu_spinpoll_pct` from the CPU-side `event_kind = 'on_cpu'` response by summing samples whose `py_file` matches `shm_broadcast.py` or `utils.py::sched_yield`.
+- `experiments/artifacts/zymtrace-bundles/<run-id>/response.json` (or any sibling bundle that follows the [zymtrace-anchored-query](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) layout) - derive `kernel_class_gpu_pct` from the GPU-side `event_kind = 'cuda'` query response, bucketed per the kernel-class regex appendix in that skill. Derive `cpu_spinpoll_pct` from the CPU-side `event_kind = 'on_cpu'` response by summing samples whose `py_file` matches `shm_broadcast.py` or `utils.py::sched_yield`.
 - If no paired profile bundle exists, emit `null` for both optional fields. The diff verb will skip them per the "Optional fields" rule above; the registry record stays valid.
 
 Emit `inference_perfbench_v1.json` to a scratch path; `sha256sum` it.
@@ -267,9 +267,9 @@ Print:
 
 #### Phase 1: resolve baseline + current
 
-- `Read <baseline>/baseline.json` — confirm `family == "inference"`
+- `Read <baseline>/baseline.json` - confirm `family == "inference"`
   and `measurement == "<model>-perfbench-v1"`.
-- `Read <baseline>/source-snapshot.<ext>` — load the baseline's
+- `Read <baseline>/source-snapshot.<ext>` - load the baseline's
   `inference_perfbench_v1.json`.
 - Parse the current bundle into the same schema shape (Phase 1 of
   record mode).
@@ -331,7 +331,7 @@ authoritative classification this skill returns.
     scheduler / queue depth (`vllm:num_requests_running` peak +
     `vllm:gpu_cache_usage_perc` peak deltas).
   - If prefix cache hit rate regressed: suggest the
-    `--connection-reuse-strategy sticky-user-sessions` flag — a
+    `--connection-reuse-strategy sticky-user-sessions` flag - a
     hit-rate drop is often a routing problem (cross-region hops
     breaking session affinity), not a model-side issue.
 
@@ -356,7 +356,7 @@ authoritative classification this skill returns.
 Per the methodology canon "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md`): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -364,8 +364,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, **delivery** (image|overlay|patchedVllm|infr-patch), bench backend, serving engine. A number is evidence only for its own `delivery` -- never cite cross-tier.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 See `server/AGENTS.md` "Speed-of-light framing". When this bridge
 records / diffs a perf-bench run, the baseline record SHOULD carry a
@@ -373,7 +373,7 @@ records / diffs a perf-bench run, the baseline record SHOULD carry a
 [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) schema, and
 the diff SHOULD report SoL delta alongside the absolute throughput /
 latency delta. Peaks are sourced from
-`configs/sol-ceilings.yaml` — never inlined.
+`configs/sol-ceilings.yaml` - never inlined.
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
 
@@ -396,4 +396,4 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 - Perf-bench input: [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
   (also reachable via the `ai-bench` colloquial alias).
 - Quality counterpart: [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md).
-- `server/AGENTS.md` — fail-fast + provenance rules.
+- `server/AGENTS.md` - fail-fast + provenance rules.

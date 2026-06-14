@@ -37,7 +37,7 @@ put the server on PYTHONPATH and invoke it as a module.
 ## How it works
 
 - **Curated source-of-truth:** `perf-tune-report/configs/value-findings.yaml`
-  — one entry per finding (`id`, `title`, `lifecycle`, `baseline`, `win`, `hardware`,
+ - one entry per finding (`id`, `title`, `lifecycle`, `baseline`, `win`, `hardware`,
   `deploy_readiness`, `campaign_ids`, **`next_lever`** [+ optional `next_value`]). Edit this
   when a finding's status changes or a new finding lands. This is the ONLY hand-maintained part.
 - **`perftunereport value_view`** joins it with the LIVE perf-lake campaigns: each campaign's
@@ -46,7 +46,7 @@ put the server on PYTHONPATH and invoke it as a module.
   numbers are human-verified in the registry; the live columns + flags are read at render time
   so the ledger never silently drifts from the lake.
 - **Flags surface** when a campaign is missing locally (S3-only / unpublished), ungrounded
-  (`sol_rigor` none/L1), its baseline is not named, or **a finding has no `next_lever`** — fix
+  (`sol_rigor` none/L1), its baseline is not named, or **a finding has no `next_lever`** - fix
   by publishing/tagging the campaign or naming the next lever.
 
 ## Keep it honest
@@ -68,17 +68,17 @@ patch's own deploy.
 Per the methodology canon "Every performance number carries its full context (no bare
 numbers)" (`docs/METHODOLOGY.md`, "Full-context reporting"): every number this
 skill emits (throughput, latency, TPOT/ITL, BW, %SoL, speedup, efficiency, goodput, acceptance
-rate, scaling efficiency, thermal/failure rate — whatever it reports) MUST carry its full
+rate, scaling efficiency, thermal/failure rate - whatever it reports) MUST carry its full
 measurement-context descriptor, and every comparison MUST be matched on it. A bare number is a
-defect — it cannot set a default, ship a config, or appear in a report.
+defect - it cannot set a default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound — e.g. accuracy/acceptance — omit `%SoL` but keep the rest of the descriptor.)
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound - e.g. accuracy/acceptance - omit `%SoL` but keep the rest of the descriptor.)
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 ## Asset validation (review + FAIL LOUD)
 

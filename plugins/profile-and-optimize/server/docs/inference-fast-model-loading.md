@@ -19,7 +19,7 @@ Enforced by the always-applied `docs/METHODOLOGY.md`. Always pick
 the fastest AVAILABLE loader; FLAG a slow load loudly and switch if effective rate
 is `< ~500 MB/s` on a large model.
 
-1. **Accelerated object-store endpoint** — a drop-in accelerated endpoint in
+1. **Accelerated object-store endpoint** - a drop-in accelerated endpoint in
    front of the S3-compatible store, if your provider offers one. GATE: probe
    reachability AND a real bucket read. Two failure shapes seen in practice:
    an endpoint DNS name that resolves to a non-routable placeholder (the probe
@@ -30,9 +30,9 @@ is `< ~500 MB/s` on a large model.
 2. **Parallel multipart -> local NVMe** then load local. GATE: node NVMe free
    `>= model_size x 1.2` (GB300 `/tmp` / emptyDir, xfs ~28 TiB; probe with
    [`local-nvme-probe.sh`](../tools/local-nvme-probe.sh)).
-3. **`runai_model_streamer`** (`--load-format runai_streamer`) — vLLM-native
+3. **`runai_model_streamer`** (`--load-format runai_streamer`) - vLLM-native
    single-pass parallel S3 stream. GATE: package in the image (`vllm-tensorizer` has it).
-4. **tensorizer** (`--load-format tensorizer`) — fastest cold-load for a pre-serialized
+4. **tensorizer** (`--load-format tensorizer`) - fastest cold-load for a pre-serialized
    model. GATE: a tensorized artifact exists.
 5. **NEVER** plain single-stream s3fs FUSE for 100s-of-GB.
 

@@ -37,14 +37,14 @@ emptyDir that the operator extracts via `kubectl cp`.
 
 | Question | Tool | Skill |
 |---|---|---|
-| What kernels run + relative sample-share? | zymtrace | `zymtrace-anchored-query` (free, no sidecar — kernel names resolve fully when the ClickHouse join is correct) |
+| What kernels run + relative sample-share? | zymtrace | `zymtrace-anchored-query` (free, no sidecar - kernel names resolve fully when the ClickHouse join is correct) |
 | **Absolute per-kernel duration (ns), CUDA graph capture/replay timeline, NVTX ranges** | **nsys** | **this skill** |
 | Per-kernel occupancy / regs / smem / DRAM-BW / arithmetic intensity / warp stalls | ncu | `inference-kernel-ncu-profile` |
 | Where does c=1 (low-concurrency) decode TIME go (GPU-busy vs host-gap vs comm) + kernel-vs-host-vs-comm verdict | vLLM profiler endpoint (torch) or nsys | `inference-decode-step-budget` |
 
 **Fast path for the decode/latency tier (prefer over a restart):** if the
 question is "where does c=1 decode time go", use
-[`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md) — it
+[`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md) - it
 drives vLLM's `/start_profile` + `/stop_profile` HTTP endpoints so you capture
 restart-free in seconds, and it bakes in the correctness gates (clean
 single-stream driver; GPU-busy must include CUDA-graph execution; reconcile
@@ -52,11 +52,11 @@ against driver TPOT). This skill (nsys sidecar/timeline) is for prefill /
 throughput-tier hot-spots and the deep CUDA-graph timeline.
 
 **Note on zymtrace symbol resolution**: zymtrace DOES resolve
-SASS-level kernel symbols — the per-kernel join returns fully-resolved
+SASS-level kernel symbols - the per-kernel join returns fully-resolved
 kernel names directly from zymtrace ClickHouse via `interp_funcs`. A
 high "native unresolved" share usually means the query joined wrong
 (filtered out the kernel-name match), not a tooling gap. Use
-`zymtrace-anchored-query` first for "what kernels run" — it's free + no
+`zymtrace-anchored-query` first for "what kernels run" - it's free + no
 cluster mutation. Use nsys for the things zymtrace CAN'T give you (timeline,
 absolute ns, NVTX, cuda graph events).
 
@@ -70,9 +70,9 @@ absolute ns, NVTX, cuda graph events).
 
 Do **not** use this skill for:
 
-- Continuous always-on capture — that's what zymtrace is for. nsys is
+- Continuous always-on capture - that's what zymtrace is for. nsys is
   on-demand only because it adds ~5% per-pod overhead during capture.
-- Multi-pod fleet-level profiling — this skill targets ONE pod at a time.
+- Multi-pod fleet-level profiling - this skill targets ONE pod at a time.
   For fleet capture use the zymtrace profiler DaemonSet.
 
 ## Sidecar image
@@ -130,66 +130,66 @@ kubectl -n $NS exec $TARGET_POD -c $SIDECAR -- bash -c "
 "
 ```
 
-**Gotcha 1 — CUDA graphs (must-read).** vLLM runs decode (and often prefill)
+**Gotcha 1 - CUDA graphs (must-read).** vLLM runs decode (and often prefill)
 inside CUDA graphs. Without `--cuda-graph-trace=node` the graph executes as one
 opaque `GRAPH_TRACE` span and the constituent kernels do NOT appear in
-`cuda_gpu_kern_sum` — so a KERNEL-only "GPU-busy" sum **under-counts** real busy
+`cuda_gpu_kern_sum` - so a KERNEL-only "GPU-busy" sum **under-counts** real busy
 time and a kernel ranking misses the in-graph forward kernels. Always pass
 `--cuda-graph-trace=node`, and when computing GPU-busy from the sqlite, union
 `CUPTI_ACTIVITY_KIND_KERNEL` with `CUPTI_ACTIVITY_KIND_GRAPH_TRACE` (+ `MEMCPY`).
 Detect graphs via the `cudaGraphLaunch` vs `cudaLaunchKernel` API counts.
 
-**Gotcha 2 — `--capture-range=cudaProfilerApi` needs a trigger.** It only starts
+**Gotcha 2 - `--capture-range=cudaProfilerApi` needs a trigger.** It only starts
 collecting when the app calls `cudaProfilerStart`. vLLM does that **only** when
 launched with `--profiler-config.profiler=cuda` and you POST `/start_profile`.
-Without that, either set `--profiler-config.profiler=cuda` (preferred — precise
+Without that, either set `--profiler-config.profiler=cuda` (preferred - precise
 window, no restart per capture) or drop `--capture-range` and use a timed window
-(`--delay`/`--duration`) — but a fixed window is brittle (it can miss
+(`--delay`/`--duration`) - but a fixed window is brittle (it can miss
 steady-state, and a long window can OOM at gpu-mem-util >= 0.85, truncating the
 report). See [`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md)
 for the endpoint-triggered recipe.
 
-**Gotcha 3 — `--attach-pid` caveats.** Attaching to a running PID for CUDA
+**Gotcha 3 - `--attach-pid` caveats.** Attaching to a running PID for CUDA
 tracing works only when the process has no conflicting CUDA injection
-(production zymtrace-instrumented pods set `CUDA_INJECTION64_PATH` and block it —
+(production zymtrace-instrumented pods set `CUDA_INJECTION64_PATH` and block it -
 see the ncu skill's "Blocker 1"; latency canaries usually have none). For the
 *decode* tier prefer the profiler-endpoint path over attach.
 
 **Capture-quality gate (decode captures).** Before trusting a decode trace,
 verify it (a) contains CUDA-kernel data, (b) shows a repeating decode-step
 pattern (a dominant inter-step idle-gap bucket), and (c) is not prefill-
-contaminated — drive a CLEAN single-stream workload (tiny prompt + long gen +
+contaminated - drive a CLEAN single-stream workload (tiny prompt + long gen +
 `ignore_eos`), not `vllm bench serve --random-input-len N`.
 
-**Gate 0 (precondition) — CUPTI must even initialize (CUDA image-vs-driver skew).** On GB300,
+**Gate 0 (precondition) - CUPTI must even initialize (CUDA image-vs-driver skew).** On GB300,
 a CUDA 12.9 serving image against the node's CUDA 13.0 driver makes CUPTI fail to init
 (`CUPTI_ERROR_INVALID_DEVICE`), so EVERY CUPTI client (nsys, ncu, vLLM `--profiler-config.profiler=torch`)
 records **0 kernels REGARDLESS of the four gates below**. This is NOT capture hygiene and the gates won't
-fix it — it is a CUDA major-version toolkit-vs-driver skew (NOT permission: `RmProfilingAdminOnly:0`; NOT
+fix it - it is a CUDA major-version toolkit-vs-driver skew (NOT permission: `RmProfilingAdminOnly:0`; NOT
 missing-lib: `libcupti.so.12` present + linked; NOT wrong-process). If you get 0 kernels on GB300,
 grep the kineto/nsys log for `CUDA versions. CUPTI/Runtime/Driver` FIRST: a 12.x-toolkit / 13.x-driver
 split needs a CUDA-13-aligned image or zymtrace (non-CUPTI), not more capture tuning.
 **SOLVED PATH (GB300 default):** use launch-wrap templates that copy a Blackwell-capable nsys
-2026.x (CUDA-13) from an NGC CUDA image into the serve container — the model-bringup template
+2026.x (CUDA-13) from an NGC CUDA image into the serve container - the model-bringup template
 ships `nsys-ngc.yaml` for vLLM and `nsys-sglang.yaml` for SGLang
 (`sglang.launch_server`). These are the GB300 default; the in-image / apt nsys is superseded there.
 
 **An EMPTY `cuda_gpu_kern_sum` is a CAPTURE-HYGIENE bug, NOT a "cudagraph blind
-spot" — DO NOT conclude the stack is unprofilable until you validate four
+spot" - DO NOT conclude the stack is unprofilable until you validate four
 things** (only after Gate 0 passes). A single empty rep has been wrongly declared a
 "CUDA-graph blind spot" before; a re-capture on the same production cudagraph stack with
 fixed capture hygiene returned **tens of millions of kernel rows**:
-1. **Flag** — `--cuda-graph-trace=node` is in the nsys argv (Gotcha 1 above);
+1. **Flag** - `--cuda-graph-trace=node` is in the nsys argv (Gotcha 1 above);
    without it graph-resident kernels are opaque `GRAPH_TRACE` and `kern_sum` is
    empty at c>=64.
-2. **Traffic** — a bench is DRIVING load during the capture window. At the
+2. **Traffic** - a bench is DRIVING load during the capture window. At the
    **throughput tier (c>=64)** drive continuous `--max-concurrency >=64` traffic
    during `[delay, delay+duration]`; an idle/untrafficked window yields an empty
    rep. (At the decode/c=1 tier this is the CLEAN single-stream workload above.)
-3. **Rep-size** — a real c>=64 rep is hundreds of MB to GB (421 MB @ c=128,
+3. **Rep-size** - a real c>=64 rep is hundreds of MB to GB (421 MB @ c=128,
    1.0 GB @ c=192). `.nsys-rep << ~10 MB` => idle/failed capture, RETRY; never run
    stats on a tiny rep.
-4. **Sqlite probe** — `nsys export --type sqlite` then
+4. **Sqlite probe** - `nsys export --type sqlite` then
    `SELECT count(*) FROM CUPTI_ACTIVITY_KIND_KERNEL`. A `kern_sum SKIPPED` message
    ALONE is not proof; it fires on a near-empty rep. Only after all four hold and
    it is STILL empty may you escalate to a genuine tooling limit.
@@ -199,9 +199,9 @@ Mechanical gate: `scripts/nsys-validate-capture.sh`
 **Two launch-wrap gotchas that also hit nsys (canon: the ncu capture-hygiene section of
 [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) +
 `docs/METHODOLOGY.md`):** (1) `-- env VAR=v python3` makes the profiler
-target the `env` process not its python child — set the env on the profiler process itself
+target the `env` process not its python child - set the env on the profiler process itself
 (`VAR=v nsys … -- python3 …`); (2) profiler-start-based scoping is unreliable when the harness
-imports a vLLM `direct_register_custom_op` module — prefer launch-index/delay scoping.
+imports a vLLM `direct_register_custom_op` module - prefer launch-index/delay scoping.
 
 ### 4. Extract artifacts
 
@@ -239,7 +239,7 @@ ipb["kernel_profile"] = {
 ```
 
 The `inference_perfbench_v1` schema treats `kernel_profile` as an
-optional dict — bundles without it are unaffected.
+optional dict - bundles without it are unaffected.
 
 ### 6. Cleanup
 
@@ -279,7 +279,7 @@ The `analyze-zymtrace-workload` skill (Phase 4d) reads the
   fmha_v2_kernel_paged<sm100>: 2.4%"
 
 Showing the operator both numbers at once closes the loop on "is the
-hot category one kernel or three?" — answerable from zymtrace alone is
+hot category one kernel or three?" - answerable from zymtrace alone is
 "unknown beyond the category".
 
 ## Cost + risk
@@ -294,16 +294,16 @@ the start.
 
 ## Pairs with
 
-- [`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md) — FAST, restart-free c=1/low-concurrency decode-step budget via vLLM's `/start_profile` endpoint. Use it (not this skill) when the question is "where does decode time go / is it kernel- or host-bound".
-- [`zymtrace-anchored-query`](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) — kernel-name resolution + sample-share from ClickHouse, no cluster mutation. Run FIRST. An empty result right after a bench is usually ClickHouse ingest lag (async flush), not absence — wait + requery for the freshest data (see [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md)).
-- [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) — per-kernel hardware counters (occupancy, regs, smem, DRAM BW, roofline) using the SAME sidecar image, scoped via `--kernel-name` to avoid the 10-100x kernel-replay slowdown. Run AFTER nsys to interpret hot-kernel ROOT CAUSE (memory-bound vs compute-bound vs occupancy-limited).
+- [`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md) - FAST, restart-free c=1/low-concurrency decode-step budget via vLLM's `/start_profile` endpoint. Use it (not this skill) when the question is "where does decode time go / is it kernel- or host-bound".
+- [`zymtrace-anchored-query`](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) - kernel-name resolution + sample-share from ClickHouse, no cluster mutation. Run FIRST. An empty result right after a bench is usually ClickHouse ingest lag (async flush), not absence - wait + requery for the freshest data (see [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md)).
+- [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) - per-kernel hardware counters (occupancy, regs, smem, DRAM BW, roofline) using the SAME sidecar image, scoped via `--kernel-name` to avoid the 10-100x kernel-replay slowdown. Run AFTER nsys to interpret hot-kernel ROOT CAUSE (memory-bound vs compute-bound vs occupancy-limited).
 
 ## Full-context reporting (no bare numbers)
 
 Per the canon "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md` "Full-context reporting"): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -311,8 +311,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 Per `docs/METHODOLOGY.md` "Speed-of-light framing", kernel-time
 hot-spot interpretation MUST cite the natural ceiling each kernel
@@ -329,7 +329,7 @@ needs FLOPS / bytes per kernel which **ncu** captures, not nsys. When
 a nsys finding flags a hot kernel that needs proper %SoL interpretation,
 the next step is
 [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)
-on that kernel name — see the "Pairs with" entry above.
+on that kernel name - see the "Pairs with" entry above.
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
 
@@ -352,12 +352,12 @@ kernel rubric (`docs/METHODOLOGY.md` "Kernel-work classification").
 **Record `(K,R,H,P,A)` for the candidate AND the named baseline** in the bundle's
 `SOURCE.md`/`summary.md`. nsys gives you the K and R axes directly (which op, library
 vs Triton vs CUDA-graph-captured) and the absolute per-kernel duration that feeds the
-P-axis comparison — but it **cannot** prove the H axis (tensor-core engagement) or a
+P-axis comparison - but it **cannot** prove the H axis (tensor-core engagement) or a
 true %SoL. Defer the H + P proof to
 [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md), which is
 the gate's enforcement point. Reminder: a win over a strictly-lower-H/R baseline (e.g.
 beating generic Triton when production runs the `sm100f` tensor-core library) is a
-**DRAFT, never a VERDICT** — it fails the "Fair baseline" clause. When the campaign
+**DRAFT, never a VERDICT** - it fails the "Fair baseline" clause. When the campaign
 reaches L4 (an ncu roofline renders), the structured `krhpa:` block in `config.yaml`
 is **required** by `publish_to_lake` (see the YAML example in
 [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)); prose in

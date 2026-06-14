@@ -68,12 +68,12 @@ Prometheus skill when the question targets time-series cluster metrics.
 
 Do **not** use this skill for:
 
-- Already-vetted profile queries — just run the SQL directly via
+- Already-vetted profile queries - just run the SQL directly via
   `curl -X POST 'http://localhost:9123/' --data-binary @<query.sql>`.
-- Live UI exploration — the zymtrace web UI has its own
+- Live UI exploration - the zymtrace web UI has its own
   flamegraph/timeline views; this skill is for headless reproducible
   queries.
-- Cross-tenant queries — every example here scopes to a single
+- Cross-tenant queries - every example here scopes to a single
   `pod_name LIKE` pattern. Cross-tenant exploration belongs to the
   zymtrace UI or the zymtrace MCP's pattern-recognition tools.
 
@@ -88,13 +88,13 @@ Do **not** use this skill for:
 
 ## Prerequisites
 
-1. **Cluster context active** — `kubectl config current-context` returns
+1. **Cluster context active** - `kubectl config current-context` returns
    the cluster running zymtrace.
-2. **zymtrace backend deployed** — `kubectl -n zymtrace get pods -l app=zymtrace-clickhouse` shows at least one Running pod.
-3. **Operator question or pod+kind+window** — one of:
+2. **zymtrace backend deployed** - `kubectl -n zymtrace get pods -l app=zymtrace-clickhouse` shows at least one Running pod.
+3. **Operator question or pod+kind+window** - one of:
    - Free-form question (skill derives `pod_name` pattern + `event_kind` + window via schema introspection).
    - Explicit `--pod <LIKE-pattern> --event-kind <cuda|on_cpu> --window <UTC-range>`.
-4. **Time window** — `--time-range "now-Nm..now"` or absolute UTC range. Default `now-5m..now`. Queries with no `timestamp` bound are refused.
+4. **Time window** - `--time-range "now-Nm..now"` or absolute UTC range. Default `now-5m..now`. Queries with no `timestamp` bound are refused.
 5. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for the bundle path (falls back to `${PWD}/zymtrace-bundles/<run-id>/`).
 
 ## Interaction style
@@ -163,18 +163,18 @@ The cardinality probe response tells us:
 - The exact `pod_name` set the query will scan (catches accidental
   cross-pod scope).
 - The actual `timestamp` range that has data (catches misaligned
-  windows — e.g. a window anchored on the bench's scheduled start when
+  windows - e.g. a window anchored on the bench's scheduled start when
   the run actually began and ended a few minutes later, a common
   first-pass mistake).
 - The sample count (so the operator can decide if the window is too
-  short to be statistically meaningful — <1000 samples is typically
+  short to be statistically meaningful - <1000 samples is typically
   not enough).
 
 If `rows = 0`: do NOT immediately conclude "no signal". Zymtrace data is not
-instantaneous — rank two causes in this order:
+instantaneous - rank two causes in this order:
 
 1. **Ingest lag (transient).** If the pod/window are freshly-run (the bench just
-   ended), zymtrace may not have flushed to ClickHouse yet — it flushes
+   ended), zymtrace may not have flushed to ClickHouse yet - it flushes
    **asynchronously** (~seconds-to-minutes). **Wait for the flush and re-run the
    cardinality probe** for the freshest data before concluding. A simple poll
    (mirrors [`scripts/zymtrace-ingest-wait.sh`](/scripts/zymtrace-ingest-wait.sh)):
@@ -189,14 +189,14 @@ instantaneous — rank two causes in this order:
    ```
 
 2. **Wrong selector / window.** If it STAYS 0 past the flush window, the
-   `pod_name LIKE` pattern or `[start,end]` doesn't match — re-query by
+   `pod_name LIKE` pattern or `[start,end]` doesn't match - re-query by
    `host=<node>`+window (the hash-suffixed pod-name filter often reads empty when
    the host filter returns frames) and confirm the window.
 
 Per the fail-fast rationale in
 [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md),
 running the top-N on an empty result would look like "no signal" when it is really
-either ingest lag (requery) or a wrong selector (fix it) — never silently proceed.
+either ingest lag (requery) or a wrong selector (fix it) - never silently proceed.
 
 If `rows > 10_000_000`: refuse. The selector is too broad; narrow the
 time window or `pod_name` pattern.
@@ -273,7 +273,7 @@ Print:
 - **Cross-link** to
   [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md)
   if the operator's question maps to a `kernel_class_gpu_pct` or
-  `cpu_spinpoll_pct` field (it usually does — that's the canonical
+  `cpu_spinpoll_pct` field (it usually does - that's the canonical
   consumer of this skill's output).
 
 ## Kernel-class bucketing (appendix)
@@ -302,17 +302,17 @@ keys (e.g. `nvjet_trt_llm`, `d2d_memcpy`, `elementwise_misc`).
 
 Per `docs/METHODOLOGY.md` "Full-context reporting": every number this
 skill emits (throughput, latency, TPOT/ITL, BW, %SoL, speedup, efficiency, goodput, acceptance
-rate, scaling efficiency, thermal/failure rate — whatever it reports) MUST carry its full
+rate, scaling efficiency, thermal/failure rate - whatever it reports) MUST carry its full
 measurement-context descriptor, and every comparison MUST be matched on it. A bare number is a
-defect — it cannot set a default, ship a config, or appear in a report.
+defect - it cannot set a default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
 - **Serving cfg:** max-num-seqs, max-num-batched-tokens, gpu-memory-utilization, max-model-len, cudagraph_mode/enforce_eager, async_scheduling, prefix-caching.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound — e.g. accuracy/acceptance — omit `%SoL` but keep the rest of the descriptor.)
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named. (If the metric is not roofline-bound - e.g. accuracy/acceptance - omit `%SoL` but keep the rest of the descriptor.)
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
 
@@ -331,7 +331,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 ## Safety
 
 - **Empty != no data (ClickHouse ingest lag).** A `rows = 0` on a freshly-run
-  pod/window is often ingest lag, not absence — zymtrace flushes to ClickHouse
+  pod/window is often ingest lag, not absence - zymtrace flushes to ClickHouse
   asynchronously. **Wait for the flush and re-probe** (`ZYM_INGEST_WAIT_SEC` /
   `ZYM_INGEST_MAX_ATTEMPTS`) before concluding; only a persistent 0 past the flush
   is a wrong selector / real gap. See
@@ -345,7 +345,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
   scanned, the skill refuses to run the top-N. Operator narrows the
   selector and retries.
 - **LIMIT 25 default.** The default top-N is 25 rows; operator can
-  override to as many as 100. Anything larger is refused — the bundle
+  override to as many as 100. Anything larger is refused - the bundle
   is for human-readable summary, not bulk export.
 - **Raw payload preservation.** Per
   [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md),
@@ -356,7 +356,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
   ClickHouse credential the port-forward uses
   (`${CH_USER}:${CH_PASSWORD}`) is the default in-cluster read/write
   account, but this skill self-restricts to read-only via its
-  query-construction logic — operator-supplied SQL that contains any
+  query-construction logic - operator-supplied SQL that contains any
   non-`SELECT` verb is refused before the curl.
 - **Port-forward hygiene.** The `nohup kubectl port-forward` is left
   running in `/tmp/zt-ch-pf.log`. Cleanup is operator-driven; the
@@ -369,7 +369,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Source-of-truth references
 
-- [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md) — the Prometheus cousin of this skill.
-- [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) — primary consumer; derives `kernel_class_gpu_pct` + `cpu_spinpoll_pct` from this skill's output.
-- [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md) — the zymtrace MCP analytical workflow (different layer; pattern-recognition over the same data).
-- Bundled server [`AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) — fail-fast + provenance rules.
+- [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md) - the Prometheus cousin of this skill.
+- [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) - primary consumer; derives `kernel_class_gpu_pct` + `cpu_spinpoll_pct` from this skill's output.
+- [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md) - the zymtrace MCP analytical workflow (different layer; pattern-recognition over the same data).
+- Bundled server [`AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - fail-fast + provenance rules.

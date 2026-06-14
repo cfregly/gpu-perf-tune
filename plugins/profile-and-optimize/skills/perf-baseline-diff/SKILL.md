@@ -39,9 +39,9 @@ Output:
 
 Handles three measurement shapes:
 
-1. **Scalar** — single number (e.g. step-time-ms). Delta is `current - baseline`, delta-% is `100 * (current - baseline) / baseline`.
+1. **Scalar** - single number (e.g. step-time-ms). Delta is `current - baseline`, delta-% is `100 * (current - baseline) / baseline`.
 2. **Structured key->value** (e.g. per-pair NCCL BW). Computes delta per key; reports worst-N regressions.
-3. **Nsys-rep** — delegates to `mcp__profile_and_optimize__profile_profile_diff` (the profile-diff harness shipped with the `profile_and_optimize` MCP server).
+3. **Nsys-rep** - delegates to `mcp__profile_and_optimize__profile_profile_diff` (the profile-diff harness shipped with the `profile_and_optimize` MCP server).
 
 ### Inference-perf use
 
@@ -56,8 +56,8 @@ For inference perf-bench output specifically, prefer the [`inference-perf-baseli
 
 Do **not** use this skill for:
 
-- Comparing two arbitrary measurements neither of which is in the registry — that's `diff` or `jq` directly. Register one of them as a baseline first.
-- One-shot debugging — too much ceremony for a quick eyeball check.
+- Comparing two arbitrary measurements neither of which is in the registry - that's `diff` or `jq` directly. Register one of them as a baseline first.
+- One-shot debugging - too much ceremony for a quick eyeball check.
 
 ## Example prompts
 
@@ -69,9 +69,9 @@ Do **not** use this skill for:
 
 ## Prerequisites
 
-1. **Baseline path** — `--baseline <registry-path>` (directory from `perf-baseline-record`).
-2. **Current measurement** — `--current <path>` (file or directory).
-3. **Tolerance** — `--tolerance-percent <N>` for scalar measurements; `--tolerance-absolute <N>` for structured. Default: `5%`.
+1. **Baseline path** - `--baseline <registry-path>` (directory from `perf-baseline-record`).
+2. **Current measurement** - `--current <path>` (file or directory).
+3. **Tolerance** - `--tolerance-percent <N>` for scalar measurements; `--tolerance-absolute <N>` for structured. Default: `5%`.
 4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for writing the diff bundle.
 
 ## Interaction style
@@ -175,7 +175,7 @@ Based on verdict:
 
 Per `docs/METHODOLOGY.md` "Full-context reporting": every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -183,8 +183,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 Per `docs/METHODOLOGY.md` "Speed-of-light framing", when the baseline
 carries `sol_pct` / `sol_ceiling_key` / `sol_ceiling_value` (the
@@ -207,7 +207,7 @@ different from the same drop at 30% SoL (former leaves no recovery
 room; latter is well within recoverable headroom).
 
 When the baseline lacks `sol_*` fields (older baselines, or
-non-roofline-bound measurements), the diff skips the SoL line silently —
+non-roofline-bound measurements), the diff skips the SoL line silently -
 no synthesised retrofit.
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
@@ -228,7 +228,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 Per `docs/METHODOLOGY.md` "Verdict rigor: DRAFT vs VERDICT", tier the diff verdict.
 A GREEN/YELLOW/RED call is a **DRAFT** unless it is variance-controlled (same-node,
->=3 trials per arm, mean +/- std — a single-trial or cross-node delta is provisional),
+>=3 trials per arm, mean +/- std - a single-trial or cross-node delta is provisional),
 metric-isolated (median TPOT/ITL for decode-latency claims, not output tok/s at small
 num_prompts), and against a production-representative baseline. A "which kernel/path
 regressed" claim additionally needs nsys/ncu per-kernel data, not a DCGM regime %.
@@ -236,6 +236,6 @@ Supersede a DRAFT everywhere once a controlled VERDICT overturns it.
 
 ## Source-of-truth references
 
-- [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) — the pair skill.
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) — measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
-- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) — fail-fast and provenance rules.
+- [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) - the pair skill.
+- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
+- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - fail-fast and provenance rules.

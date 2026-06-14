@@ -40,15 +40,15 @@ Lift workload-level Speed-of-Light from "first-principles estimate" to
 > dominated so BOTH the throughput AND the high-c DCGM utilization read low (see
 > `docs/METHODOLOGY.md` "Capture hygiene"). `import_roofline_sweep` WARNs on any cell `< 2c`.
 
-1. **Sample-share proxy** (page 4 in the perf-report PDF) — zymtrace
+1. **Sample-share proxy** (page 4 in the perf-report PDF) - zymtrace
    per-category time-share read as a coarse upper bound on category
    busyness. (zymtrace flushes to ClickHouse asynchronously, so an empty L1
-   right after the window is **ingest lag, not absence** — wait + requery for
+   right after the window is **ingest lag, not absence** - wait + requery for
    the freshest data; see
    [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).)
-2. **ncu per-kernel arithmetic intensity** (page 5) — proper roofline
+2. **ncu per-kernel arithmetic intensity** (page 5) - proper roofline
    scatter from ncu DRAM bytes + SM FLOPS counters.
-3. **DCGM workload-level byte traffic** (page 6) — this skill. Real GB
+3. **DCGM workload-level byte traffic** (page 6) - this skill. Real GB
    transferred across NVLink / HBM / Tensor pipe during the drive_load
    sweep, divided by peak × duration × n_gpus.
 
@@ -67,10 +67,10 @@ This skill is the page-6 producer.
 
 Do **not** use for:
 
-- Per-kernel arithmetic-intensity questions — that's
+- Per-kernel arithmetic-intensity questions - that's
   [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)'s
   domain (DCGM has no per-kernel attribution).
-- Real-time cluster health — DCGM scrape interval (~10-30 s) is too
+- Real-time cluster health - DCGM scrape interval (~10-30 s) is too
   coarse for sub-minute incident response; use
   [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md)
   directly with the regular dashboard panels.
@@ -91,7 +91,7 @@ Do **not** use for:
 
 ## Workflow
 
-### Phase 0 — pre-flight (knowledge-base probe)
+### Phase 0 - pre-flight (knowledge-base probe)
 
 ```python
 from tools.perf_tune_report.dcgm_correlate import (
@@ -115,14 +115,14 @@ from tools.perf_tune_report.dcgm_correlate import (
    - Cardinality is bounded (e.g. < 1000 series per metric across the
      target deploy).
 
-### Phase 1 — sweep window
+### Phase 1 - sweep window
 
 Read `(start_utc, end_utc)` either by calling
 `read_sweep_window_from_bundle(bundle_path)` or from explicit
 input (when the bundle's `captured_at` is the END of the sweep, not the
-start — older bundles).
+start - older bundles).
 
-### Phase 2 — build queries (dry-run)
+### Phase 2 - build queries (dry-run)
 
 ```python
 inputs = DcgmCorrelateInputs(
@@ -142,7 +142,7 @@ for q in result.queries:
     print(q["peak_key"], "->", q["promql"])
 ```
 
-### Phase 3 — execute the correlation
+### Phase 3 - execute the correlation
 
 ```python
 result = correlate(inputs, ceilings, prom_client, dry_run=False)
@@ -157,16 +157,16 @@ DCGM metric, each with:
 - `sol_pct` (the headline number)
 - `notes[]` (short-sweep / missing-data flags)
 
-### Phase 4 — patch sol-summary.md
+### Phase 4 - patch sol-summary.md
 
 Update the campaign's `sol-summary.md` "Workload-level SoL" table to
 reference the byte-grounded numbers, replacing the previous
 first-principles estimate. Cite the `dcgm_correlation.json` path so
 future readers can re-derive the math.
 
-### Phase 5 — re-render + re-publish to raise `sol_rigor` to L3
+### Phase 5 - re-render + re-publish to raise `sol_rigor` to L3
 
-Emitting `dcgm_correlation.json` per cell is not the end — the campaign's
+Emitting `dcgm_correlation.json` per cell is not the end - the campaign's
 published lake row + report PDF only reflect the byte-grounding after a
 **re-render then re-publish**:
 
@@ -175,18 +175,18 @@ perftunereport report_render   --campaign <slug>            # draws pages 6 + 6b
 perftunereport publish_to_lake --campaign <slug> --if-exists overwrite
 ```
 
-**Byte-grounding RAISES `sol_rigor` to L3 — it is RECORDED, not a gate
+**Byte-grounding RAISES `sol_rigor` to L3 - it is RECORDED, not a gate
 (always-publish policy).** A `sol_complete=true` campaign that is
 `dcgm_grounded=false` (no `dcgm_correlation.json`, pages 6/6b absent) still
-publishes at `sol_rigor=L1` (zymtrace proxy) — the gap is RECORDED on the
+publishes at `sol_rigor=L1` (zymtrace proxy) - the gap is RECORDED on the
 `campaign_v1` row + warned, never a refusal. `dcgm_grounded` + `sol_rigor` flow
 `report_status.json` -> `report_render` envelope -> `campaign_v1` columns. Run
 this skill (or the CLI verb below) for **every** plot-ready cell, then
 re-render + re-publish so the lake row is `dcgm_grounded=true` / `sol_rigor=L3`
-— a tighter roofline. Pass `publish_to_lake --strict` only when you want an
+ - a tighter roofline. Pass `publish_to_lake --strict` only when you want an
 `dcgm_grounded=false` campaign to refuse instead of land.
 
-### Phase 5b — offline / CI path: the `dcgm_correlate` CLI verb + frozen snapshot
+### Phase 5b - offline / CI path: the `dcgm_correlate` CLI verb + frozen snapshot
 
 The live `correlate()` python path above needs a `PrometheusClient` (the
 agent wires it to the Prometheus MCP). For an offline / re-runnable /
@@ -212,7 +212,7 @@ retention, but the frozen means do not).
 Per the canon "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md` "Full-context reporting"): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -220,8 +220,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 This skill IS the byte-grounded SoL producer. Its output is the
 authoritative third-tier evidence per `docs/METHODOLOGY.md`
@@ -229,7 +229,7 @@ authoritative third-tier evidence per `docs/METHODOLOGY.md`
 
 - Peaks live in `configs/sol-ceilings.yaml`; this skill
   reads them by key (`b200_sm100.hbm3e_tbps`,
-  `gb300_nvl72.nvfp4_dense_pflops`, etc.) — never inline.
+  `gb300_nvl72.nvfp4_dense_pflops`, etc.) - never inline.
 - DCGM metric anchors live in the same YAML under each peak's
   `dcgm_metric` / `dcgm_metrics_bytes` / `dcgm_fallback_metric` fields.
 - The renderer's page 6 (`dcgm_sol.py`) consumes the emitted
@@ -239,7 +239,7 @@ authoritative third-tier evidence per `docs/METHODOLOGY.md`
   `sol_rigor`: with a `dcgm_correlation.json` the campaign is
   `dcgm_grounded=true` / `sol_rigor=L3` (or `L4` if ncu is also present);
   without one it is `dcgm_grounded=false` / `sol_rigor=L1`. Under the
-  **always-publish policy this is RECORDED, not a gate** — `publish_to_lake`
+  **always-publish policy this is RECORDED, not a gate** - `publish_to_lake`
   lands the campaign either way, with the gap on the `campaign_v1` row + a loud
   warning. Run this skill per cell to raise rigor to L3 (a tighter roofline);
   pass `publish_to_lake --strict` only when you want an ungrounded campaign to
@@ -276,7 +276,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
   re-query provenance `nodes` (distinct host(s) the DCGM series carried),
   `namespace`, and `pod_label_selector`. `DCGM_FI_DEV_POWER_USAGE` is
   **per-node**, so without the node a window-only capture cannot be
-  re-queried later for `tokens_per_watt` — the live `correlate()` now
+  re-queried later for `tokens_per_watt` - the live `correlate()` now
   auto-captures the node from the series labels (`Hostname` / `node` /
   `exported_node` / `instance`), and a frozen YAML SHOULD record
   `nodes:` (+ optional `namespace:` / `pod_label_selector:`) so the
@@ -285,28 +285,28 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 ## Pairs with
 
 - [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)
-  — per-kernel arithmetic intensity. Run BOTH for a complete SoL
+ - per-kernel arithmetic intensity. Run BOTH for a complete SoL
   picture: ncu surfaces the per-kernel %SoL, this skill surfaces the
   workload-level %SoL aggregated over the same window.
-- [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) — the
+- [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) - the
   drive_load.py sweep that produces the window this skill correlates
   against.
 - [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md)
-  — the general anchored-PromQL primitive. This skill is
+ - the general anchored-PromQL primitive. This skill is
   the DCGM-specific specialisation.
 - [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md)
-  — the time-share proxy view (level 1 of SoL hierarchy); this skill
+ - the time-share proxy view (level 1 of SoL hierarchy); this skill
   is its level-3 upgrade.
 
 ## Source-of-truth references
 
 - Tool: [`server/tools/perf_tune_report/dcgm_correlate.py`](/plugins/profile-and-optimize/server/tools/perf_tune_report/dcgm_correlate.py).
 - Tests: [`server/tools/perf_tune_report/test_dcgm_correlate.py`](/plugins/profile-and-optimize/server/tools/perf_tune_report/test_dcgm_correlate.py)
-  — fake-Prometheus-client coverage of ratio/byte-rate aggregation,
+ - fake-Prometheus-client coverage of ratio/byte-rate aggregation,
   PROF/counter/absent fallback, and short-sweep warning.
 - Renderer page 6: `server/tools/perf_tune_report/renderer/dcgm_sol.py`
   (consumes the emitted `dcgm_correlation.json`).
-- `docs/METHODOLOGY.md` "Speed-of-light framing" — the standing
+- `docs/METHODOLOGY.md` "Speed-of-light framing" - the standing
   three-level rigor hierarchy this skill operationalises.
 
 ## Contact

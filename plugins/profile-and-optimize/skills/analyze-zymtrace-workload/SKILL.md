@@ -71,7 +71,7 @@ The MCP handles the analysis; you handle the discipline of asking for both sides
    - Specific GPU kernel dominant → the CPU view often shows the launcher / scheduler that's calling it. Useful for understanding launch-overhead vs kernel-time tradeoffs.
    - CPU dominated by `cudaMemcpy*` / `aten::*` synchronization → the workload is sync-bound on device transfers; the GPU view will show idle stretches.
 
-> If you escalate beyond zymtrace to an **nsys** per-kernel timeline (e.g. for absolute kernel durations or graph-internal kernels), remember: an EMPTY nsys `cuda_gpu_kern_sum` on a cudagraph-on deploy is a capture-hygiene bug (missing `--cuda-graph-trace=node`, idle window, or tiny rep), NOT a "cudagraph blind spot" — validate via [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) "Capture-quality gate" / `scripts/nsys-validate-capture.sh` before concluding the stack is unprofilable. One real exception: on GB300 nodes a CUDA 12.x-image vs 13.x-driver CUPTI skew makes CUPTI fail to init (`CUPTI_ERROR_INVALID_DEVICE`) -> 0 kernels for ALL CUPTI clients regardless of hygiene; grep the logs for `CUDA versions. CUPTI/Runtime/Driver` first -> that needs a CUDA-13 image or zymtrace, not more capture tuning.
+> If you escalate beyond zymtrace to an **nsys** per-kernel timeline (e.g. for absolute kernel durations or graph-internal kernels), remember: an EMPTY nsys `cuda_gpu_kern_sum` on a cudagraph-on deploy is a capture-hygiene bug (missing `--cuda-graph-trace=node`, idle window, or tiny rep), NOT a "cudagraph blind spot" - validate via [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) "Capture-quality gate" / `scripts/nsys-validate-capture.sh` before concluding the stack is unprofilable. One real exception: on GB300 nodes a CUDA 12.x-image vs 13.x-driver CUPTI skew makes CUPTI fail to init (`CUPTI_ERROR_INVALID_DEVICE`) -> 0 kernels for ALL CUPTI clients regardless of hygiene; grep the logs for `CUDA versions. CUPTI/Runtime/Driver` first -> that needs a CUDA-13 image or zymtrace, not more capture tuning.
 
 5. **Write the recap using the output template below.** Use the data the MCP returned -- kernel names, percentages, hot stacks, the call tree from the CPU view, and the kernels triggered on the GPU side -- to fill the template. Don't paraphrase the MCP's suggestions verbatim; synthesize across the two views into a concrete next step. If the MCP didn't surface a suggestion, you still produce one -- grounded in the returned data, not invented.
 
@@ -211,7 +211,7 @@ MCP returned them or they're well-known order-of-magnitude estimates.>
 
 Per `docs/METHODOLOGY.md` "Full-context reporting" (no bare numbers): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -219,8 +219,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 Per `docs/METHODOLOGY.md` "Speed-of-light framing", the cross-view
 protocol's "Done" step SHOULD also include a per-category %SoL
@@ -232,7 +232,7 @@ etc.). Zymtrace sample-share is a time-share proxy, not a tight
 utilisation number; flag the proxy caveat once and treat the resulting
 %SoL as an upper bound on category busyness, not the kernel's real
 arithmetic-intensity-vs-roofline position. When this feeds a published
-campaign it lands as `sol_rigor=L1` (a valid, comparable roofline) —
+campaign it lands as `sol_rigor=L1` (a valid, comparable roofline) -
 the proxy is recorded as a rigor level, not withheld; add DCGM (L3) /
 ncu (L4) for a tighter number (always-publish policy).
 
@@ -258,7 +258,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 ## Pairs with
 
 - [`zymtrace-anchored-query`](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) -- the anchored-SQL primitive against the same zymtrace ClickHouse backend. Use that skill for `DESCRIBE table` + `SELECT ... FROM zymtrace_profiling.events ...` patterns; use this skill (`analyze-zymtrace-workload`) for the MCP-driven flamegraph cross-view workflow. The two are complementary: anchored-query is the operator-shaped raw-SQL escape hatch; this skill is the MCP-shaped guided analysis.
-- [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) -- captures `.nsys-rep` + `gpu_kern_sum.csv` from a live vllm pod via a debug sidecar. **Cross-view with this skill**: when an `inference_perfbench_v1` bundle carries a `kernel_profile` field, read its `summary_csv_path` to resolve the zymtrace `native` category into per-kernel SASS-level entries. Example: zymtrace says "FMHA = 14.2% of GPU time"; the nsys CSV says "fmha_v2_kernel<sm100>: 11.8%, fmha_v2_kernel_paged<sm100>: 2.4%" — answering "is the hot category one kernel or three?" which zymtrace alone can't.
+- [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) -- captures `.nsys-rep` + `gpu_kern_sum.csv` from a live vllm pod via a debug sidecar. **Cross-view with this skill**: when an `inference_perfbench_v1` bundle carries a `kernel_profile` field, read its `summary_csv_path` to resolve the zymtrace `native` category into per-kernel SASS-level entries. Example: zymtrace says "FMHA = 14.2% of GPU time"; the nsys CSV says "fmha_v2_kernel<sm100>: 11.8%, fmha_v2_kernel_paged<sm100>: 2.4%" - answering "is the hot category one kernel or three?" which zymtrace alone can't.
 - [`inference-graph-diff`](/plugins/profile-and-optimize/skills/inference-graph-diff/SKILL.md) -- diffs the torch.compile / FX-Inductor graphs between two helm configs. **Cross-view with this skill**: when zymtrace shows a kernel-share shift between two variants, graph-diff identifies WHICH compilation choice produced the shift.
 
 ## Origin

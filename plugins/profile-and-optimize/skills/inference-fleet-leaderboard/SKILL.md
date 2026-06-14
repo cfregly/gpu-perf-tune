@@ -80,7 +80,7 @@ perftunereport fleet_leaderboard --campaigns-dir ./campaigns --json
    look. Then the throughput / AA leaderboards for the per-axis detail.
 
 3. **Heed the caveats the renderer embeds:**
-   - **PROVISIONAL** when a roofline sweep is still publishing — re-run to refresh.
+   - **PROVISIONAL** when a roofline sweep is still publishing - re-run to refresh.
    - **PERF-only != quality:** a perf-dominated model (e.g. a larger/smarter MoE,
      or GLM-5.1 whose value is DSA-sparse long-context) is correctly dominated on
      the AA short-context shape yet chosen for capability. The frontier is "the
@@ -89,7 +89,7 @@ perftunereport fleet_leaderboard --campaigns-dir ./campaigns --json
      TTFT as directional across engines, output-speed/cost as the robust metrics.
 
 4. **For the grounded *why*** (e.g. the models are host/KV-bound, not
-   memory-bound — DCGM L3 + zymtrace L1), pair the leaderboards with a curated
+   memory-bound - DCGM L3 + zymtrace L1), pair the leaderboards with a curated
    DCGM+zymtrace attribution doc built via `inference-dcgm-correlate` +
    `analyze-zymtrace-workload`; this verb does not generate one.
 
@@ -98,7 +98,7 @@ perftunereport fleet_leaderboard --campaigns-dir ./campaigns --json
 Per the canon "Every performance number carries its full context (no bare numbers)"
 (`docs/METHODOLOGY.md` "Full-context reporting"): every number this
 skill emits MUST carry its full measurement-context descriptor, and every comparison MUST be
-matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect — it cannot set a
+matched on it. A bare `tok/s` / TPOT / BW / %SoL / speedup is a defect - it cannot set a
 default, ship a config, or appear in a report.
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
 - **Parallelism:** TP, DP (replicas), PP, EP, parallel_strategy.
@@ -106,8 +106,8 @@ default, ship a config, or appear in a report.
 - **Workload:** dataset, ISL/OSL (or mean in/out tokens), concurrency, num-prompts.
 - **Regime:** warm vs cold; latency vs throughput tier.
 - **Stack:** image/vllm commit, bench backend, serving engine.
-- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` — never inline a peak), sol_rigor (L1–L4), trials n (mean±std), same-node, baseline named.
-- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) — never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
+- **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
+- **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
 The leaderboards carry the $/1M-output-token cost column (latency-optimal at c=1,
 throughput-optimal at the knee); they do

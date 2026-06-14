@@ -10,10 +10,16 @@ Reads .doccheck.json at the repo root and checks, over the configured docs:
   3. every relative markdown link resolves to a real file
   4. (linters) the rule count the README states equals the count in code
 
+It also scans every shipped .md/.txt in the repo for em/en dashes, the one
+de-slop rule every repo's writing guide mandates (perf-tune's AGENTS.md and
+METHODOLOGY.md: "No em-dashes"), over the whole tree rather than just the
+configured docs.
+
 Unlike the deslop prose linter, this gate scans code blocks too: install
 commands are exactly where placeholders and stale names hide. A repo that
 legitimately documents a marker (the deslop repo defines them) lists it under
-"allow" in .doccheck.json.
+"allow" in .doccheck.json. A doc that must show a dash lists itself under
+"dash_exclude".
 
 Exit 0 clean, 1 on any finding, 2 on setup error. Run from the repo root:
 
@@ -21,7 +27,9 @@ Exit 0 clean, 1 on any finding, 2 on setup error. Run from the repo root:
 """
 from __future__ import annotations
 
+import fnmatch
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -38,6 +46,9 @@ PLACEHOLDER_RE = re.compile(
 )
 STALE_PHRASES = ("once this repo has a remote", "coming soon")
 MARKER_RE = re.compile(r"\b(TODO|FIXME|TBD)\b")
+DASH_RE = re.compile("[–—]")  # en dash (U+2013), em dash (U+2014)
+SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__",
+             ".pytest_cache", ".mypy_cache", "dist", "build", "site-packages"}
 
 
 def _line(text: str, idx: int) -> int:
@@ -96,6 +107,29 @@ def check_doc(path: Path, cfg: dict) -> list[str]:
     return out
 
 
+def check_dashes(cfg: dict) -> list[str]:
+    """No em/en dash may ship in any human-facing .md/.txt. Scans the whole
+    tree (not just the configured docs), minus vendored/build dirs and any
+    'dash_exclude' glob in .doccheck.json. Set 'dash_scan': false to disable."""
+    if not cfg.get("dash_scan", True):
+        return []
+    excludes = cfg.get("dash_exclude", [])
+    out: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for fn in sorted(filenames):
+            if not fn.endswith((".md", ".txt")):
+                continue
+            path = Path(dirpath) / fn
+            rel = path.relative_to(ROOT).as_posix()
+            if any(fnmatch.fnmatch(rel, pat) for pat in excludes):
+                continue
+            text = path.read_text(encoding="utf-8")
+            for m in DASH_RE.finditer(text):
+                out.append(f"{rel}:{_line(text, m.start())}: em/en dash {m.group(0)!r}")
+    return out
+
+
 def check_rule_count(cfg: dict) -> list[str]:
     mod = cfg.get("rule_module")
     if not mod:
@@ -115,7 +149,7 @@ def check_rule_count(cfg: dict) -> list[str]:
     for pat in cfg.get("rule_count_patterns", []):
         stated.update(int(x) for x in re.findall(pat, readme))
     if not stated:
-        out.append(f"README states no rule count; code defines {n} ({prefix} rules)")
+        out.append(f"README states no rule count, code defines {n} ({prefix} rules)")
     for s in sorted(stated):
         if s != n:
             out.append(f"README says {s} rules but {mod} defines {n}: {', '.join(ids)}")
@@ -128,6 +162,7 @@ def main() -> int:
     for d in cfg.get("docs", ["README.md"]):
         findings += check_doc(ROOT / d, cfg)
     findings += check_rule_count(cfg)
+    findings += check_dashes(cfg)
     if not findings:
         print(f"[ok] check_docs: {cfg['repo']} docs are consistent")
         return 0

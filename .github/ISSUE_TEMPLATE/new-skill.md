@@ -23,7 +23,7 @@ Bulleted list of overlapping skills + a one-line "use that one instead" pointer 
 
 Cross-check against the existing [`profile-and-optimize` skills](/plugins/profile-and-optimize/skills).
 
-If your task overlaps with any of these, explain why a new skill is warranted. Incident-triage and general ops workflows are out of scope for this repo — propose those to an ops-focused plugin instead.
+If your task overlaps with any of these, explain why a new skill is warranted. Incident-triage and general ops workflows are out of scope for this repo - propose those to an ops-focused plugin instead.
 
 ## Trigger phrases for the `description` frontmatter
 
@@ -37,7 +37,7 @@ List the `allowed-tools` entries:
 - `Bash(<command>:*)`
 - `Read` / `Write` / `Grep`
 
-If a new MCP server is required (not already in [`plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json)), call that out — adding it is a separate PR.
+If a new MCP server is required (not already in [`plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json)), call that out - adding it is a separate PR.
 
 ## Safety classification
 

@@ -19,7 +19,7 @@ each is also exposed as an MCP tool of the same verb name (see
 
 - A **recorded baseline** for the metric that regressed. If none exists, stop
   and record one first (`perf_baseline_record`, skill
-  [`perf-baseline-record`](../../skills/perf-baseline-record/SKILL.md)) — a
+  [`perf-baseline-record`](../../skills/perf-baseline-record/SKILL.md)) - a
   regression without a baseline is an anecdote.
 - The serving config under test passes its known-good check, so a missing
   required flag is ruled out before any profiling:
@@ -44,8 +44,8 @@ python3 -m tools.perf_baseline.perf_baseline_cli diff \
   --tolerance-percent 5 --json
 ```
 
-- **GREEN** — no regression; stop here (noise or expectation error).
-- **YELLOW / RED** — reproduce once before profiling: rerun the *same* bench
+- **GREEN** - no regression; stop here (noise or expectation error).
+- **YELLOW / RED** - reproduce once before profiling: rerun the *same* bench
   with the *same* workload shape (ISL/OSL, concurrency, dataset). A
   single-observation regression is a DRAFT, not a finding
   (METHODOLOGY.md "Verdict rigor").
@@ -54,7 +54,7 @@ Record the confirming measurement so the investigation has a pinned "bad"
 artifact: `python3 -m tools.perf_baseline.perf_baseline_cli record ...`
 (skill: [`perf-baseline-diff`](../../skills/perf-baseline-diff/SKILL.md)).
 
-## 2. Capture an nsys profile — with hygiene gates
+## 2. Capture an nsys profile - with hygiene gates
 
 Capture one profile of the **regressed** build and ensure one exists (or is
 captured) for the **baseline** build, under driven load matching the regressing
@@ -71,7 +71,7 @@ python3 -m tools.perf_tune_report.perf_tune_report_cli kernel_profile \
 
 (Skill: [`inference-kernel-profile`](../../skills/inference-kernel-profile/SKILL.md).)
 
-**Gate every capture before analyzing it** — an empty or implausible profile
+**Gate every capture before analyzing it** - an empty or implausible profile
 is a capture bug until proven otherwise (METHODOLOGY.md "Capture hygiene"):
 
 ```bash
@@ -158,7 +158,7 @@ the diff ranked. Climbing the wrong category wastes the engagement:
 
 | Class | Signature in the data | Action |
 |---|---|---|
-| **K**nown-good | matches roofline expectation for its ceiling | move on — the regression is elsewhere |
+| **K**nown-good | matches roofline expectation for its ceiling | move on - the regression is elsewhere |
 | **R**educible | algorithmic/fusion headroom vs roofline | optimize the kernel or its launch shape |
 | **H**idden | wall-time grew, device time did not; gaps between kernels | chase launch/sync/host overhead (`profile_host_overhead`) |
 | **P**arallelism-starved | low occupancy / load imbalance at fixed work | fix grid sizing, batching, or balance |
@@ -188,7 +188,7 @@ original workload shape. A fix that cannot be seen in both the profile diff
 3. **Report with full context** (METHODOLOGY.md "Full-context reporting"):
    hardware/topology, precision, engine + flags, workload shape, both absolute
    values, and the capture artifacts. Label the claim DRAFT or VERDICT.
-4. **Name the next lever** (METHODOLOGY.md "Always be grinding") — e.g. add
+4. **Name the next lever** (METHODOLOGY.md "Always be grinding") - e.g. add
    the finding and its `next_lever` to your value-findings registry (example
    shape: [`configs/value-findings.example.yaml`](../../../../configs/value-findings.example.yaml)).
 

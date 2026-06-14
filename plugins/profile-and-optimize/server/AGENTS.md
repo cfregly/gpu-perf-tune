@@ -8,7 +8,7 @@ Ownership of this code lives in this repository. Changes land here directly; the
 
 The `profile_and_optimize_mcp` runtime ([`tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py)) walks up the filesystem at startup looking for the first directory that contains both `AGENTS.md` and `tools/`. That is how it discovers the "repo root" it needs to file-load each library's `cli.py` for `mcp_surface.py`. This `AGENTS.md` exists to satisfy that discovery check; the operational guidance for the plugin lives in the sibling [`README.md`](/plugins/profile-and-optimize/server/README.md) and in the marketplace-level docs ([CONTRIBUTING.md](/CONTRIBUTING.md), [REVIEWERS.md](/REVIEWERS.md)).
 
-**zymtrace query hygiene (empty != gap):** zymtrace flushes to ClickHouse asynchronously, so a query that comes back empty right after a bench is usually **ingest lag, not absence** — wait and requery before concluding. The capture-side poll lives in [`scripts/zymtrace-ingest-wait.sh`](/scripts/zymtrace-ingest-wait.sh); the recipe and the importer's fail-fast rationale are in [`docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md), cited by the zymtrace skills.
+**zymtrace query hygiene (empty != gap):** zymtrace flushes to ClickHouse asynchronously, so a query that comes back empty right after a bench is usually **ingest lag, not absence** - wait and requery before concluding. The capture-side poll lives in [`scripts/zymtrace-ingest-wait.sh`](/scripts/zymtrace-ingest-wait.sh); the recipe and the importer's fail-fast rationale are in [`docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md), cited by the zymtrace skills.
 
 ## What lives here
 
@@ -32,8 +32,8 @@ The `profile_and_optimize_mcp` runtime ([`tools/profile_and_optimize_mcp/src/pro
 
 ## What does NOT live here
 
-- `experiments/artifacts/<other-families>/` — mutable run-record evidence; the bundled `mcp__profile_and_optimize__search_evidence` aux tool reads from whatever `experiments/artifacts/` lives under `${PROFILE_AND_OPTIMIZE_REPO_ROOT}` at runtime (which is this directory after plugin install).
-- `.git/`, `.venv/`, `__pycache__/`, `*.pyc` — excluded from the install footprint.
+- `experiments/artifacts/<other-families>/` - mutable run-record evidence; the bundled `mcp__profile_and_optimize__search_evidence` aux tool reads from whatever `experiments/artifacts/` lives under `${PROFILE_AND_OPTIMIZE_REPO_ROOT}` at runtime (which is this directory after plugin install).
+- `.git/`, `.venv/`, `__pycache__/`, `*.pyc` - excluded from the install footprint.
 
 ## Discovery contract for `repo.py`
 

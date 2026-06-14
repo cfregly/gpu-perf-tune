@@ -21,13 +21,13 @@ a new one.
 [`server/`](server/) hosts the MCP server and its tool libraries. Key entry
 points:
 
-- [`server/mcp_surface.py`](server/mcp_surface.py) — the `LIBRARIES` registry
+- [`server/mcp_surface.py`](server/mcp_surface.py) - the `LIBRARIES` registry
   that defines the exposed tool surface.
-- [`server/docs/mcp-tool-io-contract.md`](server/docs/mcp-tool-io-contract.md) —
+- [`server/docs/mcp-tool-io-contract.md`](server/docs/mcp-tool-io-contract.md) -
   the envelope, safety classes, and ack-flag contract every verb follows.
-- [`server/docs/mcp-composition.md`](server/docs/mcp-composition.md) — which MCP
+- [`server/docs/mcp-composition.md`](server/docs/mcp-composition.md) - which MCP
   server to reach for in each situation.
-- [`server/install.sh`](server/install.sh) — venv install (add `--full` for the
+- [`server/install.sh`](server/install.sh) - venv install (add `--full` for the
   report-renderer extras).
 
 [`.mcp.json`](.mcp.json) declares the bundled server plus optional `grafana` and

@@ -7,6 +7,10 @@ GPU inference profiling and optimization skills for [Claude Code](https://claude
 
 Born from real GPU-fleet performance engineering work, genericized so any team running GPU inference can use it. This is the cost-of-intelligence work: make inference faster and cheaper, measured not asserted.
 
+- **Problem it solves:** GPU inference cost and latency are set by hardware, precision, parallelism, and engine version, and most teams argue about those instead of measuring them.
+- **See the surface in under a minute:** `make demo` prints the tool and skill surface, no GPU needed. A real perf run needs the bundled server and hardware.
+- **Production lesson it encodes:** measure against speed-of-light, label every result DRAFT until it is variance-controlled and profiled, and record the hardware, precision, and engine version next to every number.
+
 ## What this is
 
 1. **Benchmark & sweep**: `inference-perf-bench` load sweeps, `inference-tune-sweep` engine-knob exploration, `inference-model-eval` quality gates, `perf-baseline-record` / `perf-baseline-diff` regression tracking.

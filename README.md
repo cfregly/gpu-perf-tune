@@ -13,14 +13,14 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 
 ## Where this fits
 
-Six public repos, one per stage of Anthropic's Founder's Playbook, plus two disciplines that run across all of them. Claude runs every stage, and a deterministic gate verifies the output before it ships.
+Six public repos, one per stage of Anthropic's Founder's Playbook (Idea, MVP, Launch, Scale), plus two disciplines that run across every stage. The playbook names what a founder does at each stage. These are the runnable tools that do it. Claude runs the judgment on every stage, and a deterministic gate verifies the output before it ships.
 
-- **Idea**, validate before you build: [claude-idea](https://github.com/cfregly/claude-idea)
-- **MVP**, build it then a security review before any user: [claude-mvp](https://github.com/cfregly/claude-mvp)
-- **Launch**, turn traction into a repeatable gated operating loop: [claude-launch](https://github.com/cfregly/claude-launch)
-- **Scale**, build a GTM function and compound data into a moat: [claude-scale](https://github.com/cfregly/claude-scale)
+- **Idea**, validate to problem-solution fit: [claude-startup-idea](https://github.com/cfregly/claude-startup-idea)
+- **MVP**, build the product, then a security review before any user: [claude-startup-mvp](https://github.com/cfregly/claude-startup-mvp)
+- **Launch**, turn traction into a growth engine that runs without founder bottlenecks: [claude-startup-launch](https://github.com/cfregly/claude-startup-launch)
+- **Scale**, build a GTM function and compound data into a moat: [claude-startup-scale](https://github.com/cfregly/claude-startup-scale)
 - **Quality**, every stage: [claude-deslop](https://github.com/cfregly/claude-deslop)
-- **Cost, every stage: [claude-perf-tune](https://github.com/cfregly/claude-perf-tune) (this repo)**
+- **Cost**, every stage: **[claude-perf-tune](https://github.com/cfregly/claude-perf-tune) (this repo)**
 
 ## What this is
 

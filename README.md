@@ -13,13 +13,14 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 
 ## Where this fits
 
-Seven public repos, mapped to the four stages of Anthropic's Founder's Playbook (Idea, MVP, Launch, Scale). Each is the runnable tool for its stage. Claude runs every stage, and a deterministic gate verifies the output before it ships.
+Six public repos, one per stage of Anthropic's Founder's Playbook, plus two disciplines that run across all of them. Claude runs every stage, and a deterministic gate verifies the output before it ships.
 
-- **Idea**, validate before you build: [claude-startup-linter](https://github.com/cfregly/claude-startup-linter)
-- **MVP**, build it then a security review before any user: [claude-prompt-to-production](https://github.com/cfregly/claude-prompt-to-production), [claude-agent-linter](https://github.com/cfregly/claude-agent-linter)
-- **Launch**, turn traction into a repeatable gated operating loop: [claude-activation](https://github.com/cfregly/claude-activation)
-- **Scale**, GTM, compounding data, and cost at scale: [claude-activation](https://github.com/cfregly/claude-activation), **[claude-perf-tune](https://github.com/cfregly/claude-perf-tune) (this repo)**
-- **Every stage**, the quality gate and the raise: [claude-deslop](https://github.com/cfregly/claude-deslop), [claude-pitch-deck-linter](https://github.com/cfregly/claude-pitch-deck-linter)
+- **Idea**, validate before you build: [claude-idea](https://github.com/cfregly/claude-idea)
+- **MVP**, build it then a security review before any user: [claude-mvp](https://github.com/cfregly/claude-mvp)
+- **Launch**, turn traction into a repeatable gated operating loop: [claude-launch](https://github.com/cfregly/claude-launch)
+- **Scale**, build a GTM function and compound data into a moat: [claude-scale](https://github.com/cfregly/claude-scale)
+- **Quality**, every stage: [claude-deslop](https://github.com/cfregly/claude-deslop)
+- **Cost, every stage: [claude-perf-tune](https://github.com/cfregly/claude-perf-tune) (this repo)**
 
 ## What this is
 

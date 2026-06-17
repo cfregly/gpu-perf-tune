@@ -13,22 +13,13 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 
 ## Where this fits
 
-Nine public repos, two operators, one platform. Every stage runs Claude (`claude-opus-4-8`) on every run. A deterministic gate verifies Claude's output before it ships: Claude does the judgment, the gate proves it.
+Seven public repos, mapped to the four stages of Anthropic's Founder's Playbook (Idea, MVP, Launch, Scale). Each is the runnable tool for its stage. Claude runs every stage, and a deterministic gate verifies the output before it ships.
 
-**Founder Kit**, what a founder runs on their own company:
-- Diagnose the company: [claude-startup-linter](https://github.com/cfregly/claude-startup-linter)
-- Build the product: [claude-prompt-to-production](https://github.com/cfregly/claude-prompt-to-production)
-- Harden the agent: [claude-agent-linter](https://github.com/cfregly/claude-agent-linter)
-- Sharpen the raise: [claude-pitch-deck-linter](https://github.com/cfregly/claude-pitch-deck-linter)
-
-**Activation System**, what a growth lead runs on a founder cohort to make activation measurable and attributable:
-- Capture the events: [claude-activation-instrument](https://github.com/cfregly/claude-activation-instrument)
-- Measure the funnel: [claude-activation-loop](https://github.com/cfregly/claude-activation-loop)
-- Operate the loop on a schedule, gated, the capstone: [claude-operator-loop](https://github.com/cfregly/claude-operator-loop)
-
-**Two shared disciplines, under both lines:**
-- Quality: [claude-deslop](https://github.com/cfregly/claude-deslop) grades every repo, the deck, the resume, and the profile.
-- **Cost: [claude-perf-tune](https://github.com/cfregly/claude-perf-tune), the cost-of-intelligence specialist (GPU-inference profiling and tuning). (this repo)**
+- **Idea**, validate before you build: [claude-startup-linter](https://github.com/cfregly/claude-startup-linter)
+- **MVP**, build it then a security review before any user: [claude-prompt-to-production](https://github.com/cfregly/claude-prompt-to-production), [claude-agent-linter](https://github.com/cfregly/claude-agent-linter)
+- **Launch**, turn traction into a repeatable gated operating loop: [claude-activation](https://github.com/cfregly/claude-activation)
+- **Scale**, GTM, compounding data, and cost at scale: [claude-activation](https://github.com/cfregly/claude-activation), **[claude-perf-tune](https://github.com/cfregly/claude-perf-tune) (this repo)**
+- **Every stage**, the quality gate and the raise: [claude-deslop](https://github.com/cfregly/claude-deslop), [claude-pitch-deck-linter](https://github.com/cfregly/claude-pitch-deck-linter)
 
 ## What this is
 

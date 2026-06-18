@@ -13,14 +13,18 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 
 ## Where this fits
 
-Six public repos, one per stage of Anthropic's Founder's Playbook (Idea, MVP, Launch, Scale), plus two disciplines that run across every stage. The playbook names what a founder does at each stage. These are the runnable tools that do it. Claude runs the judgment on every stage, and a deterministic gate verifies the output before it ships.
+This repo is part of the public Claude proof set, but it sits one layer below the startup journey.
+[claude-founder-kit](https://github.com/cfregly/claude-founder-kit) is the main runnable kit for
+the founder path from first API call to activation and scale. The platform deep-dives cover memory,
+grounding, managed agents, parallel calls, and this GPU-cost layer.
 
-- **Idea**, validate to problem-solution fit: [claude-startup-idea](https://github.com/cfregly/claude-startup-idea)
-- **MVP**, build the product, then a security review before any user: [claude-startup-mvp](https://github.com/cfregly/claude-startup-mvp)
-- **Launch**, turn traction into a growth engine that runs without founder bottlenecks: [claude-startup-launch](https://github.com/cfregly/claude-startup-launch)
-- **Scale**, build a GTM function and compound data into a moat: [claude-startup-scale](https://github.com/cfregly/claude-startup-scale)
-- **Quality**, every stage: [claude-deslop](https://github.com/cfregly/claude-deslop)
-- **Cost**, every stage: **[claude-gpu-perf-tune](https://github.com/cfregly/claude-gpu-perf-tune) (this repo)**
+- **Main kit:** [claude-founder-kit](https://github.com/cfregly/claude-founder-kit)
+- **Platform deep-dives:** [claude-memory](https://github.com/cfregly/claude-memory),
+  [claude-grounding](https://github.com/cfregly/claude-grounding),
+  [claude-managed-agents](https://github.com/cfregly/claude-managed-agents), and
+  [claude-parallel](https://github.com/cfregly/claude-parallel)
+- **GPU cost layer:** **[claude-gpu-perf-tune](https://github.com/cfregly/claude-gpu-perf-tune)**
+  turns inference performance work into Claude Code skills and MCP tools
 
 ## What this is
 
@@ -46,6 +50,16 @@ bash "$(ls -dt ~/.claude/plugins/cache/profile-and-optimize-plugins/profile-and-
 ```
 
 Restart Claude Code, then invoke any skill (e.g. `/inference-perf-bench`) or just describe the task: Claude loads a skill automatically when your prompt matches its triggers.
+
+## Verify it
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install pyyaml
+make demo    # prints the skill and MCP tool surface, no GPU needed
+make check   # doc, skill-count, tool-count, and version gates
+```
 
 ## Repository layout
 

@@ -45,7 +45,7 @@ whole `profile -> corpus -> train -> A/B -> promote -> publish` loop without
 hand-stitching skills together.
 
 It is a self-hosted analog of Fireworks FireOptimizer's "adaptive speculative
-execution": the differentiator is operational, not algorithmic -- the draft is trained
+execution", and it differs operationally rather than algorithmically: the draft is trained
 on a corpus **matched to the measured workload profile** (the documented source of the
 higher draft hit-rate), and it is promoted only on a measured acceptance + TPOT win.
 

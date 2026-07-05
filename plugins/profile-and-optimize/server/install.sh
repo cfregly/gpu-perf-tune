@@ -93,8 +93,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Sanity-check the server tree.
-if [[ ! -f "${SERVER_ROOT}/AGENTS.md" || ! -d "${SERVER_ROOT}/tools" || ! -f "${SERVER_ROOT}/mcp_surface.py" ]]; then
-  printf 'FATAL: server tree looks wrong at %s (missing AGENTS.md / tools/ / mcp_surface.py)\n' "${SERVER_ROOT}" >&2
+if [[ ! -f "${SERVER_ROOT}/CLAUDE.md" || ! -d "${SERVER_ROOT}/tools" || ! -f "${SERVER_ROOT}/mcp_surface.py" ]]; then
+  printf 'FATAL: server tree looks wrong at %s (missing CLAUDE.md / tools/ / mcp_surface.py)\n' "${SERVER_ROOT}" >&2
   exit 2
 fi
 

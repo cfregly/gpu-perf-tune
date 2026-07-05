@@ -121,7 +121,7 @@ def _parse_per_run_json(per_run_path: Path) -> dict:
 
 
 def _descriptor_from_cell(cell: CellConfig) -> dict:
-    """Extract the full-context descriptor fields from the cell config (AGENTS.md
+    """Extract the full-context descriptor fields from the cell config (CLAUDE.md
     "Every performance number carries its full context"). Sourced from
     ``cell.extras`` (+ the ``serve_params_extra`` knobs); never fabricated -- an
     unspecified field stays "unknown"/None so the methodology gate flags it.

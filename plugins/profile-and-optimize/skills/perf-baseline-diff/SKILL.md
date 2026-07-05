@@ -238,4 +238,4 @@ Supersede a DRAFT everywhere once a controlled VERDICT overturns it.
 
 - [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) - the pair skill.
 - [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
-- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - fail-fast and provenance rules.
+- [`server/CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) - fail-fast and provenance rules.

@@ -372,4 +372,4 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 - [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md) - the Prometheus cousin of this skill.
 - [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) - primary consumer. Derives `kernel_class_gpu_pct` + `cpu_spinpoll_pct` from this skill's output.
 - [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md) - the zymtrace MCP analytical workflow (different layer. Pattern-recognition over the same data).
-- Bundled server [`AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - fail-fast + provenance rules.
+- Bundled server [`CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) - fail-fast + provenance rules.

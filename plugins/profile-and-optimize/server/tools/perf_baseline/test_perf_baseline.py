@@ -125,7 +125,7 @@ def test_append_index_creates_header_once(tmp_path: Path) -> None:
 def _seed_repo_root(tmp_path: Path) -> Path:
     root = tmp_path / "fake-repo-root"
     root.mkdir()
-    (root / "AGENTS.md").write_text("# fake\n")
+    (root / "CLAUDE.md").write_text("# fake\n")
     (root / "tools").mkdir()
     return root
 

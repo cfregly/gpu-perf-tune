@@ -22,13 +22,13 @@ CSVs (e.g. on a stripped login node) ``--baseline-csv-dir`` and
 filename matches the ``nsys stats`` output convention
 (``<stem>_<report>.csv``).
 
-Per ``mlperf-6.0-training/AGENTS.md`` "Fail Fast, No Silent Fallbacks":
+Per ``mlperf-6.0-training/CLAUDE.md`` "Fail Fast, No Silent Fallbacks":
 
 * Missing inputs abort with a clear error and non-zero exit.
 * Empty CSVs (zero rows after the header) abort.
 * When ``nsys stats`` fails, the underlying stderr is forwarded.
 
-Per ``AGENTS.md`` "Self-Contained Repository Boundary": stdlib only;
+Per ``CLAUDE.md`` "Self-Contained Repository Boundary": stdlib only;
 no third-party deps.
 """
 

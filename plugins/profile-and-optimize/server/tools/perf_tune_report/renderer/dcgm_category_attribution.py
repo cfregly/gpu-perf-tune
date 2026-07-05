@@ -221,6 +221,6 @@ def render_page(
     )
     ax_cv.text(
         0.5, 0.10,
-        "See AGENTS.md 'Speed-of-light framing' for the four-level rigor hierarchy.",
+        "See CLAUDE.md 'Speed-of-light framing' for the four-level rigor hierarchy.",
         ha="center", va="center", fontsize=7, color="#777777",
     )

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `make release` helper (AGENTS.md "Git identity + release tagging").
+# `make release` helper (CLAUDE.md "Git identity + release tagging").
 #
 # Tags the CURRENT release commit and pushes main + the tag atomically, so the
 # vX.Y.Z tag can never be forgotten. Run AFTER the release commit (plugin.json

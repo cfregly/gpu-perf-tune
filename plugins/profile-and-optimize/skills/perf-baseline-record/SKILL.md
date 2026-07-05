@@ -261,4 +261,4 @@ captured against a production-representative config. Record the tier + provenanc
 
 - [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
 - [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md) - raw-payload provenance rules.
-- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - fail-fast + artifact-durability rules.
+- [`server/CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) - fail-fast + artifact-durability rules.

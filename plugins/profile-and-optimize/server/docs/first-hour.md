@@ -75,7 +75,7 @@ If you only have time for one check, run:
 python3 tools/shared/audit/audit_repo.py
 ```
 
-Keep exact failure text in your handoff or PR. Per [`../AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md),
+Keep exact failure text in your handoff or PR. Per [`../CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md),
 do not hide a failing gate behind a broad "known issue" note.
 
 ## Minute 30-45: Pick One Reader Path
@@ -90,7 +90,7 @@ Pick exactly one next path:
   and safety label.
 - Setting up agents or MCP: read [`agent-onboarding.md`](/plugins/profile-and-optimize/server/docs/agent-onboarding.md),
   then [`mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md).
-- Preparing cluster work: stop and read [`../AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md),
+- Preparing cluster work: stop and read [`../CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md),
   [`../tools/README.md`](/plugins/profile-and-optimize/server/tools/README.md), and the target runbook under
   [`../runbooks/`](/plugins/profile-and-optimize/server/runbooks) before any `sbatch`.
 

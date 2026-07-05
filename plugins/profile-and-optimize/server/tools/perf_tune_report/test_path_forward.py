@@ -1,6 +1,6 @@
 """Tests for the path-forward / next_lever publish gate.
 
-Enforces AGENTS.md "Always ship an actionable path-forward" (the performance
+Enforces CLAUDE.md "Always ship an actionable path-forward" (the performance
 ratchet / "Always be grinding"): every published campaign MUST declare a
 ``next_lever`` -- the specific next change to move a metric further, or an
 explicit ``frontier-exhausted: <evidence>`` when a dimension is grounded at its

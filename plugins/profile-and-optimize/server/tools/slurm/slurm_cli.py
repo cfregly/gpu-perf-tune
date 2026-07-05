@@ -109,7 +109,7 @@ def _resolve_repo_root(arg: str | None) -> Path:
         return Path(env).expanduser().resolve()
     current = Path.cwd().resolve()
     while current != current.parent:
-        if (current / "AGENTS.md").is_file() and (current / "tools").is_dir():
+        if (current / "CLAUDE.md").is_file() and (current / "tools").is_dir():
             return current
         current = current.parent
     raise SystemExit("FATAL: cannot resolve repo root; pass --repo-root or set PROFILE_AND_OPTIMIZE_REPO_ROOT")

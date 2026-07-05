@@ -277,5 +277,5 @@ ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/<family>/<run-id>/
 ## Source-of-truth references
 
 - [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - the measurement-methodology canon every bundle feeds.
-- [`server/AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) - bundled-server discovery contract.
+- [`server/CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) - bundled-server discovery contract.
 - All sibling skills that write artifacts - they all assume the bundle this skill creates.

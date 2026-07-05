@@ -239,7 +239,7 @@ class _CellIdentity:
     cache_mode: str = "unknown"  # warm | cold | unknown (declared label)
     prefix_cache_hit_rate: float | None = None  # 0..1, from bundle meta if present
 
-    # Full-context descriptor (2026-06-07; AGENTS.md "Every performance number carries its
+    # Full-context descriptor (2026-06-07; CLAUDE.md "Every performance number carries its
     # full context"). Bundle-level invariants; the methodology gate flags any left "unknown"
     # /None on a measured row under --strict.
     dataset: str = "unknown"
@@ -249,7 +249,7 @@ class _CellIdentity:
     image: str = "unknown"
     data_parallel: int = 1
     pipeline_parallel: int = 1
-    # Delivery ladder (2026-06-07; AGENTS.md "Experiment delivery ladder"): how the code
+    # Delivery ladder (2026-06-07; CLAUDE.md "Experiment delivery ladder"): how the code
     # reached the cluster + the overlay sub-tier when delivery=overlay. Surfaced into extra.
     delivery: str = ""
     overlay_mode: str = ""

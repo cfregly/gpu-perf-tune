@@ -1,9 +1,7 @@
 # CLAUDE.md
 
 Guidance for Claude Code, and any AI coding agent, working in this repository.
-This is the canonical agent-guidance file. An [`AGENTS.md`](AGENTS.md) pointer
-redirects AGENTS.md-aware tools (Codex CLI, Gemini CLI, Cursor, and others) here,
-and Cursor pins it always-on via
+This is the canonical agent-guidance file. Cursor pins it always-on via
 [`.cursor/rules/coding-guidelines.mdc`](.cursor/rules/coding-guidelines.mdc).
 
 ## Run it

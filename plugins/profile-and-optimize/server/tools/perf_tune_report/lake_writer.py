@@ -354,7 +354,7 @@ class VerdictSummary:
 
     Defaults to a **DRAFT** (ungated) when verdict.json is absent. A campaign that
     declares ``tier == "verdict"`` is held to the controlled+metric+baseline
-    provenance by the publish gate (AGENTS.md "Verdict rigor: DRAFT vs VERDICT").
+    provenance by the publish gate (CLAUDE.md "Verdict rigor: DRAFT vs VERDICT").
     """
 
     tier: str = "draft"
@@ -431,7 +431,7 @@ def _effective_verdict_tier(campaign_dir: Path) -> str:
 
 def read_next_lever(campaign_dir: Path) -> str:
     """Author-declared ``next_lever`` for the campaign -- the "Always ship an
-    actionable path-forward" / performance-ratchet mandate (AGENTS.md). The
+    actionable path-forward" / performance-ratchet mandate (CLAUDE.md). The
     specific next change expected to move a metric further, OR an explicit
     ``frontier-exhausted: <evidence>`` when a dimension is grounded at its
     Speed-of-Light ceiling. Read from the campaign ``config.yaml`` ``next_lever:``
@@ -453,7 +453,7 @@ def read_next_lever(campaign_dir: Path) -> str:
 
 
 def next_lever_problems(campaign_dir: Path) -> list[str]:
-    """Performance-ratchet publish gate (AGENTS.md "Always ship an actionable
+    """Performance-ratchet publish gate (CLAUDE.md "Always ship an actionable
     path-forward" / "Always be grinding"). A campaign MUST declare a ``next_lever``
     so the lake row answers "what is the next lever for X" and the grind never
     silently stalls. The allowed escape for a genuinely-maxed dimension is
@@ -473,7 +473,7 @@ VALID_CLOSE_REASONS = ("beat-target", "measured-plateau", "infra-wall")
 
 
 def read_close_reason(campaign_dir: Path) -> str:
-    """Author-declared ``close_reason`` for the campaign (AGENTS.md "Always be grinding",
+    """Author-declared ``close_reason`` for the campaign (CLAUDE.md "Always be grinding",
     principle i). A perf investigation may CLOSE only on a MEASURED outcome: ``beat-target``,
     ``measured-plateau`` (variance-controlled), or ``infra-wall`` (documented blocker). Empty =
     still open (no close claimed). Read from config.yaml ``close_reason:`` then SOURCE.md."""
@@ -492,7 +492,7 @@ def read_close_reason(campaign_dir: Path) -> str:
 
 
 def close_reason_problems(campaign_dir: Path) -> list[str]:
-    """Grind-discipline publish gate (AGENTS.md "Always be grinding", principle i). A campaign that
+    """Grind-discipline publish gate (CLAUDE.md "Always be grinding", principle i). A campaign that
     CLOSES an investigation must record a MEASURED close_reason in {beat-target, measured-plateau,
     infra-wall}; closing on a first-principles / cost / temporary-plateau argument is forbidden. An
     empty close_reason = open campaign (fine -- next_lever is still required by next_lever_problems). A
@@ -525,7 +525,7 @@ def _row_is_measured(row: AtlasCell) -> bool:
 
 
 def methodology_problems(rows: list[AtlasCell]) -> list[str]:
-    """Benchmark-methodology hygiene gate (AGENTS.md "Benchmark methodology
+    """Benchmark-methodology hygiene gate (CLAUDE.md "Benchmark methodology
     hygiene"). Every MEASURED atlas row must carry a warm-vs-cold label
     (``cache_mode`` in {warm, cold}) and shape provenance
     (``max_num_batched_tokens`` > 0). A throughput/latency number left at
@@ -551,7 +551,7 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
             + ", ".join(unlabeled)
             + " -- label every throughput/latency number warm (cache-primed / "
             "sweep-tail) or cold (fresh / single-shot) via the importer "
-            "--cache-mode (AGENTS.md 'Benchmark methodology hygiene')"
+            "--cache-mode (CLAUDE.md 'Benchmark methodology hygiene')"
         )
     no_shape = sorted(
         {
@@ -567,7 +567,7 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
             + " -- the bench shape must be recorded, not inferred from a label"
         )
     # ISL/OSL shape precision -- the PER-ROW half of "per-number exact shape (no smoothing)"
-    # (added 2026-06-08; docs/METHODOLOGY.md "no bare numbers" / AGENTS.md "Per-number exact
+    # (added 2026-06-08; docs/METHODOLOGY.md "no bare numbers" / CLAUDE.md "Per-number exact
     # shape"). Each measured cell carries its OWN ISL/OSL; a number is NEVER smoothed to one
     # campaign-level shape. (The CROSS-CELL half -- one shared shape label rendered over
     # heterogeneous-shape cells -- is handled at RENDER time by the render-layer
@@ -599,11 +599,11 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
         p.append(
             "shape provenance missing (mean_input_tokens/mean_output_tokens<=0 on a "
             "vllm-bench dataset) on measured cell(s): " + ", ".join(no_isl_osl)
-            + " -- record the workload ISL/OSL the number was measured at (AGENTS.md "
+            + " -- record the workload ISL/OSL the number was measured at (CLAUDE.md "
             "'Every performance number carries its full context'); aiperf/drive_load/aa-* "
             "are exempt (shape defined by the dataset name)"
         )
-    # Full-context descriptor gate (AGENTS.md "Every performance number carries its full
+    # Full-context descriptor gate (CLAUDE.md "Every performance number carries its full
     # context (no bare numbers)" / rule docs/METHODOLOGY.md): a measured number is a
     # defect without its descriptor. Flag any measured row whose str descriptor field is
     # still "unknown", or whose gpu_memory_utilization is unset.
@@ -620,7 +620,7 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
                 f"full-context descriptor missing ({fld}=unknown) on measured cell(s): "
                 + ", ".join(missing)
                 + f" -- set {fld} via the importer/runner override or bundle metadata "
-                "(AGENTS.md 'Every performance number carries its full context')"
+                "(CLAUDE.md 'Every performance number carries its full context')"
             )
     no_gmu = sorted(
         {
@@ -672,7 +672,7 @@ def _read_krhpa_exempt_reason(campaign_dir: Path) -> str:
 
 
 def krhpa_problems(campaign_dir: Path, render_status: RenderStatusSummary) -> list[str]:
-    """Kernel-rubric gate (AGENTS.md "Custom-kernel work: classify before you
+    """Kernel-rubric gate (CLAUDE.md "Custom-kernel work: classify before you
     climb"). A kernel-comparison campaign -- identified by an L4 ncu roofline
     having rendered (``sol_rigor == "L4"``, i.e. page 5 from a
     ``cells/*/ncu_kernels.json``) -- MUST carry a ``krhpa:`` block in
@@ -690,7 +690,7 @@ def krhpa_problems(campaign_dir: Path, render_status: RenderStatusSummary) -> li
         return [
             "L4 kernel-comparison campaign (sol_rigor=L4) is missing a krhpa: "
             "block in config.yaml -- classify the candidate AND the named "
-            "baseline on (K,R,H,P,A) per AGENTS.md 'Custom-kernel work: classify "
+            "baseline on (K,R,H,P,A) per CLAUDE.md 'Custom-kernel work: classify "
             "before you climb' (a win over a lower-H/R baseline is a DRAFT, not a "
             "VERDICT)"
         ]
@@ -951,7 +951,7 @@ def build_atlas_table(rows: list[AtlasCell], campaign_id: str) -> Any:
             pa.field("mean_output_tokens", pa.float64(), nullable=True),
             pa.field("prefix_cache_hit_rate", pa.float64(), nullable=True),
             pa.field("cache_mode", pa.string(), nullable=False),
-            # Full-context descriptor (added 2026-06-07; AGENTS.md "Every performance
+            # Full-context descriptor (added 2026-06-07; CLAUDE.md "Every performance
             # number carries its full context"). Downstream: append these columns (defaults
             # 'unknown' / null / 1 for older partitions).
             pa.field("dataset", pa.string(), nullable=False),
@@ -1249,14 +1249,14 @@ def build_campaign_row(
             pa.field("recommended_engine", pa.string(), nullable=False),
             pa.field("champion_tier", pa.string(), nullable=False),
             pa.field("champion_baseline_cell", pa.string(), nullable=False),
-            # next_lever (added: AGENTS.md "Always ship an actionable path-forward" /
+            # next_lever (added: CLAUDE.md "Always ship an actionable path-forward" /
             # performance-ratchet mandate). The campaign-level path-forward: the next
             # change to move a metric further, or "frontier-exhausted: <evidence>".
             # Empty is REFUSED under publish_to_lake --strict (next_lever_problems), so
             # the lake itself answers "what is the next lever for X". Downstream: append
             # this column (default '' for older partitions).
             pa.field("next_lever", pa.string(), nullable=False),
-            # close_reason (added: AGENTS.md "Always be grinding" / grind discipline, principle i).
+            # close_reason (added: CLAUDE.md "Always be grinding" / grind discipline, principle i).
             # When a campaign CLOSES an investigation it must record a MEASURED reason -- one of
             # {beat-target, measured-plateau, infra-wall}; '' = still open (no close claimed). An
             # invalid/absent-but-claimed-close reason is REFUSED under --strict, recorded+warned

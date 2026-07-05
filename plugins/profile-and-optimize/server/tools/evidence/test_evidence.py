@@ -13,7 +13,7 @@ from tools.evidence.evidence_cli import CONTRACT, build_parser, main
 def _seed_repo_root(tmp_path: Path) -> Path:
     root = tmp_path / "fake-repo-root"
     root.mkdir()
-    (root / "AGENTS.md").write_text("# fake\n")
+    (root / "CLAUDE.md").write_text("# fake\n")
     (root / "tools").mkdir()
     return root
 

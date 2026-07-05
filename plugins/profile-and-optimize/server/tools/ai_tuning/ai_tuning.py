@@ -51,7 +51,7 @@ except ImportError:  # Package import path.
     from tools.ai_tuning import safety as _safety
 
 
-# Per AGENTS.md, the canonical operator surface for AI-assisted tuning is
+# Per CLAUDE.md, the canonical operator surface for AI-assisted tuning is
 # offline: every CLI verb here either prints to stdout, or writes its own
 # `--output` / per-verb output path. Slurm submission only happens through
 # the `experiment submit` subverb, which carries its own

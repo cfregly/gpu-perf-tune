@@ -97,7 +97,7 @@ SCOPE_GLOBS = [
     # Plugin-level docs
     "plugins/profile-and-optimize/README.md",
     "plugins/profile-and-optimize/server/README.md",
-    "plugins/profile-and-optimize/server/AGENTS.md",
+    "plugins/profile-and-optimize/server/CLAUDE.md",
     "plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/README.md",
     # Skills
     "plugins/profile-and-optimize/skills/**/*.md",

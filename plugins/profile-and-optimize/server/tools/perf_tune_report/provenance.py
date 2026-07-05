@@ -67,7 +67,7 @@ SCHEMA = "experiment_provenance_v1"
 #: delivery methods = how the source code actually reached the cluster.
 DELIVERY_KINDS = ("image", "overlay", "patchedVllm", "infr-patch")
 #: overlay sub-mode (only when delivery == "overlay") = HOW the runtime overlay is
-#: applied. The delivery ladder (AGENTS.md "Experiment delivery ladder"):
+#: applied. The delivery ladder (CLAUDE.md "Experiment delivery ladder"):
 #:   subpath                  = ConfigMap files mounted over dist-packages via subPath
 #:   patchset-initcontainer   = initContainer applies a .patch set into a shared
 #:                              emptyDir, main subPath-remounts (overlay-patchset.sh)
@@ -301,7 +301,7 @@ def provenance_match_problems(
         ``experiment_provenance_v1`` block (has ``source``/``identity``) OR the flattened
         lake/``provenance.json`` form (has ``delivery``/``vllm_commit``).
 
-    Mechanical backstop for AGENTS.md "code-under-test provenance match" (rigor principle ``p``):
+    Mechanical backstop for CLAUDE.md "code-under-test provenance match" (rigor principle ``p``):
     an ``overlay`` / offline-prepped campaign cited as the benefit of an ``infr-patch`` is a DRAFT
     defect even when the kernels match. Empty list = OK (matches, or not enough info to assert).
     Commit comparison is prefix-tolerant (short vs full SHA).

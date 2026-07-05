@@ -227,7 +227,7 @@ def render_page(
     ax_cv.text(
         0.5,
         cav_y if cav_y > 0 else 0.15,
-        "See AGENTS.md 'Speed-of-light framing' for the three-level rigor "
+        "See CLAUDE.md 'Speed-of-light framing' for the three-level rigor "
         "hierarchy (sample-share -> ncu per-kernel -> DCGM workload-level).",
         ha="center",
         va="center",

@@ -1,6 +1,6 @@
 """Per-number exact shape (no smoothing) in the TPM-by-hardware caption.
 
-docs/METHODOLOGY.md "Per-number exact shape (no smoothing)" / AGENTS.md principle j:
+docs/METHODOLOGY.md "Per-number exact shape (no smoothing)" / CLAUDE.md principle j:
 a per-hardware shape caption must NOT collapse heterogeneous-shape variant groups to one
 ISL/OSL label (which would hide per-point variation). _shape_caption emits a single
 ISL/OSL only when the groups share it; otherwise "ISL/OSL: per-row (varies)".

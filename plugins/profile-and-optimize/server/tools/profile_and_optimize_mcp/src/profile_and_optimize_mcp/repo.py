@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def find_repo_root(start: Path | None = None) -> Path:
-    """Return the mlperf-6.0-training repo root by walking to AGENTS.md."""
+    """Return the mlperf-6.0-training repo root by walking to CLAUDE.md."""
 
     env_root = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
     current = Path(env_root).expanduser() if env_root else (start or Path.cwd())
@@ -15,7 +15,7 @@ def find_repo_root(start: Path | None = None) -> Path:
     if current.is_file():
         current = current.parent
     while current != current.parent:
-        if (current / "AGENTS.md").is_file() and (current / "tools").is_dir():
+        if (current / "CLAUDE.md").is_file() and (current / "tools").is_dir():
             return current
         current = current.parent
     raise RuntimeError(

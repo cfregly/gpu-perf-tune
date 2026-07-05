@@ -733,7 +733,7 @@ def cmd_campaign_init(args: argparse.Namespace) -> int:
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
     campaigns_root.mkdir(parents=True, exist_ok=True)
 
-    # Experiment-id is the single join key (AGENTS.md "Experiment Isolation &
+    # Experiment-id is the single join key (CLAUDE.md "Experiment Isolation &
     # Traceability"): it is the evidence-bundle run-id AND the cluster label
     # value AND -- when supplied -- the campaign_id (this dir's basename). When
     # an --experiment-id (or config experiment_id:) is given, the campaign dir is
@@ -1751,7 +1751,7 @@ def cmd_experiments_index(args: argparse.Namespace) -> int:
     if args.family:
         rows = [r for r in rows if r["family"] == args.family]
     # Default output: the perf-report bundle (campaigns_root's parent), so the
-    # index is tracked alongside configs (data, not Python) per perf-tune-report/AGENTS.md.
+    # index is tracked alongside configs (data, not Python) per perf-tune-report/CLAUDE.md.
     out_dir = Path(args.out).expanduser().resolve() if args.out else campaigns_root.parent
     paths = write_index(rows, out_dir)
 
@@ -3177,7 +3177,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("warm", "cold", "unknown"),
         help="Warm-vs-cold methodology label for these rows (default: bundle meta or 'unknown')",
     )
-    # Full-context descriptor overrides (2026-06-07; AGENTS.md "Every performance number
+    # Full-context descriptor overrides (2026-06-07; CLAUDE.md "Every performance number
     # carries its full context"). Required (via flag or bundle meta) for a measured campaign
     # to pass publish/render --strict.
     ip.add_argument("--dataset", dest="dataset", default=None, help="Workload dataset (random|sharegpt|sonnet|aa|code|...) -- full-context descriptor")

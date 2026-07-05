@@ -203,7 +203,7 @@ def import_lws_summary_bundle(
     stamp = captured_at or overrides.get("captured_at", "")
     # Full-context descriptor (2026-06-09): apply the importer overrides so lws-summary
     # cells carry the same descriptor the perf-bench path does (the methodology_problems
-    # --strict gate, AGENTS.md 'Every performance number carries its full context').
+    # --strict gate, CLAUDE.md 'Every performance number carries its full context').
     cache_mode = overrides.get("cache_mode", "unknown")
     dataset = overrides.get("dataset", "unknown")
     cudagraph_mode = overrides.get("cudagraph_mode", "unknown")

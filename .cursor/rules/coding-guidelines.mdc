@@ -10,5 +10,4 @@ and goal-driven execution (verifiable success criteria), plus its
 "Working in this repo" gates (`make all`, canonical counts in
 `mcp_surface.py`, `docs/METHODOLOGY.md` rigor rules).
 
-CLAUDE.md is the canonical copy. Keep edits there. AGENTS.md is a thin
-pointer to it for AGENTS.md-aware tools.
+CLAUDE.md is the canonical copy. Keep durable agent-guidance edits there.

@@ -1,6 +1,6 @@
 """Tests for the verdict-rigor publish gate.
 
-Enforces AGENTS.md "Verdict rigor: DRAFT vs VERDICT": a campaign published with
+Enforces CLAUDE.md "Verdict rigor: DRAFT vs VERDICT": a campaign published with
 ``verdict.json`` ``tier=verdict`` must carry the controlled+metric+baseline
 provenance, else the publish gate fails loud (CampaignIncompleteError). A
 ``draft`` tier (or absent verdict.json) is ungated.

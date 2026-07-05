@@ -61,7 +61,7 @@ DOCS_TO_LINT = (
     "plugins/profile-and-optimize/README.md",
     "plugins/profile-and-optimize/.claude-plugin/plugin.json",
     "plugins/profile-and-optimize/server/README.md",
-    "plugins/profile-and-optimize/server/AGENTS.md",
+    "plugins/profile-and-optimize/server/CLAUDE.md",
     "plugins/profile-and-optimize/server/pyproject.toml",
     "plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/README.md",
     "plugins/profile-and-optimize/server/docs/cli-contract.md",

@@ -73,7 +73,7 @@ if [[ -z "${SERVER}" ]]; then
   fi
 fi
 
-if [[ ! -f "${SERVER}/AGENTS.md" || ! -d "${SERVER}/tools" ]]; then
+if [[ ! -f "${SERVER}/CLAUDE.md" || ! -d "${SERVER}/tools" ]]; then
   printf 'FATAL: server directory does not look right: %s\n' "${SERVER}" >&2
   exit 2
 fi

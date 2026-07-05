@@ -5,7 +5,7 @@ per-category data already used by ``kernel_breakdown.render_page`` and
 the workload-level throughput rows already used by the scatter-grid /
 heatmap pages.
 
-Per-workspace ``AGENTS.md`` "Speed-of-light framing" section, every
+Per-workspace ``CLAUDE.md`` "Speed-of-light framing" section, every
 measurement artifact must report measured-vs-SoL alongside the headline
 number. This page is the automated visualization of that discipline.
 
@@ -19,7 +19,7 @@ Layout (top to bottom):
 3. Workload-level SoL panel: measured ``output_tps_per_gpu`` per cell at
    peak concurrency, as bars. Skipped silently when no rows carry a valid
    ``output_tps_per_gpu`` number.
-4. Caveat footer: sample-share-is-time-proxy disclaimer, link to AGENTS.md
+4. Caveat footer: sample-share-is-time-proxy disclaimer, link to CLAUDE.md
    for the full caveat treatment.
 
 The page is conditional. ``render_report.discover_sol_inputs`` decides
@@ -402,7 +402,7 @@ def render_page(
         0.5,
         0.15,
         "For tight per-kernel arithmetic-intensity-vs-roofline measurements, "
-        "use inference-kernel-ncu-profile.  See AGENTS.md 'Speed-of-light framing'.",
+        "use inference-kernel-ncu-profile.  See CLAUDE.md 'Speed-of-light framing'.",
         ha="center",
         va="center",
         fontsize=7,

@@ -1,6 +1,6 @@
 """DCGM byte-grounded workload SoL correlator.
 
-Phase 2 of the SoL framing workstream (per workspace AGENTS.md
+Phase 2 of the SoL framing workstream (per workspace CLAUDE.md
 "Speed-of-light framing" 3-level rigor hierarchy: sample-share -> ncu
 per-kernel -> DCGM workload-level). This module is the third level.
 

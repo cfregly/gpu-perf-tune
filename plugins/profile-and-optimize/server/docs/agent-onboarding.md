@@ -72,7 +72,7 @@ users can symlink every skill into `~/.cursor/skills/` with
 
 Use the skills for agent behavior and the `profile_and_optimize` MCP tools for
 repeatable tool execution. Mutating MCP tools still require explicit
-`i_understand_this_*` arguments per [`../AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md).
+`i_understand_this_*` arguments per [`../CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md).
 
 ## Full profile_and_optimize Tool List
 

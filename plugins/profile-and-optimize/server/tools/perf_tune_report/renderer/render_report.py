@@ -961,7 +961,7 @@ def render_report(
             pdf.savefig(fig_done)
             plt.close(fig_done)
 
-    # Degenerate-asset guard (asset-validation rule m / AGENTS.md "Validate every generated
+    # Degenerate-asset guard (asset-validation rule m / CLAUDE.md "Validate every generated
     # asset"): a near-empty PDF means the render silently failed -- FAIL LOUD rather than
     # leaving a broken report on disk for publish_to_lake to land.
     _pdf_bytes = os.path.getsize(out_pdf) if os.path.exists(out_pdf) else 0
@@ -969,7 +969,7 @@ def render_report(
         raise RuntimeError(
             f"degenerate report: {out_pdf} is {_pdf_bytes} bytes -- the render produced no real "
             "content. Fix the campaign data and re-render; do not publish a broken report "
-            "(AGENTS.md 'Validate every generated asset')."
+            "(CLAUDE.md 'Validate every generated asset')."
         )
 
     # sol_complete = ANY Speed-of-Light evidence rendered (L1 zymtrace page4 OR

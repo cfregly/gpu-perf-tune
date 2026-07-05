@@ -71,7 +71,7 @@ class RunDetectorTest(unittest.TestCase):
             self.assertEqual(len(parsed[1]["alerts"]), 0)
 
     def test_missing_output_parent_fails_fast(self) -> None:
-        """Per AGENTS.md 'Fail Fast', refuse to write into a non-existent
+        """Per CLAUDE.md 'Fail Fast', refuse to write into a non-existent
         directory rather than auto-mkdir-ing it."""
         outpath = Path("/tmp/this/does/not/exist/timeline.jsonl")
         with self.assertRaises(FileNotFoundError):

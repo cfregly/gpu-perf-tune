@@ -59,7 +59,7 @@ STALE_PHRASES = ("once this repo has a remote", "coming soon")
 MARKER_RE = re.compile(r"\b(TODO|FIXME|TBD)\b")
 DASH_RE = re.compile("[–—]")  # en dash (U+2013), em dash (U+2014)
 VALUE_BAR = "adversarially-confirmed to add value"
-VALUE_BAR_DOCS = ("AGENTS.md", "CLAUDE.md", "README.md")
+VALUE_BAR_DOCS = ("CLAUDE.md", "CLAUDE.md", "README.md")
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__",
              ".pytest_cache", ".mypy_cache", "dist", "build", "site-packages"}
 # Spans where a semicolon is legitimate (code, inline code, links, entities).

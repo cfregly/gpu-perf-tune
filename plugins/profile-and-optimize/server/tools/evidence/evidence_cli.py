@@ -53,7 +53,7 @@ def _resolve_repo_root(arg: str | None) -> Path:
         return Path(env).expanduser().resolve()
     current = Path.cwd().resolve()
     while current != current.parent:
-        if (current / "AGENTS.md").is_file() and (current / "tools").is_dir():
+        if (current / "CLAUDE.md").is_file() and (current / "tools").is_dir():
             return current
         current = current.parent
     raise SystemExit("FATAL: cannot resolve repo root; pass --repo-root or set PROFILE_AND_OPTIMIZE_REPO_ROOT")
@@ -80,7 +80,7 @@ SOURCE_MD_TEMPLATE = """# SOURCE
 ## Experiment isolation & traceability
 
 The run-id IS the experiment-id: the single join key across this bundle, the
-cluster objects, and the perf-lake (workspace `AGENTS.md` "Experiment Isolation
+cluster objects, and the perf-lake (workspace `CLAUDE.md` "Experiment Isolation
 & Traceability").
 
 - experiment_id: {run_id}
@@ -132,7 +132,7 @@ verdict:
 
 ## Cross-references
 
-- Workspace [`AGENTS.md`](../../../AGENTS.md) "Reproducibility-Grade Evidence" +
+- Workspace [`CLAUDE.md`](../../../CLAUDE.md) "Reproducibility-Grade Evidence" +
   "Experiment Isolation & Traceability" rules.
 - This file was scaffolded by `mcp__profile_and_optimize__evidence_init` (skill: [`evidence-bundle-init`](../../../plugins/profile-and-optimize/skills/evidence-bundle-init/SKILL.md)).
 """
@@ -162,7 +162,7 @@ _(to be filled in by operator at end of experiment)_
 
 COMMANDS_README_TEMPLATE = """# commands/
 
-Per workspace [`AGENTS.md`](../../../../AGENTS.md) "Reproducibility-Grade Evidence",
+Per workspace [`CLAUDE.md`](../../../../CLAUDE.md) "Reproducibility-Grade Evidence",
 every shell command run during this experiment is captured as a four-file tuple:
 
     00-<step-slug>.cmd       # the exact command
@@ -192,10 +192,10 @@ def cmd_init(args: argparse.Namespace) -> int:
     bundle = repo_root / "experiments" / "artifacts" / family / run_id
 
     if bundle.exists():
-        # Per workspace AGENTS.md artifact-durability rule: bundles are immutable.
+        # Per workspace CLAUDE.md artifact-durability rule: bundles are immutable.
         print(
             f"FATAL: bundle already exists: {bundle}\n"
-            "Bundles are immutable per workspace AGENTS.md. Use a fresh --run-id.",
+            "Bundles are immutable per workspace CLAUDE.md. Use a fresh --run-id.",
             file=sys.stderr,
         )
         return 2

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tagging-rigidity pre-push gate (AGENTS.md "Git identity + release tagging").
+# Tagging-rigidity pre-push gate (CLAUDE.md "Git identity + release tagging").
 #
 # Wired in .pre-commit-config.yaml as a `stages: [pre-push]` local hook; enable with
 #   pre-commit install --hook-type pre-push
@@ -20,7 +20,7 @@ fi
 
 cat >&2 <<EOF
 RELEASE-TAG GATE: plugin.json version is ${ver} but no annotated tag v${ver} exists.
-Tagging rigidity (AGENTS.md "Git identity + release tagging"): every release MUST be
+Tagging rigidity (CLAUDE.md "Git identity + release tagging"): every release MUST be
 tagged. Create + push it (or run 'make release'):
   git tag -a v${ver} -m "v${ver}: <summary>" && git push origin v${ver}
 EOF

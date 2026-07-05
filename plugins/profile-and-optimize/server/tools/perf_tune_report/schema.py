@@ -55,7 +55,7 @@ def engine_for_backend(backend: str) -> str:
 
 
 # Full-context descriptor: string fields that MUST be populated (not "unknown") on a
-# MEASURED atlas row, per AGENTS.md "Every performance number carries its full context
+# MEASURED atlas row, per CLAUDE.md "Every performance number carries its full context
 # (no bare numbers)" (rule docs/METHODOLOGY.md). The methodology gate
 # (``lake_writer.methodology_problems``) flags any field still at "unknown"; publish/render
 # ``--strict`` fails closed. ``gpu_memory_utilization`` (None sentinel) is checked alongside.
@@ -145,7 +145,7 @@ class AtlasCell:
     # signal); set via the importer --cache-mode override or bundle metadata.
     cache_mode: str = "unknown"
 
-    # Full-context descriptor fields (added 2026-06-07, AGENTS.md "Every performance
+    # Full-context descriptor fields (added 2026-06-07, CLAUDE.md "Every performance
     # number carries its full context (no bare numbers)" / rule docs/METHODOLOGY.md).
     # All defaulted so older JSONL still parses; the methodology gate flags any
     # "unknown"/None on a MEASURED row (fail-closed under publish/render --strict).

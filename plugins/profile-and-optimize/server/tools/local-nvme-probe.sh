@@ -16,7 +16,7 @@
 # need to know the canonical per-node NVMe mount + free capacity on the
 # GB300 cohort. This script is the Phase 1 probe.
 #
-# Per mlperf-6.0-training/AGENTS.md "Fail Fast, No Silent Fallbacks": this
+# Per mlperf-6.0-training/CLAUDE.md "Fail Fast, No Silent Fallbacks": this
 # script is read-only by design (df / mount / findmnt / stat / a single
 # touch+rm in /tmp-of-the-mount). It does NOT run training, does NOT pull
 # a container, and does NOT write the dataset. Operator-runnable from the
@@ -32,7 +32,7 @@
 #
 # Without --reservation the probe will queue on whatever idle gb300 capacity
 # the scheduler hands out; with --reservation it stays inside the existing
-# rack-reserve cohort (per AGENTS.md the launcher never creates reservations,
+# rack-reserve cohort (per CLAUDE.md the launcher never creates reservations,
 # the operator does).
 
 set -euo pipefail
@@ -52,7 +52,7 @@ Required env (no defaults):
 
 Probed mount candidates: /raid /mnt/local /mnt/nvme /scratch/local /local /dev/shm /tmp
 
-Per AGENTS.md "Fail Fast, No Silent Fallbacks": the script exits non-zero
+Per CLAUDE.md "Fail Fast, No Silent Fallbacks": the script exits non-zero
 when no candidate mount is rw-writable on any probed node, so the operator
 sees the failure and knows Phase 2 cannot proceed.
 EOF

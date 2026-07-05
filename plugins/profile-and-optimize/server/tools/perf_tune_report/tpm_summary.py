@@ -30,7 +30,7 @@ OpenAI/Azure TPM convention) are reported side by side. Total-TPM is ``None``
 for any group whose rows lack ``total_tps_per_gpu`` (backends that do not emit
 a "Total token throughput" line); it renders as ``n/a`` downstream.
 
-Methodology caveat (see workspace ``AGENTS.md`` "Benchmark methodology hygiene"):
+Methodology caveat (see workspace ``CLAUDE.md`` "Benchmark methodology hygiene"):
 the peak point is the warm sweep best-case, NOT a cold steady-state, and TPM
 inherits whatever warm/cold + ISL/OSL methodology the underlying sweep used.
 The summary header carries this caveat plus the campaign's ISL/OSL context so a

@@ -9,7 +9,7 @@
 #     writing partial artifacts.
 #   - Wrapped command stdout/stderr land in the right files.
 #
-# Per AGENTS.md "Fail Fast, No Silent Fallbacks", the test file fails
+# Per CLAUDE.md "Fail Fast, No Silent Fallbacks", the test file fails
 # loudly on any unmet assertion.
 
 set -euo pipefail

@@ -2,10 +2,10 @@
 
 Enforces two workspace rules mechanically at publish time:
 
-- AGENTS.md "Benchmark methodology hygiene" -- every MEASURED atlas row must
+- CLAUDE.md "Benchmark methodology hygiene" -- every MEASURED atlas row must
   carry a warm/cold ``cache_mode`` + shape provenance. An unlabeled
   throughput/latency number is the warm-vs-cold comparability trap.
-- AGENTS.md "Custom-kernel work: classify before you climb" -- an L4
+- CLAUDE.md "Custom-kernel work: classify before you climb" -- an L4
   kernel-comparison campaign must carry a ``krhpa:`` block classifying the
   candidate AND named baseline on (K,R,H,P,A).
 

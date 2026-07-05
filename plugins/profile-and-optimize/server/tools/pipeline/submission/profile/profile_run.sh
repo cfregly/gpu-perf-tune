@@ -8,10 +8,10 @@
 # injects the Megatron --profile / --nvtx_ranges flags through
 # TRAINING_EXTRA_ARGS (mirrored in
 # tools/benchmarks/llama31_405b/megatron_overlay_run.sh:203), routes LOGDIR
-# under the artifact anchor (per AGENTS.md "Artifact Anchor"), and forwards
+# under the artifact anchor (per CLAUDE.md "Artifact Anchor"), and forwards
 # the operator-gate to the underlying launcher.
 #
-# Per AGENTS.md "Fail Fast, No Silent Fallbacks":
+# Per CLAUDE.md "Fail Fast, No Silent Fallbacks":
 #   - every required input must be set; the wrapper aborts on the first
 #     failing assertion.
 #   - --ack-cluster-cost is mandatory; --dry-run is the only opt-out for
@@ -19,7 +19,7 @@
 #   - missing nsys in the container is a fatal error; we do not fall back
 #     to a "run without nsys" mode silently.
 #
-# Per AGENTS.md "Self-Contained Repository Boundary":
+# Per CLAUDE.md "Self-Contained Repository Boundary":
 #   - shells out only to checked-in tools (the existing 405B launcher.sh
 #     and the unified common/launcher.py).
 #
@@ -64,7 +64,7 @@
 #                            mlperf-6.0-training/experiments/artifacts.
 #
 # The artifact dir is created up front so the operator can place
-# SOURCE.md + summary.md + commands/ alongside the profile per the AGENTS.md
+# SOURCE.md + summary.md + commands/ alongside the profile per the CLAUDE.md
 # "Reproducibility-Grade Evidence" rule.
 
 set -euo pipefail
@@ -143,7 +143,7 @@ esac
 [[ "${PROFILE_RANKS}" =~ ^[0-9]+(,[0-9]+)*$ ]] || abort "--profile-ranks must be a comma-separated rank list (got '${PROFILE_RANKS}')"
 
 if (( ACK_CLUSTER_COST == 0 && DRY_RUN == 0 )); then
-    abort "--ack-cluster-cost is required (per AGENTS.md operator gate). Use --dry-run to print without submitting."
+    abort "--ack-cluster-cost is required (per CLAUDE.md operator gate). Use --dry-run to print without submitting."
 fi
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd)"

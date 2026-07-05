@@ -16,7 +16,7 @@ ignore the rest until you need it.
 | Running a benchmark on the cluster | [`../README.md`](/plugins/profile-and-optimize/server/README.md), then the runbook for your target under [`../runbooks/`](/plugins/profile-and-optimize/server/runbooks) |
 | Implementing or reviewing a CLI verb | [`cli-contract.md`](/plugins/profile-and-optimize/server/docs/cli-contract.md) plus [`../mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) |
 | Operating the MCP server | [`mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md) and [`../tools/profile_and_optimize_mcp/README.md`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/README.md) |
-| Setting repo policy or CI gates | [`../AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) |
+| Setting repo policy or CI gates | [`../CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) |
 | Looking up campaign state | Your local `./campaigns/` directory |
 | Looking up evidence | [`../experiments/artifacts/`](/plugins/profile-and-optimize/server/experiments/artifacts) |
 
@@ -49,4 +49,4 @@ every layer, and (5) drive each benchmark to a compliant five-run submission.
 | [`../tools/`](/plugins/profile-and-optimize/server/tools) | Pipeline-step CLIs, audits, and benchmark scaffolding. |
 | [`../experiments/artifacts/`](/plugins/profile-and-optimize/server/experiments/artifacts) | Curated peer-reviewable evidence. |
 | [`../tuning/`](/plugins/profile-and-optimize/server/tuning) | Tuning spaces, rules, baselines, best-known knob ledger. |
-| [`../AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) | Repo policy: fail-fast and evidence conventions, plus the MCP server's root-discovery marker. |
+| [`../CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) | Repo policy: fail-fast and evidence conventions, plus the MCP server's root-discovery marker. |

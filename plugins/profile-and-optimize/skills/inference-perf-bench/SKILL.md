@@ -118,7 +118,7 @@ This creates `experiments/artifacts/inference-perf-bench/<run-id>/` with
 `SOURCE.md`, `summary.md`, `commands/`. Every shell command in the
 9-phase workflow can then be captured as a four-file tuple
 under `commands/` for the reproducibility-grade-evidence rule
-(`server/AGENTS.md`).
+(`server/CLAUDE.md`).
 
 ### Phase A.5: pre-bench - quiet Slurm (Slurm-on-K8s clusters only)
 
@@ -175,7 +175,7 @@ for the full contract.
 
 ### Phase D: land the result in the perf-lake (MANDATORY)
 
-Per the `server/AGENTS.md` "Experiment Isolation &
+Per the `server/CLAUDE.md` "Experiment Isolation &
 Traceability" rule, a measurement is not a result until it lands in the
 perf-lake with Speed-of-Light rooflines. The canonical path is the
 `perftunereport` pipeline (see [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md)),
@@ -243,7 +243,7 @@ re-import + re-aggregate + re-render.
 
 ## Experiment isolation & traceability (mandatory)
 
-Per the `server/AGENTS.md` "Experiment Isolation &
+Per the `server/CLAUDE.md` "Experiment Isolation &
 Traceability" rule (and `docs/METHODOLOGY.md`):
 
 - Any disposable serve/bench deployment this workflow creates MUST use
@@ -283,7 +283,7 @@ default, ship a config, or appear in a report.
 
 Every result table this skill produces MUST carry a `%SoL` column
 alongside the absolute throughput / latency numbers. Per the
-`server/AGENTS.md` "Speed-of-light framing" section:
+`server/CLAUDE.md` "Speed-of-light framing" section:
 
 - Workload-level: peak `output_tps_per_gpu` compared to the
   HBM-bandwidth ceiling (`b200_sm100.hbm3e_tbps = 8.0 TB/s` ÷
@@ -300,7 +300,7 @@ alongside the absolute throughput / latency numbers. Per the
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
@@ -312,7 +312,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Verdict rigor (DRAFT vs VERDICT)
 
-Per `server/AGENTS.md` "Verdict rigor: DRAFT vs VERDICT", tier every bench number.
+Per `server/CLAUDE.md` "Verdict rigor: DRAFT vs VERDICT", tier every bench number.
 A single sweep is a **DRAFT**. Promote to a **VERDICT** only when variance-controlled
 (same-node, >=3 trials, mean +/- std), metric-isolated (median TPOT/ITL for
 decode-latency claims - output tok/s at small num_prompts is TTFT-dominated, NOT
@@ -321,7 +321,7 @@ backend. Never an eager strawman). Mark the campaign `verdict_tier` accordingly.
 perf-lake writer gates `verdict_tier=verdict` on this provenance.
 
 **Quant-format / serve-backend claims are a MATRIX, not a single cell** (per
-`server/AGENTS.md` "Validate the matrix, never generalize from one cell" +
+`server/CLAUDE.md` "Validate the matrix, never generalize from one cell" +
 `docs/METHODOLOGY.md`). When A/B-ing quant formats or serve
 backends (NVFP4 marlin vs cutlass, FP8 compressed-tensors, ...), a single
 (backend, concurrency) point is NEVER a universal verdict -- the winner is
@@ -338,4 +338,4 @@ assuming the backend is blocked. Report the winner PER concurrency regime.
   skill), [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md)
   (quality-side counterpart).
 - Bridge: [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md).
-- `server/AGENTS.md` - fail-fast + provenance rules.
+- `server/CLAUDE.md` - fail-fast + provenance rules.

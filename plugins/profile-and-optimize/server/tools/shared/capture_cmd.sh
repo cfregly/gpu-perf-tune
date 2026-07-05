@@ -2,7 +2,7 @@
 # capture_cmd.sh
 #
 # Capture an arbitrary CLI command into the four-file tuple required by
-# AGENTS.md "Reproducibility-Grade Evidence":
+# CLAUDE.md "Reproducibility-Grade Evidence":
 #
 #   ${ART_DIR}/commands/NN-<slug>.cmd       # exact argv (one line)
 #   ${ART_DIR}/commands/NN-<slug>.stdout    # captured stdout
@@ -18,7 +18,7 @@
 # command runs with the helper's exit propagated, so an outer script
 # can chain on success/failure.
 #
-# Per AGENTS.md "Fail Fast, No Silent Fallbacks", the helper exits
+# Per CLAUDE.md "Fail Fast, No Silent Fallbacks", the helper exits
 # non-zero (rc=2) on misuse without ever swallowing the wrapped command:
 # bad usage shows up before the four-file tuple is written.
 
@@ -97,7 +97,7 @@ printf '\n' >> "${prefix}.cmd"
 # AFTER the command returns, so without this hint a capture-wrapped
 # audit-of-self always fails. The hint is "<art-dir>:NN-<slug>" so the
 # audit only skips this exact tuple in this exact bundle. Per
-# AGENTS.md "Self-audit caveat".
+# CLAUDE.md "Self-audit caveat".
 export CAPTURE_CMD_IN_FLIGHT="${ART_DIR}:${nn}-${slug}"
 
 set +e

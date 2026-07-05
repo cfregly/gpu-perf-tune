@@ -26,5 +26,5 @@ New local users should start with [`first-hour.md`](/plugins/profile-and-optimiz
 | Stable CLI / MCP contract | [`cli-contract.md`](/plugins/profile-and-optimize/server/docs/cli-contract.md), [`../mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) |
 | Command router | [`../tools/README.md`](/plugins/profile-and-optimize/server/tools/README.md) |
 | Durable evidence families | [`../experiments/artifacts/`](/plugins/profile-and-optimize/server/experiments/artifacts) |
-| Repo policy | [`../AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) |
+| Repo policy | [`../CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) |
 | Review path | [`REVIEWERS.md`](/REVIEWERS.md) |

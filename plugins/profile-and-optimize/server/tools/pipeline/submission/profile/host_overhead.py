@@ -12,19 +12,19 @@ The implementation is a thin wrapper around ``py-spy``:
 * ``py-spy record`` for a flamegraph + a text top-N summary.
 * ``py-spy dump`` for a one-shot stack snapshot.
 
-Per ``mlperf-6.0-training/AGENTS.md`` "Self-Contained Repository
+Per ``mlperf-6.0-training/CLAUDE.md`` "Self-Contained Repository
 Boundary": no required runtime deps. ``py-spy`` is a system-installed
 tool; if it is not on PATH the script aborts with the install hint
 rather than silently falling back to ``cProfile``.
 
-Per ``AGENTS.md`` "Fail Fast, No Silent Fallbacks":
+Per ``CLAUDE.md`` "Fail Fast, No Silent Fallbacks":
 
 * Missing ``py-spy`` is a fatal error with a remediation hint.
 * Missing or unreachable PID is a fatal error.
 * Output paths are created on demand; missing parent dirs do NOT abort,
   but a non-writable target does.
 
-Per ``AGENTS.md`` "Artifact Anchor": when ``--art-dir`` is supplied the
+Per ``CLAUDE.md`` "Artifact Anchor": when ``--art-dir`` is supplied the
 flamegraph + the top-N summary land under
 ``<art-dir>/host-overhead-flame.svg`` and ``<art-dir>/host-overhead.txt``
 respectively. Otherwise the operator picks the output paths.
@@ -62,7 +62,7 @@ PYSPY_INSTALL_HINT = (
     "py-spy not found on PATH. Install with `pip install py-spy` (or, "
     "inside the v6.0 image, `pip install --upgrade py-spy` against the "
     "container's pip; py-spy is not currently bundled in NVIDIA's "
-    "MLPerf images). Per AGENTS.md fail-fast, host_overhead.py refuses "
+    "MLPerf images). Per CLAUDE.md fail-fast, host_overhead.py refuses "
     "to silently fall back to cProfile."
 )
 

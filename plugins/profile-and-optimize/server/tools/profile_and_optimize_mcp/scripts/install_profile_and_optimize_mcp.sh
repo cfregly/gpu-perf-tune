@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ! -f "${REPO_ROOT}/AGENTS.md" || ! -d "${REPO_ROOT}/tools/profile_and_optimize_mcp" ]]; then
+if [[ ! -f "${REPO_ROOT}/CLAUDE.md" || ! -d "${REPO_ROOT}/tools/profile_and_optimize_mcp" ]]; then
   printf 'FATAL: --repo-root is not mlperf-6.0-training: %s\n' "${REPO_ROOT}" >&2
   exit 2
 fi

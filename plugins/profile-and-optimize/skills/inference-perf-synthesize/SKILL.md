@@ -116,7 +116,7 @@ hard-won. Encode them so a capture is right the first time:
   (C) a SEPARATE `ncu` sister pod (`--set basic`, `--kernel-name` scoped). DCGM is
   correlated POST-HOC over the bench window (no in-pod agent).
 - **Use a submit-and-queue self-driving Job on a contended cluster** (per
-  `server/AGENTS.md`): the capture pod embeds serve + bench + window-stamp, writes to the
+  `server/CLAUDE.md`): the capture pod embeds serve + bench + window-stamp, writes to the
   RWX PVC, and EXITS to free the GPU, `backoffLimit` re-queues through preemption,
   guard idempotency on the **result file** (not a marker that could be touched on
   failure). Make the bench **variance-controlled** (>=3 trials/concurrency, same pod
@@ -172,7 +172,7 @@ cross-tier DRAFT defect (even when the kernels match). Cite the patch's own run.
 - **type=config**: a `vllm.extraArgs` / cudagraph / kv-cache-dtype change ->
   hand to [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md).
 - **type=vllm-src**: a concrete vLLM code change, staged as a runtime overlay per the
-  delivery ladder (`server/AGENTS.md` "Experiment delivery ladder"): a `subPath` ConfigMap
+  delivery ladder (`server/CLAUDE.md` "Experiment delivery ladder"): a `subPath` ConfigMap
   (`overlay_mode: subpath`) for a few files,
   or the initContainer patch-set (`overlay_mode: patchset-initcontainer`)
   for a whole patch
@@ -211,7 +211,7 @@ the ledger so the next operator does not re-explore it.
 
 ## Explainability contract (mandatory)
 
-Per `server/AGENTS.md` "All attribution claims must be matched with collected
+Per `server/CLAUDE.md` "All attribution claims must be matched with collected
 profile data", **every** recommendation and every where/why verdict this skill
 emits carries:
 
@@ -241,7 +241,7 @@ production-representative baseline). Never report a predicted speedup as achieve
 ## Kernel rubric (K/R/H/P/A)
 
 Any `type=kernel` recommendation records the candidate AND the named production
-baseline's `(K,R,H,P,A)` coordinates per `server/AGENTS.md` "Kernel rubric".
+baseline's `(K,R,H,P,A)` coordinates per `server/CLAUDE.md` "Kernel rubric".
 The H + P proof (tensor-core engagement + roofline %) comes from the ncu artifact,
 a win over a strictly-lower-H/R baseline is a DRAFT, never a VERDICT.
 
@@ -270,7 +270,7 @@ a win over a strictly-lower-H/R baseline is a DRAFT, never a VERDICT.
   staged A/Bs run and the recommendations get published. The ranked levers here
   become the cross-engine variant arms. The proven survivors flow to
   `perftunereport champion_select` (the baseline-vs-top-X production pick + page 8).
-- `server/AGENTS.md` -- attribution-must-be-profiled, speed-of-light framing,
+- `server/CLAUDE.md` -- attribution-must-be-profiled, speed-of-light framing,
   DRAFT-vs-VERDICT, kernel rubric.
 
 ## Full-context reporting (no bare numbers)
@@ -291,14 +291,14 @@ default, ship a config, or appear in a report.
 
 If this skill produces a measurement (tok/s, latency, %SoL, speedup), follow the
 rigor discipline: capture L1 zymtrace + L3 DCGM (L4 ncu where feasible)
-Speed-of-Light and publish `--strict`. Canonical map: `server/AGENTS.md`
+Speed-of-Light and publish `--strict`. Canonical map: `server/CLAUDE.md`
 "Rigor discipline index" / `docs/METHODOLOGY.md`. Skills that
-do not produce measurements are exempt (`server/AGENTS.md` "Speed-of-light framing").
+do not produce measurements are exempt (`server/CLAUDE.md` "Speed-of-light framing").
 
 ## Asset validation (review + FAIL LOUD)
 
 Every asset this skill emits (findings doc / recommendation ledger / perfreport view) is held to
-`server/AGENTS.md` "Validate every generated asset"
+`server/CLAUDE.md` "Validate every generated asset"
 (`docs/METHODOLOGY.md`): the generator **FAILS LOUDLY** on missing/bad data (a recommendation with no backing
 profile artifact, an empty/degenerate fused view, `unknown`/null where a value is required) ->
 raise / flag loudly, never a silent placeholder or an unbacked recommendation, and the agent
@@ -310,7 +310,7 @@ never ships a wrong/confusing synthesis with a caveat.
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.

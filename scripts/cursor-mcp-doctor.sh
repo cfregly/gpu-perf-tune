@@ -2,7 +2,7 @@
 # Diagnose (and optionally repair) the `profile_and_optimize` MCP server entry in
 # ~/.cursor/mcp.json.
 #
-# The recurring failure mode (OPERATOR-TODO.md item #7 + AGENTS.md
+# The recurring failure mode (OPERATOR-TODO.md item #7 + CLAUDE.md
 # "Cockpit-retirement repoint"): after an `profile-and-optimize` version bump or a
 # checkout move, the `profile_and_optimize` entry's `command` points at a venv path that
 # no longer exists, so the next Cursor MCP reload spawns a child that fails with

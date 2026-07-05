@@ -2,7 +2,7 @@
 
 This directory is the **source of truth** for the MCP server that the [`profile-and-optimize`](/plugins/profile-and-optimize/README.md) Claude Code plugin ships under `${CLAUDE_PLUGIN_ROOT}/server/`. After `claude plugin install`, the plugin's [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json) launches `${CLAUDE_PLUGIN_ROOT}/server/.venv/bin/python -m profile_and_optimize_mcp serve` to expose **53 MCP tools** (51 contract-derived + 2 auxiliary search tools) across 8 libraries for GPU-cluster performance triage, perf-baseline + experiment workflows, and inference perf-tuning campaigns on GPU clusters. The canonical counts live in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `_TOTAL_*` constants and are asserted by `make lint-tool-counts` from the repo root.
 
-See [`AGENTS.md`](/plugins/profile-and-optimize/server/AGENTS.md) for the ownership model and runtime-discovery contract.
+See [`CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) for the ownership model and runtime-discovery contract.
 
 ## Quick install
 

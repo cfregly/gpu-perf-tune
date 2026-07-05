@@ -350,7 +350,7 @@ perf win paper over an accuracy regression.
 - [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md) -- the accuracy gate.
 - NVIDIA TensorRT Model Optimizer (`modelopt`) PTQ + llm-compressor `oneshot`
   upstream docs (pinned in `quantize/README.md` of the generated bundle).
-- `server/AGENTS.md` "All performance numbers..." + "Verdict rigor" +
+- `server/CLAUDE.md` "All performance numbers..." + "Verdict rigor" +
   "Experiment Isolation & Traceability".
 
 ## Full-context reporting (no bare numbers)
@@ -371,15 +371,15 @@ default, ship a config, or appear in a report.
 
 If this skill produces a measurement (tok/s, latency, %SoL, speedup), follow the
 rigor discipline: capture L1 zymtrace + L3 DCGM (L4 ncu where feasible)
-Speed-of-Light and publish `--strict`. Canonical map: `server/AGENTS.md`
+Speed-of-Light and publish `--strict`. Canonical map: `server/CLAUDE.md`
 "Rigor discipline index" / `docs/METHODOLOGY.md`. Skills that
-do not produce measurements are exempt (`server/AGENTS.md` "Speed-of-light framing").
+do not produce measurements are exempt (`server/CLAUDE.md` "Speed-of-light framing").
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.

@@ -6,7 +6,7 @@ can audit them without paging through the 3,000-line tuner CLI.
 
 The tuner ([`ai_tuning.py`](ai_tuning.py)) re-exports the same names for
 stable public API compatibility; new code should import from this module
-directly. Per [`../../AGENTS.md`](../../AGENTS.md) "AI-Assisted Tuning
+directly. Per [`../../CLAUDE.md`](../../CLAUDE.md) "AI-Assisted Tuning
 Safety", any change to ``FORBIDDEN_PATCH_PATTERNS`` requires a
 corresponding test that proves the pattern still rejects the canonical
 malicious snippet.
@@ -66,7 +66,7 @@ EXPERIMENT_STATUSES: frozenset[str] = frozenset(
 #: Schema version for ledger / proposal / template-patch / experiment
 #: ledger documents. Bump only on **strict-superset** changes; every
 #: consumer must accept the previous version in the same diff that bumps
-#: the constant. Per AGENTS.md "Vendor With Intent (DRY / YAGNI)".
+#: the constant. Per CLAUDE.md "Vendor With Intent (DRY / YAGNI)".
 REPORT_SCHEMA_VERSION: int = 1
 PROPOSAL_SCHEMA_VERSION: int = 1
 TEMPLATE_PATCH_SCHEMA_VERSION: int = 1

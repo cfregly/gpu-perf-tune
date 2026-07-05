@@ -231,7 +231,7 @@ line. `report_render` also draws a peak-only "TPM supported across hardware
 types" PDF page, and `publish_to_lake` lands a `tpm_v1` table.
 
 Report every TPM number with the warm/cold + ISL/OSL caveat the summary header
-carries (per `server/AGENTS.md` "Benchmark methodology hygiene"): peak is a
+carries (per `server/CLAUDE.md` "Benchmark methodology hygiene"): peak is a
 warm best-case, the SLA point is the customer-commitment number.
 
 **Defaults:** the SLA point + cost columns populate for EVERY
@@ -454,7 +454,7 @@ throughput-scatter points (non-`latency` focus) to be a hard refusal. When the
 YAML is found but malformed the renderer still raises `SoLCeilingsMalformed`
 and aborts - same no-silent-degradation contract as `KernelsJsonMalformed`.
 
-Per `server/AGENTS.md` "Speed-of-light framing", every campaign
+Per `server/CLAUDE.md` "Speed-of-light framing", every campaign
 SHOULD also carry a `<campaign>/sol-summary.md` doc with the
 workload-level HBM-roofline calc and a link to the relevant grounding
 doc. The SoL summary
@@ -464,7 +464,7 @@ companion.
 ## Asset validation (review + FAIL LOUD)
 
 The report PDF this skill renders (`report_render` -> report.pdf: scatter / heatmap / roofline /
-champion pages) is a DELIVERABLE held to `server/AGENTS.md` "Validate every generated asset"
+champion pages) is a DELIVERABLE held to `server/CLAUDE.md` "Validate every generated asset"
 (`docs/METHODOLOGY.md`): the renderer **FAILS LOUDLY** on missing/bad
 data (`SoLCeilingsMalformed` / `KernelsJsonMalformed` raises, the degenerate-PDF guard that raises on
 a <10KB report, and the `methodology_problems` `--strict` gate that refuses an incomplete/`unknown`
@@ -477,7 +477,7 @@ broken/confusing report with a caveat.
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
@@ -489,7 +489,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Verdict rigor (DRAFT vs VERDICT)
 
-Per `server/AGENTS.md` "Verdict rigor: DRAFT vs VERDICT", set the campaign's
+Per `server/CLAUDE.md` "Verdict rigor: DRAFT vs VERDICT", set the campaign's
 `verdict_tier` honestly. Default **draft**. Set **verdict** only for a decision-grade
 campaign that is variance-controlled (same-node, >=3 trials, mean +/- std),
 metric-isolated (median TPOT/ITL for decode-latency claims), against a
@@ -502,7 +502,7 @@ want the unsupported verdict claim to refuse instead.
 ## Experiment isolation & traceability (mandatory)
 
 This pipeline is the canonical "results -> rooflines -> perf-lake" path the
-`server/AGENTS.md` "Experiment Isolation & Traceability" rule
+`server/CLAUDE.md` "Experiment Isolation & Traceability" rule
 (and `docs/METHODOLOGY.md`) requires every measurement
 experiment to use:
 
@@ -511,7 +511,7 @@ experiment to use:
   cluster objects (label `experiment=<id-slug>`) and the evidence bundle.
 - **`cell_run` cells that submit cluster workloads MUST use experiment-unique
   serve names + the `experiment=<id-slug>` label** and MUST NOT reuse
-  standing/platform/migration names (forbidden list in the `server/AGENTS.md` rule).
+  standing/platform/migration names (forbidden list in the `server/CLAUDE.md` rule).
   Cluster-scoped PV names are global. A collision silently breaks another
   owner's PVC binding.
 - **`publish_to_lake` is mandatory**, not optional - a campaign is "done"

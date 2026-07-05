@@ -3,7 +3,7 @@
 # Single source of truth for B200 / GB300 / H100 published peaks used by the
 # perf-report renderer (renderer/sol_roofline.py), per-run sol-summary.md docs,
 # and the measurement-producing skills under
-# plugins/profile-and-optimize/skills/. AGENTS.md "Speed-of-light framing"
+# plugins/profile-and-optimize/skills/. CLAUDE.md "Speed-of-light framing"
 # section is the methodology entry point.
 #
 # Schema (per entry):
@@ -179,7 +179,7 @@ h100_sxm:
 # Caveat: zymtrace samples are time-share, not byte-traffic. %SoL computed
 # this way is an upper-bound proxy, not a tight measurement -- it is RECORDED
 # as sol_rigor=L1 (a valid, published, comparable roofline), not withheld;
-# adding DCGM (L3) or ncu (L4) raises the rigor. See AGENTS.md "Speed-of-light
+# adding DCGM (L3) or ncu (L4) raises the rigor. See CLAUDE.md "Speed-of-light
 # framing" for the full caveat + the always-publish-with-focus policy.
 category_ceiling_map:
   NCCL:         { metric: nvlink5_tbps,         bound: bandwidth }

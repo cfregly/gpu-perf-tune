@@ -65,10 +65,10 @@ def _resolve_repo_root(arg: str | None) -> Path:
     env = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
     if env:
         return Path(env).expanduser().resolve()
-    # Fall back to walking up from cwd looking for AGENTS.md + tools/.
+    # Fall back to walking up from cwd looking for CLAUDE.md + tools/.
     current = Path.cwd().resolve()
     while current != current.parent:
-        if (current / "AGENTS.md").is_file() and (current / "tools").is_dir():
+        if (current / "CLAUDE.md").is_file() and (current / "tools").is_dir():
             return current
         current = current.parent
     raise SystemExit(

@@ -1,7 +1,7 @@
 # Bundled `profile_and_optimize` MCP server
 
-This is the canonical reference for the bundled server directory. The sibling
-[`AGENTS.md`](AGENTS.md) is a thin runtime discovery marker that points here.
+This is the canonical reference for the bundled server directory. It is also
+the runtime discovery marker for this server tree.
 
 This `server/` directory is the **source of truth** for the MCP server that the [`profile-and-optimize`](/plugins/profile-and-optimize/README.md) Claude Code plugin ships. It is self-contained: a fresh clone of this repository plus `claude plugin install` provides the skills, the manifests, and the actual MCP server in one shot, with no dependency on any other repository at runtime.
 
@@ -9,7 +9,7 @@ Ownership of this code lives in this repository. Changes land here directly. The
 
 ## The repo-root discovery marker
 
-The `profile_and_optimize_mcp` runtime ([`tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py)) walks up the filesystem at startup looking for the first directory that contains both `AGENTS.md` and `tools/`. That is how it discovers the "repo root" it needs to file-load each library's `cli.py` for `mcp_surface.py`. The sibling [`AGENTS.md`](AGENTS.md) exists by name to satisfy that discovery check and points back to this file. The operational guidance for the plugin lives in the sibling [`README.md`](/plugins/profile-and-optimize/server/README.md) and in the marketplace-level docs ([CONTRIBUTING.md](/CONTRIBUTING.md), [REVIEWERS.md](/REVIEWERS.md)).
+The `profile_and_optimize_mcp` runtime ([`tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py)) walks up the filesystem at startup looking for the first directory that contains both `CLAUDE.md` and `tools/`. That is how it discovers the "repo root" it needs to file-load each library's `cli.py` for `mcp_surface.py`. The operational guidance for the plugin also lives in the sibling [`README.md`](/plugins/profile-and-optimize/server/README.md) and in the marketplace-level docs ([CONTRIBUTING.md](/CONTRIBUTING.md), [REVIEWERS.md](/REVIEWERS.md)).
 
 **zymtrace query hygiene (empty != gap):** zymtrace flushes to ClickHouse asynchronously, so a query that comes back empty right after a bench is usually **ingest lag, not absence** - wait and requery before concluding. The capture-side poll lives in [`scripts/zymtrace-ingest-wait.sh`](/scripts/zymtrace-ingest-wait.sh). The recipe and the importer's fail-fast rationale are in [`docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md), cited by the zymtrace skills.
 
@@ -31,8 +31,7 @@ The `profile_and_optimize_mcp` runtime ([`tools/profile_and_optimize_mcp/src/pro
 | `experiments/artifacts/learnings/` | Cited evidence bundles. The wider `experiments/artifacts/` tree is intentionally not in the repo (it's per-operator mutable evidence). |
 | `pyproject.toml` | Editable-installable package containing the 8 stub libraries + the `tools/` namespace. |
 | `install.sh` | Bootstrap: create `${CLAUDE_PLUGIN_ROOT}/server/.venv/`, `pip install -e` both this directory and `tools/profile_and_optimize_mcp/`, then run `mcp_surface.py counts` to confirm the canonical-counts constants match the live derivation. |
-| `AGENTS.md` | Repo-root discovery marker for `repo.py` (must exist by name). Points to this file. |
-| `CLAUDE.md` | This file. The canonical reference for the directory. |
+| `CLAUDE.md` | This file. The canonical reference for the directory and repo-root discovery marker for `repo.py` (must exist by name). |
 
 ## What does NOT live here
 
@@ -41,7 +40,7 @@ The `profile_and_optimize_mcp` runtime ([`tools/profile_and_optimize_mcp/src/pro
 
 ## Discovery contract for `repo.py`
 
-[`tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py) `find_repo_root()` either honors `${PROFILE_AND_OPTIMIZE_REPO_ROOT}` directly or walks up from `cwd` looking for an ancestor that contains both `AGENTS.md` and `tools/`. The plugin's [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json) sets `PROFILE_AND_OPTIMIZE_REPO_ROOT="${CLAUDE_PLUGIN_ROOT}/server"`, which points at this directory. The combination of the sibling `AGENTS.md` + the `tools/` directory satisfies the discovery check.
+[`tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/repo.py) `find_repo_root()` either honors `${PROFILE_AND_OPTIMIZE_REPO_ROOT}` directly or walks up from `cwd` looking for an ancestor that contains both `CLAUDE.md` and `tools/`. The plugin's [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json) sets `PROFILE_AND_OPTIMIZE_REPO_ROOT="${CLAUDE_PLUGIN_ROOT}/server"`, which points at this directory. The combination of this `CLAUDE.md` file and the `tools/` directory satisfies the discovery check.
 
 ## Contact
 

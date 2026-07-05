@@ -6,7 +6,7 @@ dict against benchmark-specific rules: max LR, max global batch, warmup
 ratio, ruleset string, hyperparameter borrowing, expert parallel values,
 LoRA rank, etc.
 
-Per ``mlperf-6.0-training/AGENTS.md`` "Fail Fast, No Silent Fallbacks", a
+Per ``mlperf-6.0-training/CLAUDE.md`` "Fail Fast, No Silent Fallbacks", a
 violation produces a structured rejection with a stable error code; never
 a silent clamp to legal range.
 

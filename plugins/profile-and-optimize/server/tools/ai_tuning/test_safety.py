@@ -1,6 +1,6 @@
 """Tests for safety.py.
 
-Per AGENTS.md "AI-Assisted Tuning Safety", every change to
+Per CLAUDE.md "AI-Assisted Tuning Safety", every change to
 ``FORBIDDEN_PATCH_PATTERNS`` must keep the regex behavior intact and
 the ai_tuning re-exports honest. These tests exercise both invariants.
 """

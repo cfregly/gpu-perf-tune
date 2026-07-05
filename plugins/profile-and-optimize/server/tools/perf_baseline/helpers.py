@@ -134,7 +134,7 @@ def write_source_md(
 
 {notes or "_(none)_"}
 
-## Per workspace AGENTS.md "Team Attribution"
+## Per workspace CLAUDE.md "Team Attribution"
 
 This baseline is attributed to the MLPerf team, not an individual. The operator user
 above is captured as audit trail; no individual is asserted as "submission

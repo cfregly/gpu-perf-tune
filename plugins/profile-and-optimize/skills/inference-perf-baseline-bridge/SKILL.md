@@ -349,7 +349,7 @@ authoritative classification this skill returns.
   cross-schema fuzzy diffing.
 - **Provenance preserved.** Every record / diff carries the perf-bench
   bundle's source SHA-256 + operator + cluster + profile_and_optimize SHA, per
-  the `server/AGENTS.md` reproducibility-grade-evidence rule.
+  the `server/CLAUDE.md` reproducibility-grade-evidence rule.
 
 ## Full-context reporting (no bare numbers)
 
@@ -367,7 +367,7 @@ default, ship a config, or appear in a report.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
-See `server/AGENTS.md` "Speed-of-light framing". When this bridge
+See `server/CLAUDE.md` "Speed-of-light framing". When this bridge
 records / diffs a perf-bench run, the baseline record SHOULD carry a
 `sol_pct` field per the
 [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) schema, and
@@ -379,7 +379,7 @@ latency delta. Peaks are sourced from
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
@@ -396,4 +396,4 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 - Perf-bench input: [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
   (also reachable via the `ai-bench` colloquial alias).
 - Quality counterpart: [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md).
-- `server/AGENTS.md` - fail-fast + provenance rules.
+- `server/CLAUDE.md` - fail-fast + provenance rules.

@@ -1,0 +1,15 @@
+{
+  "name": "packet-completeness",
+  "passed": true,
+  "checked_dimensions": [
+    "workload",
+    "target",
+    "stack",
+    "run",
+    "measurements",
+    "baseline",
+    "evidence",
+    "gates",
+    "verdict"
+  ]
+}

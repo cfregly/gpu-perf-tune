@@ -10,6 +10,7 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 - **Problem it solves:** GPU inference cost and latency are set by hardware, precision, parallelism, and engine version, and most teams argue about those instead of measuring them.
 - **See the surface in under a minute:** `make demo` prints the tool and skill surface, no GPU needed. A real perf run needs the bundled server and hardware.
 - **Production lesson it encodes:** measure against speed-of-light, label every result DRAFT until it is variance-controlled and profiled, and record the hardware, precision, and engine version next to every number.
+- **Neocloud proof packet:** [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md) defines the single buyer evidence shape. `make workload-proof-check` validates every checked-in `workload-proof-packet.json`.
 
 ## Value bar
 
@@ -26,10 +27,7 @@ the founder path from first API call to activation and scale. The platform deep-
 grounding, managed agents, parallel calls, and this GPU-cost layer.
 
 - **Main kit:** [claude-founder-kit](https://github.com/cfregly/claude-founder-kit)
-- **Platform deep-dives:** [claude-memory](https://github.com/cfregly/claude-memory),
-  [claude-grounding](https://github.com/cfregly/claude-grounding),
-  [claude-managed-agents](https://github.com/cfregly/claude-managed-agents), and
-  [claude-parallel](https://github.com/cfregly/claude-parallel)
+- **Platform deep-dives:** claude-memory, claude-grounding, claude-managed-agents, and claude-parallel
 - **GPU cost layer:** **[claude-gpu-perf-tune](https://github.com/cfregly/claude-gpu-perf-tune)**
   turns inference performance work into Claude Code skills and MCP tools
 
@@ -66,6 +64,7 @@ source .venv/bin/activate
 pip install pyyaml
 make demo    # prints the skill and MCP tool surface, no GPU needed
 make check   # doc, skill-count, tool-count, and version gates
+make workload-proof-check
 ```
 
 ## Repository layout
@@ -77,13 +76,15 @@ make check   # doc, skill-count, tool-count, and version gates
 | `plugins/profile-and-optimize/hooks/` | Runtime-agnostic safety gates (Claude Code + Cursor wiring) |
 | `configs/sol-ceilings.yaml` | Speed-of-light hardware ceilings (datasheet-sourced) used by roofline pages |
 | `campaigns/` | Default output root for perf-tune report campaigns |
+| `examples/workload-proof-packet/` | Synthetic packet fixture that exercises the neocloud workload proof gate |
+| `schemas/workload-proof-packet-v1.json` | Public JSON shape for buyer-facing workload proof packets |
 | `scripts/` | Capture-hygiene helpers (`nsys-validate-capture.sh`, `zymtrace-ingest-wait.sh`) |
 | `docs/METHODOLOGY.md` | The measurement-rigor methodology the skills enforce |
 | `mcp-descriptors/` | Offline MCP tool-schema snapshots used by skill lint |
 
 ## Methodology
 
-The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md).
+The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). For neocloud buyer proof, use the workload packet contract in [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md).
 
 ## Development
 

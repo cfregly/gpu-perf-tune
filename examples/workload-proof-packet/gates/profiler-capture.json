@@ -1,0 +1,6 @@
+{
+  "name": "profiler-capture",
+  "passed": true,
+  "trace_path": "profiles/zymtrace-summary.json",
+  "capture_window_seconds": 41
+}

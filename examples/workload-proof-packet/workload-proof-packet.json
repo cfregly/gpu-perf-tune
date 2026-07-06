@@ -1,0 +1,139 @@
+{
+  "schema_version": "workload_proof_packet_v1",
+  "packet_id": "example-b200-aa-1k-20260706",
+  "status": "draft",
+  "created_at_utc": "2026-07-06T00:00:00Z",
+  "owner": "profile-and-optimize example",
+  "audience": "neocloud buyer evaluating workload fit",
+  "workload": {
+    "name": "synthetic-aa-1k",
+    "model_id": "example-org/example-8b",
+    "model_source": "synthetic Hugging Face style fixture",
+    "dataset": "synthetic arithmetic answer fixture",
+    "input_tokens": 1000,
+    "output_tokens": 256,
+    "concurrency": 16,
+    "request_count": 128,
+    "success_criteria": "All requests complete with zero server errors and a stable output-token rate."
+  },
+  "target": {
+    "neocloud": "example-neocloud",
+    "region": "us-test-1",
+    "zone": "us-test-1a",
+    "gpu_sku": "B200",
+    "gpu_count": 1,
+    "topology": "1x B200 single node",
+    "interconnect": "PCIe fixture",
+    "availability_source": "synthetic example fixture"
+  },
+  "stack": {
+    "container_image": "registry.example.com/workload-proof/vllm:2026-07-06",
+    "serving_engine": "vLLM",
+    "engine_version": "0.10.0-example",
+    "cuda_version": "13.0",
+    "driver_version": "580.00",
+    "nccl_version": "2.28.0",
+    "launch_flags": [
+      "--tensor-parallel-size=1",
+      "--max-num-batched-tokens=8192",
+      "--enable-prefix-caching"
+    ]
+  },
+  "run": {
+    "commands": [
+      {
+        "id": "00-run-benchmark",
+        "cwd": "/workspace/workload-proof",
+        "command": "python bench.py --model example-org/example-8b --input-tokens 1000 --output-tokens 256 --concurrency 16 --requests 128",
+        "stdout_path": "commands/00-run-benchmark.stdout",
+        "stderr_path": "commands/00-run-benchmark.stderr",
+        "exit_path": "commands/00-run-benchmark.exit",
+        "exit_code": 0
+      }
+    ],
+    "environment": {
+      "sanitized_env_path": "env/sanitized-env.json",
+      "secrets_policy": "Secrets are excluded from the packet and replaced only with variable names."
+    }
+  },
+  "measurements": {
+    "latency": {
+      "ms_p50": 142.4,
+      "ms_p95": 219.7,
+      "tpot_ms": 3.8
+    },
+    "throughput": {
+      "output_tokens_per_second": 4310.2,
+      "total_tokens_per_second": 21142.6,
+      "tokens_per_second_per_gpu": 4310.2
+    },
+    "utilization": {
+      "gpu_sm_pct": 72.5,
+      "gpu_memory_pct": 64.1,
+      "power_watts": 612.0
+    },
+    "cost": {
+      "gpu_hour_usd": 5.0,
+      "tokens_per_dollar": 3103341.2,
+      "dollars_per_million_tokens": 0.322
+    },
+    "reliability": {
+      "success_rate": 1.0,
+      "error_count": 0
+    }
+  },
+  "baseline": {
+    "name": "synthetic-h100-aa-1k",
+    "kind": "synthetic prior packet",
+    "source": "summary/normalized-summary.json",
+    "comparable": true,
+    "measurements": {
+      "latency_ms_p95": 281.4,
+      "throughput_tokens_per_second": 2910.4,
+      "cost_dollars_per_million_tokens": 0.531
+    }
+  },
+  "evidence": {
+    "raw_outputs": [
+      "raw/benchmark-output.json"
+    ],
+    "logs": [
+      "logs/server.log"
+    ],
+    "profiler_traces": [
+      "profiles/zymtrace-summary.json"
+    ],
+    "normalized_summary_path": "summary/normalized-summary.json",
+    "source_repo": "https://github.com/example/vllm-workload",
+    "source_commit": "0123456789abcdef0123456789abcdef01234567",
+    "source_dirty": false
+  },
+  "gates": [
+    {
+      "name": "packet-completeness",
+      "passed": true,
+      "required_for_verdict": true,
+      "evidence_path": "gates/packet-completeness.json"
+    },
+    {
+      "name": "profiler-capture",
+      "passed": true,
+      "required_for_verdict": true,
+      "evidence_path": "gates/profiler-capture.json"
+    }
+  ],
+  "verdict": {
+    "claim": "This synthetic packet demonstrates the required neocloud workload proof shape.",
+    "proof_scope": "Schema, path, and completeness-gate example only.",
+    "not_proven": [
+      "Real B200 performance",
+      "Real cloud availability",
+      "Real customer workload fit"
+    ],
+    "caveats": [
+      "Values are synthetic fixtures for repository validation.",
+      "No customer data or production cluster was used."
+    ],
+    "next_lever": "Capture the same packet shape from a real neocloud run."
+  }
+}

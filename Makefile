@@ -14,7 +14,7 @@ SERVER_PY := $(SERVER_DIR)/.venv/bin/python
 #   make release-notes VERSION=v0.4.0
 VERSION ?=
 
-.PHONY: help demo check validate validate-uncached smoke-test smoke-mcp-runtime check-doc-links lint-skill-mcp-args lint-skill-counts lint-tool-counts lint-versions pytest pytest-xdist all freshness bootstrap print-mcp-snippet doctor install-into-cursor refresh-symlinks release-notes mcp-surface clean-pycache
+.PHONY: help demo check validate validate-uncached smoke-test smoke-mcp-runtime check-doc-links workload-proof-check lint-skill-mcp-args lint-skill-counts lint-tool-counts lint-versions pytest pytest-xdist all freshness bootstrap print-mcp-snippet doctor install-into-cursor refresh-symlinks release-notes mcp-surface clean-pycache
 
 help:
 	@printf 'profile-and-optimize operator commands\n\n'
@@ -26,11 +26,12 @@ help:
 	@printf '  make validate-uncached       Bypass the cache and re-run claude plugin validate unconditionally\n'
 	@printf '  make smoke-test              Validate + frontmatter lint + canonical-counts verify (libraries / contract tools) + skill-count lint + tool-count lint (<2s)\n'
 	@printf '  make smoke-mcp-runtime       End-to-end: spawn the bundled MCP server over stdio + verify the canonical MCP tool count (<2s)\n'
-	@printf '  make check-doc-links         Verify every [text](path|url) link in profile-and-optimize-authored docs resolves; HTTP checks run in parallel (<2s for 55 URLs)\n'
+	@printf '  make check-doc-links         Verify every [text](path|url) link in profile-and-optimize-authored docs resolves; HTTP checks run in parallel\n'
 	@printf '  make lint-skill-mcp-args     Cross-check SKILL.md `with:` arg blocks against MCP tool descriptors (catches the v0.8.1 filter/regex class of bug)\n'
 	@printf '  make lint-skill-counts       Assert every doc that names the skill count agrees with the on-disk plugins/profile-and-optimize/skills/ tree\n'
 	@printf '  make lint-tool-counts        Assert every doc that names a tool / library / aux-tool count agrees with the canonical constants in mcp_surface.py\n'
 	@printf '  make lint-versions           Assert README + plugin-README version headers match plugin.json version\n'
+	@printf '  make workload-proof-check    Validate every checked-in workload-proof-packet.json against the neocloud packet completeness gate\n'
 	@printf '  make release                 Tag the current release commit vX.Y.Z (read from plugin.json) + push main + tag atomically (tagging rigidity)\n'
 	@printf '  make pytest                  Run the bundled pytest suite sequentially (~700 profile-and-optimize-native tests in <1s; requires `bash server/install.sh --with-dev` first)\n'
 	@printf '  make pytest-xdist            Same as `make pytest` but with `-n auto` (pytest-xdist parallel); slower for the ~700-test set due to worker-startup overhead; use only if you specifically want xdist semantics\n'
@@ -75,6 +76,7 @@ check:
 	@python3 scripts/lint-skill-counts.py
 	@python3 scripts/lint-tool-counts.py
 	@python3 scripts/lint-versions.py
+	@python3 scripts/check_workload_proof_packets.py --self-test
 
 demo:
 	@printf '== profile-and-optimize: the tool and skill surface (no GPU needed) ==\n'
@@ -108,6 +110,9 @@ smoke-mcp-runtime:
 
 check-doc-links:
 	bash $(SCRIPTS_DIR)/check-doc-links.sh
+
+workload-proof-check:
+	@python3 $(SCRIPTS_DIR)/check_workload_proof_packets.py --self-test
 
 
 pytest:

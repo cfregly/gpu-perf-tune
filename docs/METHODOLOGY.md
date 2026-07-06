@@ -26,6 +26,20 @@ inline or in an adjacent table:
 
 Percent claims state their denominator. Speedups state both absolute values.
 
+## Workload proof packet
+
+Neocloud buyer proof uses one packet shape: [`workload-proof-packet.json`](workload-proof-packet.md).
+The packet records the workload, target cloud, stack, exact command, measured
+latency, throughput, utilization, cost, reliability, baseline, raw evidence,
+gates, and verdict. The completeness gate is:
+
+```bash
+make workload-proof-check
+```
+
+Use a packet when a result may leave the repo. A claim without this packet is a
+draft observation, even if the benchmark command exited 0.
+
 ## Speed-of-light framing
 
 Measured throughput is graded against hardware ceilings, not against vibes.

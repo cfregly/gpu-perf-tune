@@ -41,6 +41,8 @@ For ProofPlane GPU/inference pilots, this same packet is the workload-level
 evidence artifact. Its `proofplane_handoff` block separates the workload facts
 this repo proves from the workflow authority, replay, gates, hosted evidence,
 and promotion that ProofPlane proves.
+The cross-project boundary is documented in the
+[ProofPlane evidence contract](https://github.com/cfregly/macro-harness/blob/main/docs/evidence-contract.md).
 
 Use a packet when a result may leave the repo. A claim without this packet is a
 draft observation, even if the benchmark command exited 0.

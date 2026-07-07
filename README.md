@@ -12,6 +12,11 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 - **Production lesson it encodes:** measure against speed-of-light, label every result DRAFT until it is variance-controlled and profiled, and record the hardware, precision, and engine version next to every number.
 - **ProofPlane workload evidence:** [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md) defines the GPU/inference packet shape for neocloud buyers and ProofPlane pilots. `make workload-proof-check` validates every checked-in `workload-proof-packet.json` for completeness and ProofPlane handoff metadata.
 
+In the [ProofPlane evidence contract](https://github.com/cfregly/macro-harness/blob/main/docs/evidence-contract.md),
+this repo owns workload-level GPU and inference proof. ProofPlane owns workflow
+proof, agent-harness-opt owns runtime/harness behavior proof, and macro-kernel
+can supply backend artifacts once its B200 gates pass.
+
 ## Value bar
 
 Every benchmark result, optimization claim, and generated report starts as a candidate. It becomes

@@ -56,6 +56,25 @@ Use `--require-verdict` before external sharing. It is the separate gate that
 requires verdict status, passing verdict gates, a comparable baseline, and a
 clean source tree.
 
+## Unified evidence contract
+
+ProofPlane's unified evidence contract treats this packet as the workload proof
+layer. The `proofplane_handoff` object is the bridge into a ProofPlane Customer
+Workflow Proof Pack: it names the pilot, access-stage movement, workload facts,
+ProofPlane facts, and non-claims.
+
+Macro-kernel artifacts may be referenced as profiler or backend evidence only
+when the packet also names the workload command, run evidence, comparable
+baseline, gates, and verdict scope. A macro-kernel compile or profile artifact
+does not become a buyer-facing workload claim until this packet accepts it.
+
+`agent-harness-opt` outputs are upstream runtime and harness confidence. They
+can support the ProofPlane workflow lane, but they do not prove GPU performance,
+backend correctness, or workload cost by themselves.
+
+The canonical cross-project boundary is documented in
+[ProofPlane's evidence contract](https://github.com/cfregly/macro-harness/blob/main/docs/evidence-contract.md).
+
 ## Commands
 
 Validate every checked-in packet:

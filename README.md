@@ -10,7 +10,7 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 - **Problem it solves:** GPU inference cost and latency are set by hardware, precision, parallelism, and engine version, and most teams argue about those instead of measuring them.
 - **See the surface in under a minute:** `make demo` prints the tool and skill surface, no GPU needed. A real perf run needs the bundled server and hardware.
 - **Production lesson it encodes:** measure against speed-of-light, label every result DRAFT until it is variance-controlled and profiled, and record the hardware, precision, and engine version next to every number.
-- **Neocloud proof packet:** [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md) defines the single buyer evidence shape. `make workload-proof-check` validates every checked-in `workload-proof-packet.json`.
+- **ProofPlane workload evidence:** [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md) defines the GPU/inference packet shape for neocloud buyers and ProofPlane pilots. `make workload-proof-check` validates every checked-in `workload-proof-packet.json` for completeness and ProofPlane handoff metadata.
 
 ## Value bar
 
@@ -76,7 +76,7 @@ make workload-proof-check
 | `plugins/profile-and-optimize/hooks/` | Runtime-agnostic safety gates (Claude Code + Cursor wiring) |
 | `configs/sol-ceilings.yaml` | Speed-of-light hardware ceilings (datasheet-sourced) used by roofline pages |
 | `campaigns/` | Default output root for perf-tune report campaigns |
-| `examples/workload-proof-packet/` | Synthetic packet fixture that exercises the neocloud workload proof gate |
+| `examples/workload-proof-packet/` | Synthetic packet fixture that exercises the neocloud workload proof and ProofPlane handoff gates |
 | `schemas/workload-proof-packet-v1.json` | Public JSON shape for buyer-facing workload proof packets |
 | `scripts/` | Capture-hygiene helpers (`nsys-validate-capture.sh`, `zymtrace-ingest-wait.sh`) |
 | `docs/METHODOLOGY.md` | The measurement-rigor methodology the skills enforce |
@@ -84,7 +84,7 @@ make workload-proof-check
 
 ## Methodology
 
-The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). For neocloud buyer proof, use the workload packet contract in [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md).
+The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). For neocloud buyer proof and ProofPlane GPU/inference pilots, use the workload packet contract in [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md).
 
 ## Development
 

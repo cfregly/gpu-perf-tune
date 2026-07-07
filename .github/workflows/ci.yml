@@ -17,7 +17,7 @@ jobs:
       - name: Version banners match plugin.json
         run: python3 scripts/lint-versions.py
       - name: Workload proof packet completeness
-        run: python3 scripts/check_workload_proof_packets.py --self-test
+        run: python3 scripts/check_workload_proof_packets.py --self-test --require-proofplane-handoff
       - name: Doc-correctness gate
         run: python3 scripts/check_docs.py
       - name: De-slop the README

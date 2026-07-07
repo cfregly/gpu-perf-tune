@@ -135,5 +135,25 @@
       "No customer data or production cluster was used."
     ],
     "next_lever": "Capture the same packet shape from a real neocloud run."
+  },
+  "proofplane_handoff": {
+    "schema_version": "proofplane_workload_handoff_v1",
+    "attachment_role": "workload_level_evidence",
+    "proof_pack_id": "proofplane-synthetic-coreweave-inference-fixture",
+    "workflow_name": "CoreWeave inference-agent workflow proof",
+    "current_access_stage": "offline",
+    "target_access_stage": "shadow",
+    "packet_proves": [
+      "Synthetic workload target, stack, command, measurement, baseline, profiler, and verdict-scope shape"
+    ],
+    "proofplane_proves": [
+      "Workflow authority, replay, gates, hosted evidence, and promotion when attached to a real ProofPlane pilot"
+    ],
+    "not_proven": [
+      "Real B200 performance",
+      "Real CoreWeave or Verda execution",
+      "Real ProofPlane Customer Workflow Proof Pack"
+    ],
+    "handoff_notes": "Synthetic fixture showing how GPU workload evidence attaches to a ProofPlane pilot; not external verdict evidence."
   }
 }

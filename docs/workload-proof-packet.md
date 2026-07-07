@@ -39,12 +39,35 @@ A packet must track these dimensions:
   path.
 - Verdict: claim, proof scope, not-proven list, caveats, next lever.
 
+## ProofPlane handoff
+
+GPU and inference pilots can attach this packet to a ProofPlane proof pack as
+`workload_level_evidence`. The optional top-level `proofplane_handoff` object
+names the ProofPlane proof-pack or pilot id, the workflow, access-stage movement,
+what the workload packet proves, what ProofPlane proves, and what remains outside
+the claim.
+
+Keep the layers separate. This packet proves workload target, stack, command,
+measurements, baseline, profiler evidence, and verdict scope. ProofPlane proves
+workflow authority, replay, gates, hosted evidence, and promotion. A packet can
+pass `--require-proofplane-handoff` while still being `status: "draft"`.
+
+Use `--require-verdict` before external sharing. It is the separate gate that
+requires verdict status, passing verdict gates, a comparable baseline, and a
+clean source tree.
+
 ## Commands
 
 Validate every checked-in packet:
 
 ```bash
 make workload-proof-check
+```
+
+Validate a specific packet as ProofPlane-attachable workload evidence:
+
+```bash
+python3 scripts/check_workload_proof_packets.py path/to/workload-proof-packet.json --require-proofplane-handoff
 ```
 
 Validate a specific packet as verdict-ready:
@@ -58,6 +81,10 @@ required verdict gate has not passed, if the baseline is not comparable, or if
 the source tree was dirty during capture.
 
 ## Status
+
+The checked-in example is a synthetic draft fixture. It demonstrates the packet
+and handoff contract, not real B200, CoreWeave, Verda, or customer-workflow
+evidence.
 
 Use `status: "draft"` for single-run or incomplete evidence. A draft packet can
 still be valuable, but it must name what is not proven.

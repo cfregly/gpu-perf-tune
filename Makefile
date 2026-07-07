@@ -31,7 +31,7 @@ help:
 	@printf '  make lint-skill-counts       Assert every doc that names the skill count agrees with the on-disk plugins/profile-and-optimize/skills/ tree\n'
 	@printf '  make lint-tool-counts        Assert every doc that names a tool / library / aux-tool count agrees with the canonical constants in mcp_surface.py\n'
 	@printf '  make lint-versions           Assert README + plugin-README version headers match plugin.json version\n'
-	@printf '  make workload-proof-check    Validate every checked-in workload-proof-packet.json against the neocloud packet completeness gate\n'
+	@printf '  make workload-proof-check    Validate every checked-in workload-proof-packet.json against the neocloud packet and ProofPlane handoff gates\n'
 	@printf '  make release                 Tag the current release commit vX.Y.Z (read from plugin.json) + push main + tag atomically (tagging rigidity)\n'
 	@printf '  make pytest                  Run the bundled pytest suite sequentially (~700 profile-and-optimize-native tests in <1s; requires `bash server/install.sh --with-dev` first)\n'
 	@printf '  make pytest-xdist            Same as `make pytest` but with `-n auto` (pytest-xdist parallel); slower for the ~700-test set due to worker-startup overhead; use only if you specifically want xdist semantics\n'
@@ -76,7 +76,7 @@ check:
 	@python3 scripts/lint-skill-counts.py
 	@python3 scripts/lint-tool-counts.py
 	@python3 scripts/lint-versions.py
-	@python3 scripts/check_workload_proof_packets.py --self-test
+	@python3 scripts/check_workload_proof_packets.py --self-test --require-proofplane-handoff
 
 demo:
 	@printf '== profile-and-optimize: the tool and skill surface (no GPU needed) ==\n'
@@ -112,7 +112,7 @@ check-doc-links:
 	bash $(SCRIPTS_DIR)/check-doc-links.sh
 
 workload-proof-check:
-	@python3 $(SCRIPTS_DIR)/check_workload_proof_packets.py --self-test
+	@python3 $(SCRIPTS_DIR)/check_workload_proof_packets.py --self-test --require-proofplane-handoff
 
 
 pytest:

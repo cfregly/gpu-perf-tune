@@ -536,29 +536,29 @@
         }
       }
     },
-    "proofplane_handoff": {
+    "workflow_handoff": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "schema_version",
         "attachment_role",
-        "proof_pack_id",
+        "integration_id",
         "workflow_name",
         "current_access_stage",
         "target_access_stage",
         "packet_proves",
-        "proofplane_proves",
+        "workflow_system_proves",
         "not_proven",
         "handoff_notes"
       ],
       "properties": {
         "schema_version": {
-          "const": "proofplane_workload_handoff_v1"
+          "const": "workflow_handoff_v1"
         },
         "attachment_role": {
           "const": "workload_level_evidence"
         },
-        "proof_pack_id": {
+        "integration_id": {
           "type": "string",
           "minLength": 1
         },
@@ -580,7 +580,7 @@
             "minLength": 1
           }
         },
-        "proofplane_proves": {
+        "workflow_system_proves": {
           "type": "array",
           "minItems": 1,
           "items": {

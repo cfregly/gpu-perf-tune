@@ -39,41 +39,46 @@ A packet must track these dimensions:
   path.
 - Verdict: claim, proof scope, not-proven list, caveats, next lever.
 
-## ProofPlane handoff
+## Workflow handoff
 
-GPU and inference pilots can attach this packet to a ProofPlane proof pack as
-`workload_level_evidence`. The optional top-level `proofplane_handoff` object
-names the ProofPlane proof-pack or pilot id, the workflow, access-stage movement,
-what the workload packet proves, what ProofPlane proves, and what remains outside
-the claim.
+GPU and inference pilots can attach this packet to a broader workflow record as
+`workload_level_evidence`. The optional top-level `workflow_handoff` object
+names the integration id, workflow, access-stage movement, what the workload
+packet proves, what the consuming workflow system proves, and what remains
+outside the claim.
 
 Keep the layers separate. This packet proves workload target, stack, command,
-measurements, baseline, profiler evidence, and verdict scope. ProofPlane proves
-workflow authority, replay, gates, hosted evidence, and promotion. A packet can
-pass `--require-proofplane-handoff` while still being `status: "draft"`.
+measurements, baseline, profiler evidence, and verdict scope. The consuming
+workflow system proves workflow authority, replay, hosted evidence, promotion,
+or other workflow-level facts. A packet can pass `--require-workflow-handoff`
+while still being `status: "draft"`.
 
 Use `--require-verdict` before external sharing. It is the separate gate that
 requires verdict status, passing verdict gates, a comparable baseline, and a
 clean source tree.
 
-## Unified evidence contract
+## Local workload proof contract
 
-ProofPlane's unified evidence contract treats this packet as the workload proof
-layer. The `proofplane_handoff` object is the bridge into a ProofPlane Customer
-Workflow Proof Pack: it names the pilot, access-stage movement, workload facts,
-ProofPlane facts, and non-claims.
+The workload proof packet is the local contract. It is complete without another
+repository: schema, validator, checked fixture, and Makefile gate all live here.
+The `workflow_handoff` object is only the bridge into another workflow system. It
+names the integration id, access-stage movement, workload facts, workflow-system
+facts, and non-claims.
 
-Macro-kernel artifacts may be referenced as profiler or backend evidence only
-when the packet also names the workload command, run evidence, comparable
-baseline, gates, and verdict scope. A macro-kernel compile or profile artifact
-does not become a buyer-facing workload claim until this packet accepts it.
+Backend compiler or profiler artifacts may be referenced as evidence only when
+the packet also names the workload command, run evidence, comparable baseline,
+gates, and verdict scope. A compile or profile artifact does not become a
+buyer-facing workload claim until this packet accepts it.
 
-`agent-harness-opt` outputs are upstream runtime and harness confidence. They
-can support the ProofPlane workflow lane, but they do not prove GPU performance,
-backend correctness, or workload cost by themselves.
+Runtime or harness outputs can support a workflow lane, but they do not prove GPU
+performance, backend correctness, or workload cost by themselves.
 
-The canonical cross-project boundary is documented in
-[ProofPlane's evidence contract](https://github.com/cfregly/macro-harness/blob/main/docs/evidence-contract.md).
+## Optional integrations
+
+ProofPlane is one possible consumer of `workflow_handoff` metadata. In that
+case, ProofPlane should consume the packet as workload-level evidence and keep
+its workflow-level claims separate from this repo's GPU workload claims. This
+repo does not require ProofPlane to validate, install, or run.
 
 ## Commands
 
@@ -83,10 +88,10 @@ Validate every checked-in packet:
 make workload-proof-check
 ```
 
-Validate a specific packet as ProofPlane-attachable workload evidence:
+Validate a specific packet as workflow-attachable workload evidence:
 
 ```bash
-python3 scripts/check_workload_proof_packets.py path/to/workload-proof-packet.json --require-proofplane-handoff
+python3 scripts/check_workload_proof_packets.py path/to/workload-proof-packet.json --require-workflow-handoff
 ```
 
 Validate a specific packet as verdict-ready:

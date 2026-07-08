@@ -19,8 +19,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_VERSION = "workload_proof_packet_v1"
-PROOFPLANE_HANDOFF_SCHEMA_VERSION = "proofplane_workload_handoff_v1"
-PROOFPLANE_ATTACHMENT_ROLE = "workload_level_evidence"
+WORKFLOW_HANDOFF_SCHEMA_VERSION = "workflow_handoff_v1"
+WORKFLOW_ATTACHMENT_ROLE = "workload_level_evidence"
 ACCESS_STAGES = {"offline", "shadow", "supervised_pilot", "default"}
 DEFAULT_PACKET_GLOBS = (
     "examples/**/workload-proof-packet.json",
@@ -317,61 +317,61 @@ def _validate_gates(
         issues.append(Issue(packet_path, "gates", "at least one gate must be required_for_verdict"))
 
 
-def _validate_proofplane_handoff(
+def _validate_workflow_handoff(
     issues: list[Issue],
     packet_path: Path,
     payload: dict[str, Any],
     *,
     require_handoff: bool,
 ) -> None:
-    handoff = payload.get("proofplane_handoff")
+    handoff = payload.get("workflow_handoff")
     if handoff is None:
         if require_handoff:
-            issues.append(Issue(packet_path, "proofplane_handoff", "missing required ProofPlane handoff"))
+            issues.append(Issue(packet_path, "workflow_handoff", "missing required workflow handoff"))
         return
     if not isinstance(handoff, dict) or not handoff:
-        issues.append(Issue(packet_path, "proofplane_handoff", "must be an object"))
+        issues.append(Issue(packet_path, "workflow_handoff", "must be an object"))
         return
     allowed_keys = {
         "schema_version",
         "attachment_role",
-        "proof_pack_id",
+        "integration_id",
         "workflow_name",
         "current_access_stage",
         "target_access_stage",
         "packet_proves",
-        "proofplane_proves",
+        "workflow_system_proves",
         "not_proven",
         "handoff_notes",
     }
     for key in sorted(set(handoff) - allowed_keys):
-        issues.append(Issue(packet_path, f"proofplane_handoff.{key}", "unexpected handoff field"))
+        issues.append(Issue(packet_path, f"workflow_handoff.{key}", "unexpected handoff field"))
     for dotted in (
-        "proofplane_handoff.proof_pack_id",
-        "proofplane_handoff.workflow_name",
-        "proofplane_handoff.handoff_notes",
+        "workflow_handoff.integration_id",
+        "workflow_handoff.workflow_name",
+        "workflow_handoff.handoff_notes",
     ):
         _require_non_empty_string(issues, packet_path, payload, dotted)
     _require_enum(
         issues,
         packet_path,
         payload,
-        "proofplane_handoff.schema_version",
-        {PROOFPLANE_HANDOFF_SCHEMA_VERSION},
+        "workflow_handoff.schema_version",
+        {WORKFLOW_HANDOFF_SCHEMA_VERSION},
     )
     _require_enum(
         issues,
         packet_path,
         payload,
-        "proofplane_handoff.attachment_role",
-        {PROOFPLANE_ATTACHMENT_ROLE},
+        "workflow_handoff.attachment_role",
+        {WORKFLOW_ATTACHMENT_ROLE},
     )
-    _require_enum(issues, packet_path, payload, "proofplane_handoff.current_access_stage", ACCESS_STAGES)
-    _require_enum(issues, packet_path, payload, "proofplane_handoff.target_access_stage", ACCESS_STAGES)
+    _require_enum(issues, packet_path, payload, "workflow_handoff.current_access_stage", ACCESS_STAGES)
+    _require_enum(issues, packet_path, payload, "workflow_handoff.target_access_stage", ACCESS_STAGES)
     for dotted in (
-        "proofplane_handoff.packet_proves",
-        "proofplane_handoff.proofplane_proves",
-        "proofplane_handoff.not_proven",
+        "workflow_handoff.packet_proves",
+        "workflow_handoff.workflow_system_proves",
+        "workflow_handoff.not_proven",
     ):
         _require_non_empty_string_list(issues, packet_path, payload, dotted)
 
@@ -477,7 +477,7 @@ def validate_packet(
     packet_path: Path,
     *,
     require_verdict: bool = False,
-    require_proofplane_handoff: bool = False,
+    require_workflow_handoff: bool = False,
     require_existing_paths: bool = True,
 ) -> list[Issue]:
     payload, issues = _load_json(packet_path)
@@ -492,11 +492,11 @@ def validate_packet(
         "",
         require_existing_paths=require_existing_paths,
     )
-    _validate_proofplane_handoff(
+    _validate_workflow_handoff(
         issues,
         packet_path,
         payload,
-        require_handoff=require_proofplane_handoff,
+        require_handoff=require_workflow_handoff,
     )
     status = payload.get("status")
     if require_verdict and status != "verdict":
@@ -645,15 +645,15 @@ def _self_test() -> list[str]:
                 "caveats": ["synthetic data"],
                 "next_lever": "validate a real packet",
             },
-            "proofplane_handoff": {
-                "schema_version": PROOFPLANE_HANDOFF_SCHEMA_VERSION,
-                "attachment_role": PROOFPLANE_ATTACHMENT_ROLE,
-                "proof_pack_id": "proofplane-self-test",
+            "workflow_handoff": {
+                "schema_version": WORKFLOW_HANDOFF_SCHEMA_VERSION,
+                "attachment_role": WORKFLOW_ATTACHMENT_ROLE,
+                "integration_id": "workflow-self-test",
                 "workflow_name": "Synthetic inference workload proof",
                 "current_access_stage": "offline",
                 "target_access_stage": "shadow",
                 "packet_proves": ["synthetic target, stack, command, measurement, and baseline shape"],
-                "proofplane_proves": ["workflow authority, replay, gates, and promotion when attached"],
+                "workflow_system_proves": ["workflow authority, replay, gates, and promotion when attached"],
                 "not_proven": ["real B200 performance"],
                 "handoff_notes": "Synthetic handoff block for validator coverage.",
             },
@@ -663,7 +663,7 @@ def _self_test() -> list[str]:
         valid_issues = validate_packet(
             packet_path,
             require_verdict=True,
-            require_proofplane_handoff=True,
+            require_workflow_handoff=True,
         )
         if valid_issues:
             findings.append("self-test valid packet failed: " + " | ".join(i.render() for i in valid_issues))
@@ -672,34 +672,34 @@ def _self_test() -> list[str]:
         invalid_issues = validate_packet(
             packet_path,
             require_verdict=True,
-            require_proofplane_handoff=True,
+            require_workflow_handoff=True,
         )
         if not any(issue.pointer == "workload.model_id" for issue in invalid_issues):
             findings.append("self-test invalid packet did not fail workload.model_id")
         packet["workload"]["model_id"] = "example/model"
-        packet.pop("proofplane_handoff")
+        packet.pop("workflow_handoff")
         packet_path.write_text(json.dumps(packet), encoding="utf-8")
-        missing_handoff_issues = validate_packet(packet_path, require_proofplane_handoff=True)
-        if not any(issue.pointer == "proofplane_handoff" for issue in missing_handoff_issues):
-            findings.append("self-test missing ProofPlane handoff did not fail")
-        packet["proofplane_handoff"] = {
-            "schema_version": PROOFPLANE_HANDOFF_SCHEMA_VERSION,
-            "attachment_role": PROOFPLANE_ATTACHMENT_ROLE,
-            "proof_pack_id": "proofplane-self-test",
+        missing_handoff_issues = validate_packet(packet_path, require_workflow_handoff=True)
+        if not any(issue.pointer == "workflow_handoff" for issue in missing_handoff_issues):
+            findings.append("self-test missing workflow handoff did not fail")
+        packet["workflow_handoff"] = {
+            "schema_version": WORKFLOW_HANDOFF_SCHEMA_VERSION,
+            "attachment_role": WORKFLOW_ATTACHMENT_ROLE,
+            "integration_id": "workflow-self-test",
             "workflow_name": "Synthetic inference workload proof",
             "current_access_stage": "offline",
             "target_access_stage": "pilot",
             "packet_proves": [],
-            "proofplane_proves": ["workflow authority"],
+            "workflow_system_proves": ["workflow authority"],
             "not_proven": ["real hardware performance"],
             "handoff_notes": "Invalid handoff block for self-test coverage.",
         }
         packet_path.write_text(json.dumps(packet), encoding="utf-8")
-        invalid_handoff_issues = validate_packet(packet_path, require_proofplane_handoff=True)
-        if not any(issue.pointer == "proofplane_handoff.target_access_stage" for issue in invalid_handoff_issues):
-            findings.append("self-test invalid ProofPlane handoff stage did not fail")
-        if not any(issue.pointer == "proofplane_handoff.packet_proves" for issue in invalid_handoff_issues):
-            findings.append("self-test invalid ProofPlane handoff list did not fail")
+        invalid_handoff_issues = validate_packet(packet_path, require_workflow_handoff=True)
+        if not any(issue.pointer == "workflow_handoff.target_access_stage" for issue in invalid_handoff_issues):
+            findings.append("self-test invalid workflow handoff stage did not fail")
+        if not any(issue.pointer == "workflow_handoff.packet_proves" for issue in invalid_handoff_issues):
+            findings.append("self-test invalid workflow handoff list did not fail")
     return findings
 
 
@@ -712,9 +712,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Fail unless packets are verdict-ready and all required verdict gates pass",
     )
     parser.add_argument(
-        "--require-proofplane-handoff",
+        "--require-workflow-handoff",
         action="store_true",
-        help="Fail unless packets include valid ProofPlane workload-level handoff metadata",
+        help="Fail unless packets include valid workload-level workflow handoff metadata",
     )
     parser.add_argument(
         "--no-path-check",
@@ -735,7 +735,7 @@ def main(argv: list[str] | None = None) -> int:
         issues = validate_packet(
             packet,
             require_verdict=args.require_verdict,
-            require_proofplane_handoff=args.require_proofplane_handoff,
+            require_workflow_handoff=args.require_workflow_handoff,
             require_existing_paths=not args.no_path_check,
         )
         findings.extend(issue.render() for issue in issues)

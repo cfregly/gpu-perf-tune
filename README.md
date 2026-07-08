@@ -10,12 +10,7 @@ Born from real GPU-fleet performance engineering work, genericized so any team r
 - **Problem it solves:** GPU inference cost and latency are set by hardware, precision, parallelism, and engine version, and most teams argue about those instead of measuring them.
 - **See the surface in under a minute:** `make demo` prints the tool and skill surface, no GPU needed. A real perf run needs the bundled server and hardware.
 - **Production lesson it encodes:** measure against speed-of-light, label every result DRAFT until it is variance-controlled and profiled, and record the hardware, precision, and engine version next to every number.
-- **ProofPlane workload evidence:** [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md) defines the GPU/inference packet shape for neocloud buyers and ProofPlane pilots. `make workload-proof-check` validates every checked-in `workload-proof-packet.json` for completeness and ProofPlane handoff metadata.
-
-In the [ProofPlane evidence contract](https://github.com/cfregly/macro-harness/blob/main/docs/evidence-contract.md),
-this repo owns workload-level GPU and inference proof. ProofPlane owns workflow
-proof, agent-harness-opt owns runtime/harness behavior proof, and macro-kernel
-can supply backend artifacts once its B200 gates pass.
+- **Workload proof contract:** [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md) defines the GPU/inference packet shape for neocloud buyers and workflow handoffs. `make workload-proof-check` validates every checked-in `workload-proof-packet.json` for completeness and local handoff metadata.
 
 ## Value bar
 
@@ -24,17 +19,13 @@ shippable only when it is adversarially-confirmed to add value: the workload is 
 fair, a skeptic has tried to break the finding, and the receipt maps to lower cost, faster runtime,
 higher throughput, better reliability, or a clearer operator action.
 
-## Where this fits
+## Root concept
 
-This repo is part of the public Claude proof set, but it sits one layer below the startup journey.
-[claude-founder-kit](https://github.com/cfregly/claude-founder-kit) is the main runnable kit for
-the founder path from first API call to activation and scale. The platform deep-dives cover memory,
-grounding, managed agents, parallel calls, and this GPU-cost layer.
-
-- **Main kit:** [claude-founder-kit](https://github.com/cfregly/claude-founder-kit)
-- **Platform deep-dives:** claude-memory, claude-grounding, claude-managed-agents, and claude-parallel
-- **GPU cost layer:** **[claude-gpu-perf-tune](https://github.com/cfregly/claude-gpu-perf-tune)**
-  turns inference performance work into Claude Code skills and MCP tools
+`claude-gpu-perf-tune` is the standalone GPU inference profiling and
+optimization plugin. It ships the skills, bundled MCP server, workload proof
+schema, synthetic fixture, and validation gates in this repository. A fresh
+clone has the repo-owned code and docs needed to inspect the contract, run the
+local checks, and install the plugin.
 
 ## What this is
 
@@ -81,7 +72,7 @@ make workload-proof-check
 | `plugins/profile-and-optimize/hooks/` | Runtime-agnostic safety gates (Claude Code + Cursor wiring) |
 | `configs/sol-ceilings.yaml` | Speed-of-light hardware ceilings (datasheet-sourced) used by roofline pages |
 | `campaigns/` | Default output root for perf-tune report campaigns |
-| `examples/workload-proof-packet/` | Synthetic packet fixture that exercises the neocloud workload proof and ProofPlane handoff gates |
+| `examples/workload-proof-packet/` | Synthetic packet fixture that exercises the neocloud workload proof and workflow handoff gates |
 | `schemas/workload-proof-packet-v1.json` | Public JSON shape for buyer-facing workload proof packets |
 | `scripts/` | Capture-hygiene helpers (`nsys-validate-capture.sh`, `zymtrace-ingest-wait.sh`) |
 | `docs/METHODOLOGY.md` | The measurement-rigor methodology the skills enforce |
@@ -89,7 +80,14 @@ make workload-proof-check
 
 ## Methodology
 
-The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). For neocloud buyer proof and ProofPlane GPU/inference pilots, use the workload packet contract in [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md).
+The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). For neocloud buyer proof and workflow handoffs, use the workload packet contract in [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md).
+
+## Optional integrations
+
+A workflow system can consume `workflow_handoff` blocks when GPU workload
+evidence needs to attach to a broader customer workflow record. ProofPlane is
+one possible consumer. That integration does not change this repo's local
+contract, validation gates, or runtime dependencies.
 
 ## Development
 

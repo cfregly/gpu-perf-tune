@@ -36,6 +36,7 @@ backends can replace the query engine without changing agent workflows.
 
 | Need | First surface | Follow-up surface |
 | --- | --- | --- |
+| Back-of-the-envelope performance triage | `perftune://repo/docs/performance-hints.md` or `search_runbooks` | [`inference-performance-hints`](/plugins/profile-and-optimize/skills/inference-performance-hints/SKILL.md), then the measurement skill it selects |
 | Runbook or repo-grounded operation | `profile_and_optimize` resource or `search_runbooks` | Local docs / tests when changing behavior |
 | Repo + evidence-tree discovery | `search_runbooks` / `search_evidence` aux tools | Direct file reads once the path is known |
 | AI-assisted tuning proposals / ledger / finalize | `ai_tuning_*` family (subverbs via `args`, `ai_tuning_experiment` `submit` requires its own ack flag in `args`) | Operator runs the resulting Slurm submissions through documented launch wrappers |

@@ -85,6 +85,18 @@ before it is promoted. Name the workload, baseline, skeptical check, receipt, an
 value such as lower cost, faster runtime, higher throughput, better reliability, or clearer operator
 action. If that chain is missing, label the result DRAFT or candidate.
 
+### 6. Estimate, Then Measure
+
+For performance work, apply the repo's
+[`Dean-Ghemawat performance-hints adaptation`](plugins/profile-and-optimize/server/docs/performance-hints.md):
+
+- Classify the path as setup, per request, per token, or shared library code.
+- Write a rough work x unit-cost ledger and state overlap assumptions.
+- Rank changes by the measured contributor share and maximum possible impact.
+- Prefer less work, bulk operations, compact representations, fewer allocations
+  and copies, reuse, and less synchronization before local instruction tuning.
+- Re-run the production-shaped baseline after every change. Estimates stay DRAFT.
+
 ## Working in this repo
 
 - Run `make all` before committing: smoke-test, MCP runtime smoke, doc-link
@@ -96,6 +108,8 @@ action. If that chain is missing, label the result DRAFT or candidate.
   number. Never hardcode a count in a doc.
 - Measurement rigor rules live in [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md)
   (DRAFT-vs-VERDICT labeling, full-context perf numbers, asset validation).
+- Performance-estimation and optimization-hint rules live in
+  [`plugins/profile-and-optimize/server/docs/performance-hints.md`](plugins/profile-and-optimize/server/docs/performance-hints.md).
 - De-slop writing rules live in [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md)
   ("De-slop"): every human-facing artifact (report, PR body, ledger row,
   commit message) is written plain. No em-dashes, minimal bold, plain

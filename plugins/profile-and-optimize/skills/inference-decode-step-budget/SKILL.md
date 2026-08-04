@@ -1,6 +1,6 @@
 ---
 name: inference-decode-step-budget
-last_validated: 2026-05-29
+last_validated: 2026-08-03
 description: >-
   Measure the low-concurrency (c=1..c=8) decode hot-path of a live vLLM pod
   FAST and CORRECTLY: where each token's time actually goes (GPU-busy vs
@@ -43,6 +43,10 @@ gap (Python scheduler + launch + sampling + spec-decode orchestration), and
 (c) comm. From that split the skill classifies the workload as **kernel-bound
 / host-bound / comm-bound** and names the addressable lever - so nobody spends
 days tuning a kernel that is 12% of TPOT.
+
+This split is the measured version of the
+[`performance-hints` cost ledger](/plugins/profile-and-optimize/server/docs/performance-hints.md).
+Use each contributor's share to cap the end-to-end value of its proposed fix.
 
 Done naively this measurement is slow and error-prone: repeated vLLM restarts
 under nsys, prefill-contaminated captures, and GPU-busy numbers that silently

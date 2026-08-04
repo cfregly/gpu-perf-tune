@@ -1,0 +1,85 @@
+{
+  "schema": "performance_hint_estimate_v1",
+  "status": "DRAFT",
+  "synthetic": true,
+  "target": {
+    "metric": "decode_step_ms",
+    "direction": "lower"
+  },
+  "workload": {
+    "model": "synthetic-70b-dense",
+    "active_parameters": 70000000000,
+    "weight_bits": 8,
+    "tensor_parallel": 8,
+    "concurrency": 1,
+    "regime": "warm_decode",
+    "output_tokens": 512
+  },
+  "assumptions": {
+    "effective_hbm_bytes_per_second_per_gpu": {
+      "value": 2000000000000,
+      "source": "synthetic achieved-rate assumption",
+      "confidence": "low"
+    },
+    "kernel_launches_per_step": {
+      "value": 450,
+      "source": "synthetic timeline assumption",
+      "confidence": "low"
+    },
+    "launch_cost_seconds": {
+      "value": 0.000004,
+      "source": "synthetic host-launch assumption",
+      "confidence": "low"
+    },
+    "collective_effective_bytes_per_step": {
+      "value": 32000000,
+      "source": "synthetic topology-adjusted assumption",
+      "confidence": "low"
+    },
+    "effective_collective_bytes_per_second": {
+      "value": 200000000000,
+      "source": "synthetic measured-bandwidth assumption",
+      "confidence": "low"
+    },
+    "collective_latency_seconds": {
+      "value": 0.00002,
+      "source": "synthetic same-message-size assumption",
+      "confidence": "low"
+    }
+  },
+  "ledger": [
+    {
+      "term": "weight_stream",
+      "formula": "active_parameters * weight_bits / 8 / (tensor_parallel * effective_hbm_bytes_per_second_per_gpu)",
+      "estimated_seconds": 0.004375
+    },
+    {
+      "term": "host_launch_serial_budget",
+      "formula": "kernel_launches_per_step * launch_cost_seconds",
+      "estimated_seconds": 0.0018
+    },
+    {
+      "term": "collective",
+      "formula": "collective_effective_bytes_per_step / effective_collective_bytes_per_second + collective_latency_seconds",
+      "estimated_seconds": 0.00018
+    }
+  ],
+  "composition": {
+    "rule": "max because the terms may overlap; do not sum without timeline evidence",
+    "estimated_lower_bound_seconds": 0.004375,
+    "estimated_ceiling_tokens_per_second_per_replica": 228.571
+  },
+  "synthetic_measurement": {
+    "decode_step_seconds": 0.006,
+    "tokens_per_second_per_replica": 166.667,
+    "lower_bound_efficiency_percent": 72.9,
+    "gap_seconds": 0.001625
+  },
+  "next_experiment": {
+    "route": "inference-decode-step-budget",
+    "hypothesis": "host gaps and launch serialization explain a material part of the gap",
+    "control": "same model, engine, flags, node, prompt, output length, and c=1 driver",
+    "proves": "nsys or profiler-endpoint budget reconciles GPU-busy, host-gap, communication, and driver TPOT",
+    "stop_if": "host gaps are below 5 percent of measured decode-step time"
+  }
+}

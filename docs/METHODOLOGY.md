@@ -55,6 +55,22 @@ variant, with datasheet citations). Never inline these numbers in skills or
 reports - load the YAML and reference by key path. A "%SoL" figure names the
 ceiling it is a percentage of.
 
+## Estimate before cluster spend
+
+Use the
+[`Dean-Ghemawat performance-hints adaptation`](../plugins/profile-and-optimize/server/docs/performance-hints.md)
+to write a rough cost ledger before a broad sweep or expensive capture. Estimate
+work x achieved unit cost for the relevant terms: weights and KV bytes, FLOPs,
+collective bytes and latency, launches and host gaps, loader bytes, and queueing.
+State which costs overlap and which serialize.
+
+The estimate ranks experiments and bounds possible impact. It does not establish
+a baseline, root cause, speedup, or capacity verdict. Every assumed rate and every
+result derived from it is DRAFT until a production-shaped measurement confirms it.
+Use `configs/sol-ceilings.yaml` for named published GPU ceilings and local evidence
+for achieved rates. Never use a historical CPU/storage latency table as a GPU or
+fabric measurement.
+
 ## Asset validation
 
 Every generated asset is validated before it is reported as done: a rendered PDF

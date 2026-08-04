@@ -1,6 +1,6 @@
 ---
 name: inference-perf-bench
-last_validated: 2026-06-07
+last_validated: 2026-08-03
 description: >-
   Canonical inference perf-bench skill (formal name. The colloquial alias
   is `ai-bench` - identical behaviour). Drives NVIDIA AIPerf + the
@@ -119,6 +119,18 @@ This creates `experiments/artifacts/inference-perf-bench/<run-id>/` with
 9-phase workflow can then be captured as a four-file tuple
 under `commands/` for the reproducibility-grade-evidence rule
 (`server/CLAUDE.md`).
+
+### Phase A.25: write the pre-bench estimate
+
+Before choosing a broad concurrency sweep, apply
+[`inference-performance-hints`](/plugins/profile-and-optimize/skills/inference-performance-hints/SKILL.md).
+Record a DRAFT estimate ledger in the bundle: expected weight/KV, compute,
+collective, launch/host, and queueing terms, their sources, and which costs overlap.
+Use it to choose the smallest sweep that crosses the expected latency/throughput
+knee and to name the server counters or profile that would refute the estimate.
+
+The estimate does not replace c=1, knee, and saturation measurements. It prevents
+an unexplained grid from becoming the experiment plan.
 
 ### Phase A.5: pre-bench - quiet Slurm (Slurm-on-K8s clusters only)
 

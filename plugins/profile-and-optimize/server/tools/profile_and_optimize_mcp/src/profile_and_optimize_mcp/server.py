@@ -23,6 +23,7 @@ RESOURCE_PATHS: dict[str, str] = {
     "perftune://repo/docs/operator-commands.md": "docs/operator-commands.md",
     "perftune://repo/docs/mcp-tool-io-contract.md": "docs/mcp-tool-io-contract.md",
     "perftune://repo/docs/mcp-composition.md": "docs/mcp-composition.md",
+    "perftune://repo/docs/performance-hints.md": "docs/performance-hints.md",
     "perftune://repo/runbooks/gb300_405b.md": "runbooks/gb300_405b.md",
     "perftune://repo/runbooks/dsv3_671b.md": "runbooks/dsv3_671b.md",
     "perftune://repo/runbooks/b200_8b.md": "runbooks/b200_8b.md",
@@ -182,7 +183,10 @@ def create_server() -> Any:
             "highest-EV unlock toward Speed-of-Light), not just the next micro-lever; "
             "every finding names its next_lever, and a breakthrough claim stays a DRAFT "
             "until variance-controlled, metric-isolated, fair-baselined, profiled, and "
-            "SoL-grounded."
+            "SoL-grounded. Before broad sweeps or captures, apply the Dean-Ghemawat "
+            "estimate-then-measure loop in perftune://repo/docs/performance-hints.md: "
+            "write a cost ledger, bound each idea by measured profile share, and route "
+            "one controlled experiment. Estimates never establish a verdict."
         ),
     )
 

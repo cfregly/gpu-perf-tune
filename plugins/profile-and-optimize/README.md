@@ -1,13 +1,18 @@
 # profile-and-optimize plugin
 
-**Version v0.1.0**
+**Version v0.2.0**
 
-The plugin shipped by this marketplace: 31 GPU inference profiling and
+The plugin shipped by this marketplace: 32 GPU inference profiling and
 optimization skills plus the bundled `profile_and_optimize` MCP server.
 
 See the [repository README](../../README.md) for the skill families and
 quickstart, and [`docs/METHODOLOGY.md`](../../docs/METHODOLOGY.md) for the
 measurement-rigor canon the skills enforce.
+
+Start performance triage with
+[`inference-performance-hints`](skills/inference-performance-hints/SKILL.md).
+Its canonical GPU adaptation is available to agents through the bundled MCP as
+`perftune://repo/docs/performance-hints.md` and through `search_runbooks`.
 
 ## Skills
 

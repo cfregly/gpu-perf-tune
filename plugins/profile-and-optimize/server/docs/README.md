@@ -16,6 +16,7 @@ New local users should start with [`first-hour.md`](/plugins/profile-and-optimiz
 | [`agent-onboarding.md`](/plugins/profile-and-optimize/server/docs/agent-onboarding.md), [`mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md), [`mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md), [`agent-rationale.md`](/plugins/profile-and-optimize/server/docs/agent-rationale.md) | Active/Reference | Agent and MCP onboarding/contracts plus policy rationale. |
 | [`perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md) | Active/Reference | Supporting engineering references. |
 | [`profiling-and-perf-discovery.md`](/plugins/profile-and-optimize/server/docs/profiling-and-perf-discovery.md), [`operator-commands.md`](/plugins/profile-and-optimize/server/docs/operator-commands.md), [`zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md) | Reference | Profiling workflow, operator command surface, and query-hygiene notes. |
+| [`performance-hints.md`](/plugins/profile-and-optimize/server/docs/performance-hints.md) | Active/Reference | Jeff Dean and Sanjay Ghemawat's performance principles adapted to GPU-inference estimation, measurement, and experiment routing. |
 | [`learnings/`](learnings/) | Reference | Distilled lessons: evidence shape. |
 
 ## Other Indexes

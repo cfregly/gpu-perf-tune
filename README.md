@@ -3,7 +3,7 @@
 [![ci](https://github.com/cfregly/claude-gpu-perf-tune/actions/workflows/ci.yml/badge.svg)](https://github.com/cfregly/claude-gpu-perf-tune/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GPU inference profiling and optimization skills for [Claude Code](https://claude.com/claude-code), backed by a bundled MCP server: shipped as the `profile-and-optimize` plugin. 31 task-oriented workflows covering benchmark sweeps, kernel-level profiling (nsys / ncu / DCGM / zymtrace), speed-of-light roofline analysis, quantization and speculative-decode tuning, and a multi-page PDF perf-tune report renderer. Each skill is a `SKILL.md` following the open [Agent Skills standard](https://agentskills.io/).
+GPU inference profiling and optimization skills for [Claude Code](https://claude.com/claude-code), backed by a bundled MCP server: shipped as the `profile-and-optimize` plugin. 32 task-oriented workflows covering back-of-the-envelope performance triage, benchmark sweeps, kernel-level profiling (nsys / ncu / DCGM / zymtrace), speed-of-light roofline analysis, quantization and speculative-decode tuning, and a multi-page PDF perf-tune report renderer. Each skill is a `SKILL.md` following the open [Agent Skills standard](https://agentskills.io/).
 
 Born from real GPU-fleet performance engineering work, genericized so any team running GPU inference can use it. This is the cost-of-intelligence work: make inference faster and cheaper, measured not asserted.
 
@@ -29,12 +29,12 @@ local checks, and install the plugin.
 
 ## What this is
 
-1. **Benchmark & sweep**: `inference-perf-bench` load sweeps, `inference-tune-sweep` engine-knob exploration, `inference-model-eval` quality gates, `perf-baseline-record` / `perf-baseline-diff` regression tracking.
+1. **Estimate, benchmark & sweep**: `inference-performance-hints` back-of-the-envelope triage, `inference-perf-bench` load sweeps, `inference-tune-sweep` engine-knob exploration, `inference-model-eval` quality gates, `perf-baseline-record` / `perf-baseline-diff` regression tracking.
 2. **Profile**: `inference-workload-profile`, `inference-kernel-profile` (nsys), `inference-kernel-ncu-profile` (per-kernel roofline), `inference-dcgm-correlate`, `analyze-zymtrace-workload`, `inference-graph-diff` (compile-graph diffs), `mirage-graph-coverage`.
 3. **Optimize**: `inference-model-optimize` (cross-engine bring-up orchestrator), `inference-quantize-calibrate`, `inference-spec-decode-train` / `-tune` / `-service`, `inference-decode-step-budget`, `inference-capacity-sizing`, `inference-known-good-config`.
 4. **Report & track**: `inference-perf-tune-report` (multi-page PDF renderer), `inference-perf-synthesize`, `inference-fleet-leaderboard`, `inference-value-ledger`, `evidence-bundle-init` provenance bundles, `prometheus-anchored-query` / `zymtrace-anchored-query` anchored observability queries.
 
-This is a Claude Code plugin: Claude operates it. The 31 skills and the bundled MCP server (`plugins/profile-and-optimize/server/`) are how Claude drives the cost work, loading a skill when your prompt matches its triggers and calling the MCP tools to run the sweep, profile, and report. The documented bash-tool path is the fallback wherever an external observability server is missing.
+This is a Claude Code plugin: Claude operates it. The 32 skills and the bundled MCP server (`plugins/profile-and-optimize/server/`) are how Claude drives the cost work, loading a skill when your prompt matches its triggers and calling the MCP tools to estimate, sweep, profile, and report. The documented bash-tool path is the fallback wherever an external observability server is missing.
 
 ## Quickstart
 
@@ -67,7 +67,7 @@ make workload-proof-check
 
 | Path | What it is |
 | --- | --- |
-| `plugins/profile-and-optimize/skills/` | The 31 skills (one dir per skill, `SKILL.md` + assets) |
+| `plugins/profile-and-optimize/skills/` | The 32 skills (one dir per skill, `SKILL.md` + assets) |
 | `plugins/profile-and-optimize/server/` | Bundled MCP server: tool libraries, contract docs, report renderer |
 | `plugins/profile-and-optimize/hooks/` | Runtime-agnostic safety gates (Claude Code + Cursor wiring) |
 | `configs/sol-ceilings.yaml` | Speed-of-light hardware ceilings (datasheet-sourced) used by roofline pages |
@@ -76,11 +76,12 @@ make workload-proof-check
 | `schemas/workload-proof-packet-v1.json` | Public JSON shape for buyer-facing workload proof packets |
 | `scripts/` | Capture-hygiene helpers (`nsys-validate-capture.sh`, `zymtrace-ingest-wait.sh`) |
 | `docs/METHODOLOGY.md` | The measurement-rigor methodology the skills enforce |
+| `plugins/profile-and-optimize/server/docs/performance-hints.md` | Dean-Ghemawat performance guidance adapted to GPU inference and exposed through the MCP |
 | `mcp-descriptors/` | Offline MCP tool-schema snapshots used by skill lint |
 
 ## Methodology
 
-The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). For neocloud buyer proof and workflow handoffs, use the workload packet contract in [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md).
+The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). The [`performance-hints adaptation`](plugins/profile-and-optimize/server/docs/performance-hints.md) adds estimate-then-measure triage, with a [synthetic worked example](examples/performance-hints/README.md). For neocloud buyer proof and workflow handoffs, use the workload packet contract in [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md).
 
 ## Optional integrations
 

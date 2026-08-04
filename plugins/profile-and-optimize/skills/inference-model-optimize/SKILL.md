@@ -1,6 +1,6 @@
 ---
 name: inference-model-optimize
-last_validated: 2026-06-07
+last_validated: 2026-08-03
 description: >-
   End-to-end orchestrator that takes a NEW model from a bare HuggingFace id to a
   perf-lake-published, validated CROSS-ENGINE (vLLM + SGLang) champion on
@@ -157,6 +157,20 @@ This renders the per-model harness bundle (03a PVC, 03b puller,
 `summary.md`. **The run-id printed here is the experiment-id** -- record it. Every
 later phase uses it as the `experiment=<id-slug>` label and the
 `campaign=<id>` key. Report the scaffolded paths. Ask before deploying.
+
+### Phase 0.5: estimate the dominant costs before GPU spend
+
+Run an
+[`inference-performance-hints`](/plugins/profile-and-optimize/skills/inference-performance-hints/SKILL.md)
+pass and store the estimate ledger in the evidence bundle. At minimum estimate
+model-loading bytes, active-weight bytes per decode step, prefill FLOPs, KV bytes,
+collective bytes, and likely launch/host cost. Use local achieved rates where they
+exist. Otherwise cite a `configs/sol-ceilings.yaml` key plus an explicit efficiency
+assumption.
+
+The ledger must name the expected dominant resource and the first profile that can
+refute it. It narrows phase ordering but never skips the baseline, accuracy, or
+roofline gates. Every estimate stays DRAFT.
 
 ### Phase 1: deploy baseline (cluster-profile aware)
 

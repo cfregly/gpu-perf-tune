@@ -1,6 +1,6 @@
 ---
 name: _template
-last_validated: 2026-05-20
+last_validated: 2026-08-03
 description: >-
   Copy this directory to plugins/profile-and-optimize/skills/<your-skill-name>/ and
   rewrite this description to be third-person + include WHAT the skill does
@@ -75,6 +75,14 @@ an existing skill such as
 ### Phase 0: confirm intent
 
 <Resolve the operator's request to specific parameters. State them back. Get confirmation.>
+
+If the skill spends GPU time or recommends a performance change, add a
+Dean-Ghemawat hint pass before the first job: classify setup vs per-request vs
+per-token work, write a rough cost ledger, bound candidates by measured profile
+share, and name one experiment with a stop condition. Canon:
+[`server/docs/performance-hints.md`](/plugins/profile-and-optimize/server/docs/performance-hints.md).
+Delete this paragraph only when the skill is neither performance-shaped nor
+cluster-spending.
 
 ### Phase 1: <name>
 

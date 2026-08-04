@@ -1,6 +1,6 @@
 ---
 name: inference-tune-sweep
-last_validated: 2026-06-01
+last_validated: 2026-08-03
 description: >-
   Search a vLLM serving model's config space for its best inference performance:
   a `perftunereport campaign_run` matrix sweep over concurrency x
@@ -113,6 +113,14 @@ Resolve and state back:
   cudagraph_mode, enable-chunked-prefill, enable-prefix-caching}` to vary and
   their values. Keep it small -- a 2x3 grid is usually enough to find the knee.
 - The baseline to beat (the current `my-values` config, recorded as a baseline).
+- The bounded mechanism for every axis. Use the
+  [`performance-hints` cost ledger](/plugins/profile-and-optimize/server/docs/performance-hints.md)
+  to state whether the lever targets active work, HBM/KV representation, batching,
+  repeated work, launch/host gaps, or synchronization. Include its measured
+  contributor share and maximum plausible end-to-end impact when a profile exists.
+
+Drop any grid axis that lacks a mechanism or cannot affect the focus metric under
+the named workload. A broad matrix is not a substitute for a hypothesis.
 
 ### Phase 1: author the campaign matrix YAML
 

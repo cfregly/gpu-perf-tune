@@ -1,6 +1,6 @@
 ---
 name: inference-kernel-profile
-last_validated: 2026-05-29
+last_validated: 2026-08-03
 description: >-
   Capture per-kernel CUDA profile data from a live vLLM inference pod via an
   nsys debug sidecar (no production image rebuild). Outputs `.nsys-rep` +
@@ -11,6 +11,7 @@ description: >-
   "ncu", "Nsight Systems", "kernel-level analysis", or any combination of
   "profile / capture / nsys / ncu" with "vllm / kimi / glm / deepseek".
 allowed-tools:
+  - mcp__profile_and_optimize__search_runbooks
   - Bash(kubectl:debug,*)
   - Bash(kubectl:exec,*)
   - Bash(kubectl:cp,*)
@@ -74,6 +75,19 @@ Do **not** use this skill for:
   on-demand only because it adds ~5% per-pod overhead during capture.
 - Multi-pod fleet-level profiling - this skill targets ONE pod at a time.
   For fleet capture use the zymtrace profiler DaemonSet.
+
+## Before attaching: bound the question
+
+Apply the
+[`Dean-Ghemawat performance-hints adaptation`](/plugins/profile-and-optimize/server/docs/performance-hints.md)
+before paying the capture overhead. Name the end-to-end metric, the suspected
+contributor, its current profile share if known, and the maximum win possible if it
+were removed. For c=1 decode, route to `inference-decode-step-budget` first. For a
+known hot kernel that needs stalls or roofline data, route directly to
+`inference-kernel-ncu-profile`.
+
+If no profile share exists, this nsys capture may establish it. Record that as the
+question. Do not start with an untargeted "capture everything" request.
 
 ## Sidecar image
 

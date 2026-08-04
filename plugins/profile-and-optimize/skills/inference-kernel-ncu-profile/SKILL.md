@@ -1,6 +1,6 @@
 ---
 name: inference-kernel-ncu-profile
-last_validated: 2026-05-29
+last_validated: 2026-08-03
 description: >-
   Capture per-kernel CUDA hardware-counter data (occupancy, achieved warps
   active, regs/thread, smem/block, DRAM throughput, arithmetic intensity,
@@ -55,6 +55,11 @@ FIRST. If at c=1 it returns "host-bound" (GPU idle >> busy per step, as GLM-5.1
 does), per-kernel SoL is **moot** - the kernels are a small fraction of TPOT and
 are launch-latency-scale at one token. Only escalate to this skill when the
 budget says kernel-bound, or for the prefill/throughput tier.
+
+Per the
+[`Dean-Ghemawat performance-hints adaptation`](/plugins/profile-and-optimize/server/docs/performance-hints.md),
+bound the candidate win by the kernel's measured end-to-end share before capture.
+Hardware-counter improvements cannot recover time outside that share.
 
 ## When to use
 

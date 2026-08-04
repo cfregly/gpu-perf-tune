@@ -1,6 +1,6 @@
 ---
 name: inference-capacity-sizing
-last_validated: 2026-06-09
+last_validated: 2026-08-03
 description: >-
   SLA-first GPU capacity sizing for a serving deployment: given a tokens-per-minute
   (TPM) target AND the interactivity SLA (output tokens/s/user), compute the pods and
@@ -43,6 +43,11 @@ count. Sizing from a fixed concurrency and back-deriving users is the backwards 
 Do not use this to MEASURE a model (that is `inference-perf-bench` / `inference-aa-workload`)
 or to rank models (that is `inference-fleet-leaderboard`). This skill consumes an
 already-measured tok/s/user-vs-concurrency curve.
+
+This is the measured-capacity continuation of the
+[`performance-hints` estimate loop](/plugins/profile-and-optimize/server/docs/performance-hints.md).
+A back-of-the-envelope throughput estimate can sanity-check orders of magnitude,
+but it cannot replace the SLA-matched measured curve used for GPU counts.
 
 ## The method (SLA-first)
 

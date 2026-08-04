@@ -151,6 +151,20 @@ class ServerSmokeTest(unittest.TestCase):
         self.assertEqual(payload["paths"], ["runbooks", "docs"])
         self.assertIsInstance(payload["matches"], list)
 
+    def test_performance_hints_are_exposed_and_searchable(self) -> None:
+        uri = "perftune://repo/docs/performance-hints.md"
+        self.assertEqual(RESOURCE_PATHS[uri], "docs/performance-hints.md")
+        result = _search(
+            "search_runbooks",
+            SEARCH_TOOL_SPECS["search_runbooks"],
+            "An estimate is a ranking tool",
+            limit=5,
+        )
+        self.assertEqual(result["returncode"], 0)
+        self.assertTrue(
+            any("docs/performance-hints.md" in match for match in result["json"]["matches"])
+        )
+
     def test_runtime_traps_systemexit_from_argparse_help(self) -> None:
         """Regression test: argparse `--help` raises SystemExit which would
         otherwise propagate through FastMCP's stdio JSON-RPC loop and

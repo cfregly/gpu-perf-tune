@@ -252,6 +252,7 @@ TIER_C = [
     # search_evidence) guide a self-contained script or calculator workflow.
     ("inference-aa-workload", "profile_and_optimize", "search_runbooks (AA shapes driven by the bundled self-contained AIPerf script)"),
     ("inference-capacity-sizing", "profile_and_optimize", "search_runbooks (sizing calculator; knowledge-layer search only)"),
+    ("inference-performance-hints", "profile_and_optimize", "search_runbooks (read-only performance-hints resource + estimate routing)"),
     # Prometheus-side byte-grounding for the SoL hierarchy.
     ("inference-dcgm-correlate", "prometheus_mcp", "query_prometheus (DCGM PROF group over the sweep window)"),
 ]

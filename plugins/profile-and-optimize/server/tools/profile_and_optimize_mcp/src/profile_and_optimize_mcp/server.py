@@ -11,6 +11,7 @@ import contextlib
 import importlib
 import io
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -39,23 +40,33 @@ _MAX_SEARCH_LINE_CHARS = 8192
 _MAX_SEARCH_STDERR_CHARS = 8192
 
 
-def _search_command(query: str, paths: list[str], limit: int) -> list[str]:
-    return [
-        "rg",
-        "--line-number",
-        "--max-columns",
-        "4096",
-        "--max-columns-preview",
-        "--max-count",
-        str(limit),
-        "--",
-        query,
-        *paths,
-    ]
+def _search_command(
+    query: str,
+    paths: list[str],
+    limit: int,
+    *,
+    program: str = "rg",
+) -> list[str]:
+    if Path(program).name == "rg":
+        return [
+            program,
+            "--line-number",
+            "--max-columns",
+            "4096",
+            "--max-columns-preview",
+            "--max-count",
+            str(limit),
+            "--",
+            query,
+            *paths,
+        ]
+    if Path(program).name == "grep":
+        return [program, "-r", "-n", "-E", "--", query, *paths]
+    raise ValueError(f"unsupported search program: {program}")
 
 
 def _search(name: str, paths: list[str], query: str, *, limit: int = 50) -> dict[str, Any]:
-    """Wrap `rg` in the same envelope the contract-derived MCP tools use.
+    """Wrap a bounded text search in the contract-derived MCP envelope.
 
     The auxiliary MCP-only tools (`search_runbooks`, `search_evidence`) are
     not CLI verbs, so they have no library / verb / ack semantics from the
@@ -70,7 +81,23 @@ def _search(name: str, paths: list[str], query: str, *, limit: int = 50) -> dict
 
     repo = find_repo_root()
     argv = [query, "--limit", str(limit), "--paths", *paths]
-    cmd = _search_command(query, paths, limit)
+    program = shutil.which("rg") or shutil.which("grep")
+    if program is None:
+        payload = {"query": query, "paths": paths, "matches": []}
+        return {
+            "tool": name,
+            "library": "mcp_aux",
+            "verb": "search",
+            "safety": "read_only",
+            "ack_required": False,
+            "ack_field": None,
+            "args": argv,
+            "returncode": 127,
+            "stdout": "",
+            "stderr": "search requires ripgrep or grep on PATH",
+            "json": payload,
+        }
+    cmd = _search_command(query, paths, limit, program=program)
     matches: list[str] = []
     stderr = ""
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_file:

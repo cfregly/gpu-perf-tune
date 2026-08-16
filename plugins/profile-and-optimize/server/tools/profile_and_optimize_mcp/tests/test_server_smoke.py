@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -432,9 +433,49 @@ class ServerSmokeTest(unittest.TestCase):
 
     def test_search_places_hostile_query_after_option_terminator(self) -> None:
         query = "--pre=/bin/sh"
-        command = _search_command(query, ["runbooks", "docs"], 3)
-        terminator = command.index("--")
-        self.assertEqual(command[terminator + 1], query)
+        for program in ("rg", shutil.which("grep") or "grep"):
+            with self.subTest(program=program):
+                command = _search_command(
+                    query,
+                    ["runbooks", "docs"],
+                    3,
+                    program=program,
+                )
+                terminator = command.index("--")
+                self.assertEqual(command[terminator + 1], query)
+
+    def test_search_falls_back_to_grep_when_ripgrep_is_missing(self) -> None:
+        grep = shutil.which("grep")
+        if grep is None:
+            self.skipTest("grep is not installed")
+
+        def find_program(name: str) -> str | None:
+            return None if name == "rg" else grep
+
+        with mock.patch(
+            "profile_and_optimize_mcp.server.shutil.which",
+            side_effect=find_program,
+        ):
+            result = _search(
+                "search_runbooks",
+                SEARCH_TOOL_SPECS["search_runbooks"],
+                "An estimate is a ranking tool",
+                limit=5,
+            )
+
+        self.assertEqual(result["returncode"], 0)
+        self.assertTrue(any("docs/performance-hints.md" in match for match in result["json"]["matches"]))
+
+    def test_search_fails_cleanly_when_no_search_program_exists(self) -> None:
+        with mock.patch(
+            "profile_and_optimize_mcp.server.shutil.which",
+            return_value=None,
+        ):
+            result = _search("search_runbooks", ["runbooks"], "profile", limit=3)
+
+        self.assertEqual(result["returncode"], 127)
+        self.assertEqual(result["json"]["matches"], [])
+        self.assertIn("ripgrep or grep", result["stderr"])
 
     def test_search_rejects_invalid_limits(self) -> None:
         for limit in (True, 0, -1, 101, 1.5):

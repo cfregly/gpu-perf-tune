@@ -15,6 +15,7 @@ from tools.known_good_config.known_good_config_cli import (
     CONTRACT,
     _find_model,
     _load_registry,
+    _operator_path,
     _parse_required_flag,
     build_parser,
     main,
@@ -61,6 +62,11 @@ def test_contract_shape() -> None:
     assert CONTRACT["record"]["safety"] == "writes_artifacts"
     assert CONTRACT["check"]["safety"] == "read_only"
     assert all(CONTRACT[v]["json"] for v in CONTRACT)
+
+
+def test_operator_path_rejects_nul_bytes() -> None:
+    with pytest.raises(ValueError, match="without NUL bytes"):
+        _operator_path("registry\x00outside", label="--registry")
 
 
 def test_build_parser_accepts_json_for_both_verbs() -> None:

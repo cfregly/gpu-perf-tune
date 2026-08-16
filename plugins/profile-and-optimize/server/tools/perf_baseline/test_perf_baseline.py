@@ -21,11 +21,21 @@ from tools.perf_baseline.helpers import (
     write_baseline_json,
     write_source_md,
 )
-from tools.perf_baseline.perf_baseline_cli import CONTRACT, build_parser, main
+from tools.perf_baseline.perf_baseline_cli import (
+    CONTRACT,
+    _operator_path,
+    build_parser,
+    main,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def test_operator_path_rejects_nul_bytes() -> None:
+    with pytest.raises(ValueError, match="without NUL bytes"):
+        _operator_path("repo\x00outside", label="--repo-root")
 
 
 def test_sha256_of_file(tmp_path: Path) -> None:

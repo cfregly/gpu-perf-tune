@@ -2,14 +2,91 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BASH = shutil.which("bash") or "/bin/bash"
+
+
+def _load_stage_model_parallel():
+    script = (
+        REPO_ROOT
+        / "plugins"
+        / "profile-and-optimize"
+        / "server"
+        / "tools"
+        / "stage-model-parallel.py"
+    )
+    spec = importlib.util.spec_from_file_location("stage_model_parallel", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_stage_model_parallel_contains_object_keys_under_destination(tmp_path: Path) -> None:
+    module = _load_stage_model_parallel()
+    destination = (tmp_path / "models").resolve()
+    destination.mkdir()
+
+    output = module._download_path(
+        destination,
+        "checkpoints/model",
+        "checkpoints/model/layers/0.bin",
+    )
+
+    assert output == destination / "layers" / "0.bin"
+
+
+def test_stage_model_parallel_rejects_nul_destination() -> None:
+    module = _load_stage_model_parallel()
+
+    with pytest.raises(SystemExit, match="without NUL bytes"):
+        module._operator_destination("models\x00outside")
+
+
+@pytest.mark.parametrize(
+    "object_key",
+    [
+        "checkpoints/model/../outside.bin",
+        "checkpoints/model/layers//0.bin",
+        "other-prefix/outside.bin",
+        "checkpoints/model/layers\\0.bin",
+    ],
+)
+def test_stage_model_parallel_rejects_unsafe_object_keys(
+    tmp_path: Path,
+    object_key: str,
+) -> None:
+    module = _load_stage_model_parallel()
+    destination = (tmp_path / "models").resolve()
+    destination.mkdir()
+
+    with pytest.raises(RuntimeError):
+        module._download_path(destination, "checkpoints/model", object_key)
+
+
+def test_stage_model_parallel_rejects_symlink_escape(tmp_path: Path) -> None:
+    module = _load_stage_model_parallel()
+    destination = (tmp_path / "models").resolve()
+    outside = tmp_path / "outside"
+    destination.mkdir()
+    outside.mkdir()
+    (destination / "linked").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(RuntimeError, match="escapes destination root"):
+        module._download_path(
+            destination,
+            "checkpoints/model",
+            "checkpoints/model/linked/config.json",
+        )
 
 
 def test_plugin_validation_cache_invalidates_on_hook_change(tmp_path: Path) -> None:

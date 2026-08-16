@@ -48,8 +48,20 @@ MCP_CACHE_DEFAULT = Path.home() / ".cursor" / "projects" / "Users-<operator>-<pr
 # Order: env override -> operator's Cursor cache -> bundled descriptors.
 # The bundle is the CI-friendly fallback (see mcp-descriptors/README.md).
 _env = os.environ.get("PROFILE_AND_OPTIMIZE_MCP_CACHE")
+MCP_CACHE_ERROR = None
 if _env:
-    MCP_CACHE = Path(_env)
+    normalized_cache = os.path.realpath(os.path.expanduser(_env))
+    cursor_root = os.path.realpath(os.path.join(os.path.expanduser("~"), ".cursor"))
+    cursor_prefix = cursor_root if cursor_root.endswith(os.sep) else cursor_root + os.sep
+    if normalized_cache.startswith(cursor_prefix):
+        if os.path.basename(normalized_cache) == "mcps":
+            MCP_CACHE = Path(normalized_cache)
+        else:
+            MCP_CACHE_ERROR = "PROFILE_AND_OPTIMIZE_MCP_CACHE must name an mcps directory"
+            MCP_CACHE = BUNDLED_DESCRIPTORS
+    else:
+        MCP_CACHE_ERROR = "PROFILE_AND_OPTIMIZE_MCP_CACHE must stay below ~/.cursor"
+        MCP_CACHE = BUNDLED_DESCRIPTORS
 elif MCP_CACHE_DEFAULT.exists():
     MCP_CACHE = MCP_CACHE_DEFAULT
 else:
@@ -134,9 +146,16 @@ def list_profile_and_optimize_surface() -> Optional[set[str]]:
 
 def load_descriptor(server: str, tool: str) -> Optional[dict]:
     remapped = remap_server(server)
-    if remapped is None:
+    if remapped is None or not re.fullmatch(r"[A-Za-z0-9_]+", tool):
         return None
-    desc_path = MCP_CACHE / remapped / "tools" / f"{tool}.json"
+    root = os.path.realpath(os.fspath(MCP_CACHE))
+    desc_path_text = os.path.realpath(
+        os.path.join(root, remapped, "tools", f"{tool}.json")
+    )
+    prefix = root if root.endswith(os.sep) else root + os.sep
+    if not desc_path_text.startswith(prefix):
+        return None
+    desc_path = Path(desc_path_text)
     if not desc_path.exists():
         return None
     try:
@@ -274,6 +293,9 @@ def lint_skill(skill_md: Path, profile_and_optimize_surface: Optional[set[str]])
 
 
 def main() -> int:
+    if MCP_CACHE_ERROR:
+        print(f"FATAL: {MCP_CACHE_ERROR}", file=sys.stderr)
+        return 2
     if not MCP_CACHE.exists():
         print(f"FATAL: MCP descriptor folder not found at {MCP_CACHE}", file=sys.stderr)
         print(f"       Bundled fallback expected at {BUNDLED_DESCRIPTORS} (see mcp-descriptors/README.md).", file=sys.stderr)

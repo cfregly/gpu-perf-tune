@@ -101,8 +101,8 @@ class JsonConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             config = root / "client.json"
-            secret = "existing-private-token"
-            original = json.dumps({"private": secret, "mcpServers": {"other": {}}})
+            marker = "unchanged-config-marker"
+            original = json.dumps({"customValue": marker, "mcpServers": {"other": {}}})
             config.write_text(original, encoding="utf-8")
             args = make_args(root, dry_run=True)
             output = io.StringIO()
@@ -111,7 +111,7 @@ class JsonConfigTests(unittest.TestCase):
                 configure_clients.update_json_mcp(config, args)
 
             self.assertEqual(config.read_text(encoding="utf-8"), original)
-            self.assertNotIn(secret, output.getvalue())
+            self.assertNotIn(marker, output.getvalue())
             self.assertIn(str(args.python), output.getvalue())
             self.assertNotIn('"other"', output.getvalue())
 
@@ -212,8 +212,8 @@ name = "keep-me"
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             config = root / "config.toml"
-            secret = "existing-private-token"
-            original = f'private_value = "{secret}"\n'
+            marker = "unchanged-config-marker"
+            original = f'custom_value = "{marker}"\n'
             config.write_text(original, encoding="utf-8")
             args = make_args(root, dry_run=True)
             output = io.StringIO()
@@ -222,7 +222,7 @@ name = "keep-me"
                 configure_clients.update_codex_toml(config, args)
 
             self.assertEqual(config.read_text(encoding="utf-8"), original)
-            self.assertNotIn(secret, output.getvalue())
+            self.assertNotIn(marker, output.getvalue())
             self.assertIn("[mcp_servers.profile_and_optimize]", output.getvalue())
 
     def test_toml_strings_escape_quotes_and_backslashes(self) -> None:

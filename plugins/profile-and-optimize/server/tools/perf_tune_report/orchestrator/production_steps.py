@@ -46,6 +46,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
+from tools.perf_tune_report.helpers import resolve_operator_path
 from tools.perf_tune_report.orchestrator.campaign_run import CellPlan, StepFns
 
 
@@ -320,7 +321,7 @@ def _discover_ceilings_yaml(campaign_dir: Path) -> Path | None:
 
     env_override = os.environ.get("SOL_CEILINGS_YAML", "").strip()
     if env_override and env_override != "disable":
-        p = Path(env_override).expanduser().resolve()
+        p = resolve_operator_path(env_override, label="SOL_CEILINGS_YAML")
         return p if p.is_file() else None
     relpath = Path("perf-tune-report") / "configs" / "sol-ceilings.yaml"
     cur = campaign_dir.resolve()
@@ -389,7 +390,11 @@ def _baseline_repo_root() -> Path:
     import os
 
     override = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
-    return Path(override).expanduser().resolve() if override else _SERVER_ROOT
+    return (
+        resolve_operator_path(override, label="PROFILE_AND_OPTIMIZE_REPO_ROOT")
+        if override
+        else _SERVER_ROOT
+    )
 
 
 def _cell_headline(campaign_dir: Path, cell_id: str) -> dict[str, Any] | None:

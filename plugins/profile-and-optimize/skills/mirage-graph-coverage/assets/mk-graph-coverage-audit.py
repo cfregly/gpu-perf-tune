@@ -32,6 +32,16 @@ DECL_RE = re.compile(r'all_tensors\[\s*"([^"]+)"\s*\]\s*=')
 DEFAULT_CRITICAL = ["rope_cos", "rope_sin", "cos_pos_embed", "sin_pos_embed"]
 
 
+def artifact_path(gendir, filename):
+    """Resolve one generated artifact and reject symlink escapes from gendir."""
+    root = os.path.realpath(os.path.expanduser(gendir))
+    candidate = os.path.realpath(os.path.join(root, filename))
+    prefix = root if root.endswith(os.sep) else root + os.sep
+    if not candidate.startswith(prefix):
+        raise ValueError(f"artifact leaves generated directory: {filename!r}")
+    return candidate
+
+
 def parse_declared(kernel_cu):
     names = set()
     with open(kernel_cu, errors="replace") as f:
@@ -43,7 +53,8 @@ def parse_declared(kernel_cu):
 
 
 def parse_consumed(task_graph_json):
-    d = json.load(open(task_graph_json))
+    with open(task_graph_json) as source:
+        d = json.load(source)
     in_refs, out_refs = defaultdict(int), defaultdict(int)
     in_tt, out_tt = defaultdict(set), defaultdict(set)
     for t in d.get("all_tasks", []):
@@ -58,8 +69,10 @@ def parse_consumed(task_graph_json):
 
 
 def audit_rank(gendir, rank, critical):
-    kcu = os.path.join(gendir, f"kernel_{rank}.cu")
-    tgj = os.path.join(gendir, f"task_graph_{rank}.json")
+    if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
+        raise ValueError(f"rank must be a nonnegative integer: {rank!r}")
+    kcu = artifact_path(gendir, f"kernel_{rank}.cu")
+    tgj = artifact_path(gendir, f"task_graph_{rank}.json")
     if not (os.path.exists(kcu) and os.path.exists(tgj)):
         return None
     declared = parse_declared(kcu)

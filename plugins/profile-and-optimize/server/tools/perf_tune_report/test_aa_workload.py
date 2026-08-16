@@ -12,6 +12,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from tools.perf_tune_report.runners.aa_bench import run_cell as run_cell_aa
 from tools.perf_tune_report.runners.aa_workload import (
     AA_SHAPES,
@@ -23,7 +25,6 @@ from tools.perf_tune_report.runners.aa_workload import (
 )
 from tools.perf_tune_report.runners.common import CellConfig
 from tools.perf_tune_report.schema import BACKEND_AIPERF, STATUS_FAILED, STATUS_FULL
-
 
 # --- shapes ---------------------------------------------------------------
 
@@ -52,6 +53,100 @@ def test_standalone_script_shapes_drift_guard():
     spec.loader.exec_module(mod)
     pkg = {k: (v.input_tokens, v.output_tokens) for k, v in AA_SHAPES.items()}
     assert mod.AA_SHAPES == pkg
+
+
+def _load_ttfo_probe():
+    script = (
+        Path(__file__).resolve().parents[3]
+        / "skills"
+        / "inference-aa-workload"
+        / "assets"
+        / "aa_ttfo_probe.py"
+    )
+    spec = importlib.util.spec_from_file_location("aa_ttfo_probe", script)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_ttfo_probe_accepts_only_explicit_loopback_targets():
+    probe = _load_ttfo_probe()
+
+    assert probe.parse_probe_target(
+        "http://localhost:8000/v1/chat/completions"
+    ) == ("127.0.0.1", 8000)
+    assert probe.parse_probe_target(
+        "http://127.0.0.1:18000/v1/chat/completions"
+    ) == ("127.0.0.1", 18000)
+    assert probe.parse_probe_target("http://[::1]:8000/v1/chat/completions") == (
+        "::1",
+        8000,
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://localhost:8000/v1/chat/completions",
+        "http://example.com:8000/v1/chat/completions",
+        "http://169.254.169.254:8000/v1/chat/completions",
+        "http://localhost.example.com:8000/v1/chat/completions",
+        "http://localhost@169.254.169.254:8000/v1/chat/completions",
+        "http://user@localhost:8000/v1/chat/completions",
+        "http://localhost/v1/chat/completions",
+        "http://localhost:80/v1/chat/completions",
+        "http://localhost:8000/v1/models",
+        "http://localhost:8000/v1/chat/completions?next=external",
+        "http://localhost:8000/v1/chat/completions#fragment",
+    ],
+)
+def test_ttfo_probe_rejects_urls_outside_policy(url):
+    probe = _load_ttfo_probe()
+
+    with pytest.raises(ValueError):
+        probe.parse_probe_target(url)
+
+
+def test_ttfo_probe_uses_fixed_path_and_refuses_redirects(monkeypatch):
+    probe = _load_ttfo_probe()
+    calls = []
+
+    class Response:
+        status = 302
+        reason = "Found"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    class Connection:
+        def __init__(self, host, port, timeout):
+            calls.append(("connect", host, port, timeout))
+
+        def request(self, method, path, **kwargs):
+            calls.append(("request", method, path, kwargs))
+
+        def getresponse(self):
+            return Response()
+
+        def close(self):
+            calls.append(("close",))
+
+    monkeypatch.setattr(probe.http.client, "HTTPConnection", Connection)
+
+    with pytest.raises(RuntimeError, match="HTTP 302 Found"):
+        probe.run_one(
+            "http://localhost:18000/v1/chat/completions",
+            "model",
+            "prompt",
+            1,
+        )
+
+    assert calls[0] == ("connect", "127.0.0.1", 18000, 900)
+    assert calls[1][0:3] == ("request", "POST", "/v1/chat/completions")
+    assert calls[-1] == ("close",)
 
 
 # --- command builder ------------------------------------------------------

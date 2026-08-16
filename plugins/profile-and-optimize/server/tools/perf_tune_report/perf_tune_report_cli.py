@@ -48,6 +48,7 @@ from tools.perf_tune_report.helpers import (
     resolve_campaign_dir,
     resolve_campaigns_dir,
     resolve_cell_dir,
+    resolve_operator_path,
     safe_path_segment,
     slugify,
     synthetic_fixture_path,
@@ -2596,11 +2597,11 @@ def _resolve_ceilings_yaml(explicit: str | None, campaign_dir: Path) -> Path | N
     """Locate sol-ceilings.yaml: --ceilings, then SOL_CEILINGS_YAML env, then
     walk up from the campaign dir for configs/sol-ceilings.yaml."""
     if explicit:
-        p = Path(explicit).expanduser().resolve()
+        p = resolve_operator_path(explicit, label="--ceilings")
         return p if p.is_file() else None
     env_override = os.environ.get("SOL_CEILINGS_YAML", "").strip()
     if env_override and env_override != "disable":
-        p = Path(env_override).expanduser().resolve()
+        p = resolve_operator_path(env_override, label="SOL_CEILINGS_YAML")
         return p if p.is_file() else None
     # Canonical bundle name first, then a name-agnostic bundle-root fallback
     # (<bundle>/configs/sol-ceilings.yaml) so a future submodule rename needs no

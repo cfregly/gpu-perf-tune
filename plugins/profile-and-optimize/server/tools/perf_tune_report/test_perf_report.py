@@ -37,7 +37,12 @@ from tools.perf_tune_report.aggregator import aggregate
 from tools.perf_tune_report.capture_signature import variant_key_for
 from tools.perf_tune_report.coverage import summarize
 from tools.perf_tune_report.fixtures._build_synthetic_atlas import build_rows
-from tools.perf_tune_report.helpers import DEFAULT_CAMPAIGNS_DIR, resolve_campaigns_dir
+from tools.perf_tune_report.helpers import (
+    DEFAULT_CAMPAIGNS_DIR,
+    resolve_campaign_dir,
+    resolve_campaigns_dir,
+    resolve_operator_path,
+)
 from tools.perf_tune_report.perf_tune_report_cli import CONTRACT, main
 from tools.perf_tune_report.runners.aiperf_bench import (
     normalize_outputs as normalize_outputs_aiperf,
@@ -420,6 +425,46 @@ def test_campaigns_default_is_repo_local_when_env_is_absent(monkeypatch) -> None
     assert resolved == DEFAULT_CAMPAIGNS_DIR.resolve()
     assert resolved.is_relative_to(REPO_ROOT)
     assert "dev/inference" not in resolved.as_posix()
+
+
+def test_operator_path_rejects_nul_bytes() -> None:
+    with pytest.raises(ValueError, match="without NUL bytes"):
+        resolve_operator_path("campaigns\x00outside", label="campaigns directory")
+
+
+def test_campaign_lookup_rejects_unresolved_traversal_slug(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaigns = tmp_path / "campaigns"
+    campaigns.mkdir()
+    (tmp_path / "outside").mkdir()
+    cwd = tmp_path / "work" / "deep"
+    cwd.mkdir(parents=True)
+    monkeypatch.chdir(cwd)
+
+    with pytest.raises(SystemExit, match="invalid campaign path or slug"):
+        resolve_campaign_dir("../outside", campaigns)
+
+
+def test_campaign_lookup_rejects_symlink_escape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaigns = tmp_path / "campaigns"
+    campaigns.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (campaigns / "20260101T000000Z-demo").symlink_to(
+        outside,
+        target_is_directory=True,
+    )
+    cwd = tmp_path / "work"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+
+    with pytest.raises(SystemExit, match="campaign symlink escapes"):
+        resolve_campaign_dir("demo", campaigns)
 
 
 @pytest.mark.parametrize(

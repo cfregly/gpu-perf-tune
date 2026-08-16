@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from tools.perf_tune_report.capture_signature import variant_key_for
+from tools.perf_tune_report.helpers import resolve_operator_path
 from tools.perf_tune_report.schema import (
     REQUIRED_CONTEXT_STR_FIELDS,
     AtlasCell,
@@ -1339,7 +1340,7 @@ def _resolve_sol_ceilings(campaign_dir: Path, rows: list[AtlasCell]) -> "tuple[d
         return None, None, ""
     yaml_path: Path | None = None
     if env_override:
-        cand = Path(env_override).expanduser().resolve()
+        cand = resolve_operator_path(env_override, label="SOL_CEILINGS_YAML")
         yaml_path = cand if cand.is_file() else None
     else:
         cur = campaign_dir.resolve()

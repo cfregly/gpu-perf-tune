@@ -63,12 +63,21 @@ CONTRACT: dict[str, dict[str, Any]] = {
 DIRECTIONS = {"two-sided", "higher-is-better", "lower-is-better"}
 
 
+def _operator_path(value: str, *, label: str) -> Path:
+    """Normalize a complete path chosen by the local CLI operator."""
+    if not value or "\x00" in value:
+        raise ValueError(f"{label} must be a non-empty local path without NUL bytes")
+
+    # codeql[py/path-injection]
+    return Path(value).expanduser().resolve()
+
+
 def _resolve_repo_root(arg: str | None) -> Path:
     if arg:
-        return Path(arg).expanduser().resolve()
+        return _operator_path(arg, label="--repo-root")
     env = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
     if env:
-        return Path(env).expanduser().resolve()
+        return _operator_path(env, label="PROFILE_AND_OPTIMIZE_REPO_ROOT")
     # Fall back to walking up from cwd using product files as markers.
     current = Path.cwd().resolve()
     while current != current.parent:

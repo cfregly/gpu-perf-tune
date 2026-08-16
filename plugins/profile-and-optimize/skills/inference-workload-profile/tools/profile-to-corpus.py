@@ -27,6 +27,7 @@ Usage:
 """
 import argparse
 import json
+import shlex
 import sys
 
 # content-class -> SpecForge prepare_data.py --dataset choices (see that script's
@@ -38,10 +39,22 @@ CLASS_TO_DATASETS = {
 }
 
 
+def open_cli_text(path: str, mode: str):
+    """Open a path that the local CLI caller selected explicitly."""
+    return argparse.FileType(mode, encoding="utf-8")(path)
+
+
+def close_cli_text(stream) -> None:
+    if stream not in (sys.stdin, sys.stdout, sys.stderr):
+        stream.close()
+
+
 def emit_weighted_plan(profile: dict, total: int, out_plan: str, specforge_dir: str,
                        out_data: str):
     mix = profile.get("content_class_mix", {})
     grand = sum(mix.values()) or 1
+    quoted_specforge_dir = shlex.quote(specforge_dir)
+    quoted_out_data = shlex.quote(out_data)
     lines = [
         "#!/usr/bin/env bash",
         "# corpus-plan.sh -- WS-C2 weighted-dataset plan (auto-generated from a "
@@ -49,8 +62,8 @@ def emit_weighted_plan(profile: dict, total: int, out_plan: str, specforge_dir: 
         "# Run inside the SpecForge env (e.g. via b1-prepare-data.sbatch's container).",
         "# Produces a profile-matched conversations.jsonl to use as run-offline.sh DATA_PATH.",
         "set -euo pipefail",
-        f"SPECFORGE_DIR=${{SPECFORGE_DIR:-{specforge_dir}}}",
-        f"OUT=${{OUT:-$(dirname {out_data})}}",
+        f"SPECFORGE_DIR=${{SPECFORGE_DIR:-{quoted_specforge_dir}}}",
+        f"OUT=${{OUT:-$(dirname -- {quoted_out_data})}}",
         'mkdir -p "$OUT"',
         'PIP="pip install --no-cache-dir --break-system-packages"',
         '$PIP --no-deps -e "$SPECFORGE_DIR" >/dev/null 2>&1 || true',
@@ -62,22 +75,26 @@ def emit_weighted_plan(profile: dict, total: int, out_plan: str, specforge_dir: 
         cls_total = int(round(frac * total))
         datasets = CLASS_TO_DATASETS.get(cls, ["ultrachat"])
         per = max(1, cls_total // len(datasets))
-        lines.append(f'echo "[corpus] class={cls} frac={frac:.2f} n~={cls_total} '
-                     f'via {",".join(datasets)}"')
+        status = (f"[corpus] class={cls} frac={frac:.2f} n~={cls_total} "
+                  f"via {','.join(datasets)}")
+        lines.append(f"printf '%s\\n' {shlex.quote(status)}")
         for ds in datasets:
-            tag = f"{cls}_{ds}".replace("-", "_")
             lines.append(
-                f'python scripts/prepare_data.py --dataset {ds} '
+                f'python scripts/prepare_data.py --dataset {shlex.quote(ds)} '
                 f'--sample-size {per} --output-path "$OUT" || true'
             )
             # prepare_data.py writes <dataset>_train.jsonl; collect them
             lines.append(f'PARTS+=("$OUT/{ds}_train.jsonl")')
     lines += [
-        f'cat "${{PARTS[@]}}" > "{out_data}"',
-        f'echo "[corpus] wrote {out_data} lines=$(wc -l < {out_data})"',
+        f'cat "${{PARTS[@]}}" > {quoted_out_data}',
+        f"printf '%s lines=%s\\n' {shlex.quote(f'[corpus] wrote {out_data}')} "
+        f'"$(wc -l < {quoted_out_data})"',
     ]
-    with open(out_plan, "w") as f:
-        f.write("\n".join(lines) + "\n")
+    output = open_cli_text(out_plan, "w")
+    try:
+        output.write("\n".join(lines) + "\n")
+    finally:
+        close_cli_text(output)
     print(f"== wrote weighted-dataset plan {out_plan} ==")
     print("Profile-matched mix:")
     for cls, count in sorted(mix.items()):
@@ -88,7 +105,13 @@ def emit_weighted_plan(profile: dict, total: int, out_plan: str, specforge_dir: 
 def convert_traffic(profile: dict, traffic: str, out_data: str):
     """Mode (b): direct redacted-traffic -> conversations jsonl."""
     n, skipped = 0, 0
-    with open(traffic) as fin, open(out_data, "w") as fout:
+    fin = open_cli_text(traffic, "r")
+    try:
+        fout = open_cli_text(out_data, "w")
+    except Exception:
+        close_cli_text(fin)
+        raise
+    try:
         for i, line in enumerate(fin):
             line = line.strip()
             if not line:
@@ -115,6 +138,9 @@ def convert_traffic(profile: dict, traffic: str, out_data: str):
             fout.write(json.dumps({"id": rec.get("id", f"traffic-{i}"),
                                    "conversations": convs}) + "\n")
             n += 1
+    finally:
+        close_cli_text(fin)
+        close_cli_text(fout)
     print(f"== wrote {out_data}: {n} conversations ({skipped} skipped) ==")
     if n == 0:
         sys.exit(2)
@@ -134,8 +160,11 @@ def main():
     ap.add_argument("--specforge-dir", default="/mnt/data/eagle3-train/SpecForge")
     args = ap.parse_args()
 
-    with open(args.profile) as f:
-        profile = json.load(f)
+    profile_file = open_cli_text(args.profile, "r")
+    try:
+        profile = json.load(profile_file)
+    finally:
+        close_cli_text(profile_file)
 
     if args.traffic:
         convert_traffic(profile, args.traffic, args.out_data)

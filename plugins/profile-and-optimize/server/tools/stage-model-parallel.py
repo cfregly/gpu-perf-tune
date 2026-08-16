@@ -34,6 +34,7 @@ import socket
 import threading
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -87,6 +88,34 @@ def parse_s3(uri: str):
     return bucket, key.rstrip("/")
 
 
+def _operator_destination(value: str) -> Path:
+    """Normalize the complete destination root chosen by the local operator."""
+    if not value or "\x00" in value:
+        raise SystemExit("FATAL: destination must be a non-empty local path without NUL bytes")
+
+    # codeql[py/path-injection]
+    return Path(value).expanduser().resolve()
+
+
+def _download_path(destination_root: Path, prefix: str, object_key: str) -> Path:
+    """Map one S3 object key to a path contained by ``destination_root``."""
+    key_prefix = f"{prefix}/"
+    if not object_key.startswith(key_prefix):
+        raise RuntimeError(f"object key is outside requested prefix: {object_key!r}")
+    relative_key = object_key[len(key_prefix):]
+    parts = relative_key.split("/")
+    if (
+        not relative_key
+        or "\\" in relative_key
+        or any(part in {"", ".", ".."} for part in parts)
+    ):
+        raise RuntimeError(f"unsafe object key below requested prefix: {object_key!r}")
+    output = destination_root.joinpath(*parts).resolve()
+    if not output.is_relative_to(destination_root):
+        raise RuntimeError(f"object key escapes destination root: {object_key!r}")
+    return output
+
+
 def make_client(endpoint: str):
     return boto3.client(
         "s3", endpoint_url=endpoint, aws_access_key_id=AK,
@@ -106,7 +135,8 @@ def main():
     bucket, prefix = parse_s3(src)
     if not AK or not SK:
         raise SystemExit("FATAL: missing S3 creds (PERFLAKE_LAKE_S3_ACCESS_KEY/SECRET_KEY)")
-    os.makedirs(dst, exist_ok=True)
+    destination_root = _operator_destination(dst)
+    destination_root.mkdir(parents=True, exist_ok=True)
     endpoint = pick_endpoint()
 
     cfg = TransferConfig(
@@ -118,15 +148,27 @@ def main():
 
     s3 = make_client(endpoint)
     keys = []
+    output_keys: dict[Path, str] = {}
     total = 0
     for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix + "/"):
         for o in page.get("Contents", []):
-            keys.append((o["Key"], o["Size"]))
-            total += o["Size"]
+            key = o["Key"]
+            size = o["Size"]
+            if key.endswith("/") and size == 0:
+                continue
+            output = _download_path(destination_root, prefix, key)
+            previous_key = output_keys.get(output)
+            if previous_key is not None:
+                raise RuntimeError(
+                    f"object keys map to the same destination: {previous_key!r} and {key!r}"
+                )
+            output_keys[output] = key
+            keys.append((key, size, output))
+            total += size
     if not keys:
         raise SystemExit(f"FATAL: no objects under s3://{bucket}/{prefix}/")
 
-    print(f"[stage] {len(keys)} objects, {total/1e9:.1f} GB  ->  {dst}", flush=True)
+    print(f"[stage] {len(keys)} objects, {total/1e9:.1f} GB  ->  {destination_root}", flush=True)
     print(f"[stage] shards={SHARD_CONCURRENCY} multipart={MULTIPART_CONCURRENCY}x{CHUNK_MB}MB", flush=True)
 
     t0 = time.time()
@@ -134,14 +176,13 @@ def main():
     lock = threading.Lock()
     tl = threading.local()
 
-    def fetch(key, size):
-        rel = key[len(prefix) + 1:] if key.startswith(prefix + "/") else os.path.basename(key)
-        out = os.path.join(dst, rel)
-        os.makedirs(os.path.dirname(out) or dst, exist_ok=True)
+    def fetch(key, size, out):
+        rel = out.relative_to(destination_root).as_posix()
+        out.parent.mkdir(parents=True, exist_ok=True)
         if not hasattr(tl, "c"):
             tl.c = make_client(endpoint)
-        tl.c.download_file(bucket, key, out, Config=cfg)
-        got = os.path.getsize(out)
+        tl.c.download_file(bucket, key, str(out), Config=cfg)
+        got = out.stat().st_size
         if got != size:
             raise RuntimeError(f"size mismatch {rel}: got {got} expected {size}")
         with lock:
@@ -152,12 +193,16 @@ def main():
                   f"{done['bytes']/1e9:.1f}/{total/1e9:.1f}GB  {done['bytes']/1e6/el:.0f} MB/s agg", flush=True)
 
     with ThreadPoolExecutor(max_workers=SHARD_CONCURRENCY) as ex:
-        futs = [ex.submit(fetch, k, s) for k, s in keys]
+        futs = [ex.submit(fetch, key, size, output) for key, size, output in keys]
         for f in as_completed(futs):
             f.result()  # re-raise any worker error (fail-loud, no partial model)
 
     el = max(time.time() - t0, 1e-6)
-    print(f"[stage] DONE {total/1e9:.1f} GB in {el:.0f}s = {total/1e6/el:.0f} MB/s aggregate  ->  {dst}", flush=True)
+    print(
+        f"[stage] DONE {total/1e9:.1f} GB in {el:.0f}s = "
+        f"{total/1e6/el:.0f} MB/s aggregate  ->  {destination_root}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

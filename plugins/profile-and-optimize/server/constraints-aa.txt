@@ -11,7 +11,7 @@
 # Closure of tiktoken 0.13.0 as resolved on the validating venv (Python 3.14).
 tiktoken==0.13.0
 regex==2026.5.9
-charset-normalizer==3.4.7
+charset-normalizer==3.5.0
 requests==2.34.2
 certifi==2026.5.20
 idna==3.16

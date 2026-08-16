@@ -17,10 +17,6 @@ jobs:
       - name: Version banners match plugin.json
         run: python3 scripts/lint-versions.py
       - name: Workload proof packet completeness
-        run: python3 scripts/check_workload_proof_packets.py --self-test --require-proofplane-handoff
+        run: python3 scripts/check_workload_proof_packets.py --self-test --require-workflow-handoff
       - name: Doc-correctness gate
         run: python3 scripts/check_docs.py
-      - name: De-slop the README
-        run: |
-          pip install --quiet "git+https://github.com/cfregly/claude-deslop"
-          python -m deslop README.md

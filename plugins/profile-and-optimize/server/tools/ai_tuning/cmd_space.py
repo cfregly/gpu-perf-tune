@@ -17,8 +17,6 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 from tools.shared.jsonutil import load_json
 
-DEFAULT_SPACE = REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for

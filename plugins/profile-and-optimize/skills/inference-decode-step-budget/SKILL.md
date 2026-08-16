@@ -1,6 +1,9 @@
 ---
 name: inference-decode-step-budget
-last_validated: 2026-08-03
+license: MIT
+compatibility: Requires a skills-compatible agent and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-08-03"
 description: >-
   Measure the low-concurrency (c=1..c=8) decode hot-path of a live vLLM pod
   FAST and CORRECTLY: where each token's time actually goes (GPU-busy vs
@@ -16,19 +19,7 @@ description: >-
   "latency-tier profile", "GPU idle during decode", "start_profile", "torch
   profiler vllm", or any combination of "decode / c=1 / latency / TPOT / ITL"
   with "profile / budget / breakdown / hot-path / where" on a vllm deploy.
-allowed-tools:
-  - Bash(kubectl:exec,*)
-  - Bash(kubectl:cp,*)
-  - Bash(kubectl:get,*)
-  - Bash(kubectl:debug,*)
-  - Bash(kubectl:port-forward,*)
-  - Bash(curl:*)
-  - Bash(python3:*)
-  - Bash(nsys:*)
-  - Bash(jq:*)
-  - Bash(sha256sum:*)
-  - Read
-  - Write
+allowed-tools: "Bash(kubectl:exec,*) Bash(kubectl:cp,*) Bash(kubectl:get,*) Bash(kubectl:debug,*) Bash(kubectl:port-forward,*) Bash(curl:*) Bash(python3:*) Bash(nsys:*) Bash(jq:*) Bash(sha256sum:*) Read Write"
 ---
 
 # inference-decode-step-budget
@@ -45,7 +36,7 @@ gap (Python scheduler + launch + sampling + spec-decode orchestration), and
 days tuning a kernel that is 12% of TPOT.
 
 This split is the measured version of the
-[`performance-hints` cost ledger](/plugins/profile-and-optimize/server/docs/performance-hints.md).
+[`performance-hints` cost ledger](../../server/docs/performance-hints.md).
 Use each contributor's share to cap the end-to-end value of its proposed fix.
 
 Done naively this measurement is slow and error-prone: repeated vLLM restarts
@@ -110,11 +101,11 @@ Per-iteration cost: **seconds**, not the ~5 min a vllm restart costs.
 Do **not** use this skill for:
 
 - Per-kernel hardware-counter / roofline detail - that is
-  [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md).
+  [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md).
 - Prefill / throughput-tier (high-concurrency) hot-spots - use
-  [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) +
-  [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md).
-- End-to-end tok/s sweeps - that is [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md).
+  [`inference-kernel-profile`](../inference-kernel-profile/SKILL.md) +
+  [`analyze-zymtrace-workload`](../analyze-zymtrace-workload/SKILL.md).
+- End-to-end tok/s sweeps - that is [`inference-perf-bench`](../inference-perf-bench/SKILL.md).
 
 ## Example prompts
 
@@ -152,7 +143,7 @@ tiers (zymtrace L1, DCGM L3) apply to SGLang unchanged.
 
 Iterative. Do one phase, report the single most important number, then ask
 before the next. Never dump all diagnostics at once. Mirror
-[`k8s-troubleshooting`](/plugins/profile-and-optimize/skills/k8s-troubleshooting/SKILL.md).
+[`k8s-troubleshooting`](../k8s-troubleshooting/SKILL.md).
 
 ## Workflow
 
@@ -219,7 +210,7 @@ Run the gates (next section). Only then classify:
   coverage, spec-decode host orchestration, graph the sampling/LM-head tail.
   Kernel tuning is futile.
 - **kernel/compute-bound** (GPU busy ~= step, one kernel dominates): escalate to
-  [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) on
+  [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md) on
   that kernel.
 - **comm-bound** (all-reduce/all-gather dominates busy): NCCL/NVLS env + TP/topology.
 
@@ -260,11 +251,11 @@ These are mandatory. Each one prevents a class of wrong answer seen in practice.
 
 ## Assets
 
-- [`assets/clean-driver.sh`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/assets/clean-driver.sh) - workload-agnostic clean
+- [`assets/clean-driver.sh`](assets/clean-driver.sh) - workload-agnostic clean
   single-stream decode driver (env: `MODEL`, `PROMPT`, `MAX_TOKENS`,
   `CONCURRENCY`, `ROUNDS`). Reports per-round wall-time so you get TPOT for the
   reconciliation gate for free.
-- [`assets/decode_budget.py`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/assets/decode_budget.py) - auto-detects nsys
+- [`assets/decode_budget.py`](assets/decode_budget.py) - auto-detects nsys
   `.sqlite` (via `nsys export`) or kineto `.json[.gz]`. Prints the true-busy
   budget, idle-gap histogram, inter-step cadence, and the
   busy-vs-idle-vs-comm per-step split with the capture-quality verdict.
@@ -287,10 +278,10 @@ TPOT so kernel work cannot move c=1.
 
 ## Pairs with
 
-- [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) - when Phase 4 says kernel-bound, get per-kernel %SoL / occupancy.
-- [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) - nsys timeline for prefill / throughput tier.
-- [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) - the end-to-end TPOT the budget must reconcile against.
-- [`evidence-bundle-init`](/plugins/profile-and-optimize/skills/evidence-bundle-init/SKILL.md) - scaffold the bundle first.
+- [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md) - when Phase 4 says kernel-bound, get per-kernel %SoL / occupancy.
+- [`inference-kernel-profile`](../inference-kernel-profile/SKILL.md) - nsys timeline for prefill / throughput tier.
+- [`inference-perf-bench`](../inference-perf-bench/SKILL.md) - the end-to-end TPOT the budget must reconcile against.
+- [`evidence-bundle-init`](../evidence-bundle-init/SKILL.md) - scaffold the bundle first.
 
 ## Full-context reporting (no bare numbers)
 

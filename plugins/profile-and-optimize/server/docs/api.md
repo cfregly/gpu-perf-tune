@@ -5,7 +5,7 @@ Audience: engineers and MCP/tool authors importing repo helpers.
 
 The public Python API is intentionally small and CLI-free. Import the
 stable shared primitives from the `tools.shared` modules listed below.
-Operator commands remain under [`tools/`](/plugins/profile-and-optimize/server/tools).
+Operator commands remain under [`tools/`](../tools).
 
 Do not import other `tools.pipeline...` modules directly from external
 code. Their layout and signatures are internal and may change without

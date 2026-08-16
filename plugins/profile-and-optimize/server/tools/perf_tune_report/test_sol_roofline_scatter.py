@@ -417,7 +417,7 @@ def test_renderer_full_stack_5_pages_with_zymtrace_and_ncu(tmp_path, monkeypatch
 
 
 # ---------------------------------------------------------------------------
-# E. v1.23.2: empty-state messaging + DCGM-fallback scatter
+# E. Empty-state messaging + DCGM-fallback scatter
 # ---------------------------------------------------------------------------
 
 
@@ -475,7 +475,7 @@ _DCGM_PAYLOAD_WITH_ATTRIBUTION = {
 
 
 def test_render_page_dcgm_fallback_plots_when_ncu_all_null():
-    """v1.23.2: when all ncu kernels have null AI/tflops, DCGM fallback fires."""
+    """When all ncu kernels have null AI/tflops, DCGM fallback fires."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -501,7 +501,7 @@ def test_render_page_dcgm_fallback_plots_when_ncu_all_null():
 
 
 def test_render_page_empty_state_message_when_no_data():
-    """v1.23.2: when neither ncu kernels NOR dcgm fallback have data, empty-state msg renders."""
+    """When neither ncu kernels nor DCGM fallback have data, render an empty state."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -522,13 +522,13 @@ def test_render_page_empty_state_message_when_no_data():
                 all_text.append(child.get_text())
         joined = " ".join(all_text)
         assert "No roofline-ready measurements found" in joined
-        assert "TODO-NCU-FULL-SET-RECAPTURE" in joined
+        assert "ncu --set full" in joined
     finally:
         plt.close(fig)
 
 
 def test_render_page_dcgm_fallback_skipped_when_attribution_empty():
-    """v1.23.2: dcgm payload without per_category_attribution -> empty-state."""
+    """A DCGM payload without per_category_attribution renders an empty state."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -714,7 +714,7 @@ def test_report_status_records_partial_page5_solonly(tmp_path, monkeypatch):
 
 
 def test_render_page_real_ncu_kernels_skip_dcgm_fallback():
-    """v1.23.2: when ncu kernels have real AI/tflops, DCGM fallback is NOT used."""
+    """When ncu kernels have real AI/tflops, do not use the DCGM fallback."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt

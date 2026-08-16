@@ -4,12 +4,12 @@ Audience: operators triaging an MFU / step-time / convergence regression on a GP
 # Performance regression bisection decision tree
 
 This is the symptom-to-culprit decision tree that pairs with
-[`profile_run.sh`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/profile_run.sh), [`profile_diff.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/profile_diff.py),
-and [`host_overhead.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/host_overhead.py). It turns a noisy "step time
+[`profile_run.sh`](profile_run.sh), [`profile_diff.py`](profile_diff.py),
+and [`host_overhead.py`](host_overhead.py). It turns a noisy "step time
 got slower" complaint into a short list of likely culprits, each anchored
 on a concrete recent NVIDIA-side commit so the operator knows what kind
 of fix to look for. Pair it with the strategy memo at
-[`docs/profiling-and-perf-discovery.md`](/plugins/profile-and-optimize/server/docs/profiling-and-perf-discovery.md)
+[`docs/profiling-and-perf-discovery.md`](../../../../docs/profiling-and-perf-discovery.md)
 and your per-target SOPs under `runbooks/`.
 
 The tree is **not** an automated tool. Each branch is a hypothesis the
@@ -68,9 +68,8 @@ single hot kernel.
    `090da658c96a` "no recompute default"
    (commit moved the default away from full recompute). Probe:
    `MEGATRON_EXTRA_ARGS` carrying `--recompute-granularity` should match
-   the baseline's. If it changed, the probe template at
-   [`tuning/proposals/template-patches/llama31_405b/recompute_granularity_none.json`](/plugins/profile-and-optimize/server/tuning/proposals/template-patches/llama31_405b/recompute_granularity_none.json)
-   shows how to pin the value.
+   the baseline's. If it changed, pin the value in a workload-specific derived
+   configuration and preserve the diff with the experiment evidence.
 2. Quant dtype drifted: cf. Bridge
    `ec5e8c3b0fab` "mxfp8 to fp8_cs for
    h100 gpt-oss". Probe: NVFP4 recipe paths must remain on

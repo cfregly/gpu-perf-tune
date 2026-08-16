@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "target_file": "tools/ai_tuning/testdata/structural.sbatch",
+  "changes": [
+    {
+      "match_context": "#SBATCH --job-name=ai-tuning-structural\n#SBATCH --nodes=8\n#SBATCH --partition=example",
+      "replacement": "#SBATCH --job-name=ai-tuning-structural\n#SBATCH --partition=example",
+      "rationale": "Exercise rejection of a removed node declaration."
+    }
+  ]
+}

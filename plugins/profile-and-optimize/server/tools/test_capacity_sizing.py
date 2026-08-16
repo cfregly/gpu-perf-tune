@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from capacity_sizing import Anchor, parse_anchors, render_md, resolve
+from tools.capacity_sizing import Anchor, parse_anchors, render_md, resolve
 
 # GB300 MiniMax-M2.7-NVFP4 TP4 measured tok/s/user anchors (AA aa-10k, L3): c=1, c=10, knee c=256.
 MINIMAX = [Anchor(1, 215.5), Anchor(10, 122.2), Anchor(256, 41.8)]

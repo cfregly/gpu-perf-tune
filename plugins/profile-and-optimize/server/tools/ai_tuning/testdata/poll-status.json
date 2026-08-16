@@ -1,0 +1,9 @@
+{
+  "jobs": [
+    {
+      "slurm_job_id": "12345",
+      "slurm_state": "COMPLETED",
+      "exit_code": "0:0"
+    }
+  ]
+}

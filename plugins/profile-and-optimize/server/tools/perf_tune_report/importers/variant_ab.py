@@ -1,9 +1,9 @@
-"""Importer for the model-optimize variant-A/B layout (run-variant-ab.sh output).
+"""Importer for the model-optimize variant A/B bundle layout.
 
 Sibling to ``inference_perf_bench.py`` (single-cell vLLM sweep) and
 ``lws_summary.py`` (multi-variant summary.json). Added so
 ``perftunereport import_perf_bench --bundle <ab-dir>`` ingests the
-``run-variant-ab.sh`` A/B output DIRECTLY -- no per-campaign glue.
+an A/B output bundle directly, with no per-campaign glue.
 
 Source layout (one subdir per A/B arm == one cell):
 
@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from tools.perf_tune_report.helpers import resolve_cell_dir
 
 from tools.perf_tune_report.schema import (
     BACKEND_SGLANG_SWEEP,
@@ -85,7 +87,7 @@ def _arm_dirs(bundle: Path) -> list[Path]:
 
 
 def detect_variant_ab(bundle: Path) -> bool:
-    """True iff ``bundle`` has the run-variant-ab.sh ``<arm>/c<C>-t<T>.txt`` layout."""
+    """True iff ``bundle`` has the ``<arm>/c<C>-t<T>.txt`` A/B layout."""
     try:
         bundle = bundle.expanduser()
         return bundle.is_dir() and len(_arm_dirs(bundle)) > 0
@@ -186,7 +188,7 @@ def _arm_identity(
         else bool(res["mtp"]) if res.get("mtp") is not None
         else "mtp" in arm.name.lower()
     )
-    # Engine (cross-engine A/B): result.json "engine" (written by run-variant-ab.sh)
+        # Engine (cross-engine A/B): result.json "engine" from the producer.
     # wins; else CLI override; else infer from the arm name (the "-s-" / "sgl" naming
     # convention); else default vllm.
     engine = (
@@ -249,7 +251,7 @@ def import_variant_ab_bundle(
     captured_at: str | None = None,
     require_plot_ready: bool = False,
 ) -> VariantAbImportResult:
-    """Convert a run-variant-ab.sh A/B bundle into one ``cells/<arm>/normalized.json``
+    """Convert an A/B bundle into one ``cells/<arm>/normalized.json``
     per arm. Reuses the inference_perf_bench text parser + row builder.
     """
     bundle = bundle.expanduser().resolve()
@@ -299,9 +301,9 @@ def import_variant_ab_bundle(
         cells.append(arm.name)
         total_rows += len(rows)
         all_concs.update(r.concurrency for r in rows)
-        cell_dir = campaign_dir / "cells" / arm.name
+        cell_dir = resolve_cell_dir(campaign_dir, arm.name)
         # Per-arm zymtrace SoL ingestion (declared-coverage contract, mirrors
-        # inference_perf_bench): when run-variant-ab.sh's inline SoL capture wrote
+        # inference_perf_bench): when the producer's inline SoL capture wrote
         # <arm>/capture_sources.json + <arm>/zymtrace/, a cells/<arm>/kernels.json is
         # emitted (renderer page 4 / L1). If the manifest DECLARES zymtrace but a TSV
         # is missing/empty/malformed, this raises and aborts the whole import -- the

@@ -4,7 +4,7 @@ loader (hf-pull | runai) + rationale.
 
 This is the SINGLE SOURCE OF TRUTH for the loader decision, shared by:
   - (B) the inference-model-optimize / model-onboarding advisor step (emits LOADER.md + JSON), and
-  - (C) the scaffold-model-bringup.sh `--loader auto` resolver (renders the chosen fragment).
+  - (C) an operator-owned model bring-up flow that consumes the JSON recommendation.
 
 Pure-Python, no cluster calls (decisions are structural). Decision tree (kept in lockstep with
 docs/inference-fast-model-loading.md "Loader selection for a serving tier"):

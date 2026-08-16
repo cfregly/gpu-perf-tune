@@ -1,6 +1,6 @@
-"""import_workloads: a bench-all-workloads.sh output dir -> dataset-tagged campaign cells.
+"""Import a multi-workload output directory into dataset-tagged campaign cells.
 
-``bench-all-workloads.sh`` writes one ``<tag>-c<c>.txt`` per (workload, concurrency) plus a
+The input has one ``<tag>-c<c>.txt`` per workload and concurrency pair, plus a
 ``bench-workloads.json`` (tag -> dataset / ISL / OSL, mirroring
 ``perf-tune-report/configs/workloads.yaml``). This importer parses each ``<tag>-c<c>.txt`` (reusing
 ``raw_bench_compare._parse_sweep_file`` for the metric extraction) and emits one
@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from tools.perf_tune_report.helpers import resolve_cell_dir
 from tools.perf_tune_report.raw_bench_compare import _parse_sweep_file
 from tools.perf_tune_report.runners.common import (
     write_backend_file,
@@ -28,7 +29,7 @@ from tools.perf_tune_report.runners.common import (
 )
 from tools.perf_tune_report.schema import BACKEND_VLLM_SWEEP, STATUS_FULL, AtlasCell
 
-# bench-all-workloads.sh output file: <tag>-c<c>.txt (tag may contain hyphens, e.g. aa-1k).
+# Input file: <tag>-c<c>.txt (tag may contain hyphens, e.g. aa-1k).
 # Greedy ``.+`` anchors on the LAST ``-c<digits>`` so multi-hyphen tags resolve correctly.
 _TAG_C_RE = re.compile(r"^(?P<tag>.+)-c(?P<c>\d+)\.txt$")
 
@@ -150,7 +151,7 @@ def import_workloads(
     bench_backend: str = "openai",
     dry_run: bool = False,
 ) -> WorkloadsImportResult:
-    """Import a bench-all-workloads.sh output dir into per-workload campaign cells.
+    """Import a multi-workload output directory into per-workload campaign cells.
 
     One ``cells/<tag>/normalized.json`` per workload tag (each concurrency a row), tagged with
     the workload ``dataset`` + typed ISL/OSL from ``bench-workloads.json``. The serve-config
@@ -184,7 +185,6 @@ def import_workloads(
         by_tag.setdefault(m.group("tag"), []).append((int(m.group("c")), fp))
 
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    cells_root = campaign_dir / "cells"
     tags_done: list[str] = []
     skipped: list[str] = []
     n_rows = 0
@@ -212,7 +212,7 @@ def import_workloads(
             skipped.append(tag)
             continue
         if not dry_run:
-            cell_dir = cells_root / tag
+            cell_dir = resolve_cell_dir(campaign_dir, tag)
             write_normalized_json(cell_dir, rows)
             write_status_file(cell_dir, STATUS_FULL)
             write_backend_file(cell_dir, BACKEND_VLLM_SWEEP)

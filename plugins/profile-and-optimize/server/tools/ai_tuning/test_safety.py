@@ -1,6 +1,6 @@
 """Tests for safety.py.
 
-Per CLAUDE.md "AI-Assisted Tuning Safety", every change to
+Per AGENTS.md safety guidance, every change to
 ``FORBIDDEN_PATCH_PATTERNS`` must keep the regex behavior intact and
 the ai_tuning re-exports honest. These tests exercise both invariants.
 """
@@ -8,16 +8,9 @@ the ai_tuning re-exports honest. These tests exercise both invariants.
 from __future__ import annotations
 
 import re
-import sys
 import unittest
-from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
-
-import ai_tuning  # noqa: E402
-import safety  # noqa: E402
+from tools.ai_tuning import ai_tuning, safety
 
 
 class ForbiddenPatternsTests(unittest.TestCase):

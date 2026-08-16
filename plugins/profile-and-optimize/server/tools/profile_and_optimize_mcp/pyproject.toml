@@ -1,20 +1,28 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "profile-and-optimize-mcp"
-version = "0.2.0"
-description = "MLPerf and performance MCP tools"
+version = "0.3.0"
+description = "Standards-based MCP runtime for GPU inference profiling and optimization tools."
+readme = "README.md"
 requires-python = ">=3.11"
+authors = [{name = "Project contributors"}]
+license = "MIT"
 # `pyyaml` is required because the campaign library
 # (`tools/pipeline/submission/campaign/campaign_dag.py`) imports yaml at
 # module-load time. Loading the campaign shim under the FastMCP runtime
 # would otherwise raise ModuleNotFoundError before any verb dispatches.
-dependencies = ["mcp[cli]>=1.2.0", "pyyaml>=6", "starlette>=1.3.1"]
+dependencies = ["mcp[cli]>=1.2.0,<2", "PyYAML>=6.0.2", "starlette>=1.3.1"]
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
+test = ["pytest>=8,<10"]
+
+[project.urls]
+Homepage = "https://github.com/cfregly/gpu-perf-tune"
+Issues = "https://github.com/cfregly/gpu-perf-tune/issues"
+Security = "https://github.com/cfregly/gpu-perf-tune/security/policy"
 
 [project.scripts]
 profile-and-optimize-mcp = "profile_and_optimize_mcp.__main__:main"

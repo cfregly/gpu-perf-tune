@@ -3,11 +3,11 @@
 This package is a thin shim. The real implementation lives at
 [`tools/slurm/slurm_cli.py`](../tools/slurm/slurm_cli.py).
 The shim exists so the MCP surface in [`mcp_surface.py`](../mcp_surface.py)
-can introspect this library the same way it introspects the MLPerf libraries
-via `<repo_root>/<library>/cli.py`.
+can introspect this library alongside every package in
+`mcp_surface.LIBRARIES` via `<repo_root>/<library>/cli.py`.
 
-Added in profile-and-optimize v0.5.0. Backs the
-[`slurm-job-triage-generic`](../skills/slurm-job-triage-generic/SKILL.md) skill.
+Cluster-level findings can hand off to
+[`k8s-troubleshooting`](../../skills/k8s-troubleshooting/SKILL.md).
 """
 
 from __future__ import annotations

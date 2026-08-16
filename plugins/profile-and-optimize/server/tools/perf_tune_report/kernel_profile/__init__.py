@@ -1,4 +1,4 @@
-"""perf_tune_report_kernel_profile verb (v1.21.0).
+"""perf_tune_report_kernel_profile verb.
 
 Capture per-kernel CUDA profile data from a live vLLM inference pod via an
 nsys-enabled debug sidecar (no production image rebuild). Implements the

@@ -1,1 +1,1 @@
-"""Importable package for MLPerf operator tooling."""
+"""Importable GPU profiling and performance optimization tools."""

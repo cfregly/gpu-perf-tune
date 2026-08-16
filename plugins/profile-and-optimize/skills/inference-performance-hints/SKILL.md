@@ -1,6 +1,9 @@
 ---
 name: inference-performance-hints
-last_validated: 2026-08-03
+license: Apache-2.0
+compatibility: Requires a skills-compatible agent and configured MCP servers named in allowed-tools.
+metadata:
+  last-validated: "2026-08-16"
 description: >-
   Applies Jeff Dean and Sanjay Ghemawat's Performance Hints to GPU inference.
   Builds a back-of-the-envelope cost ledger, identifies the hot-path class,
@@ -10,10 +13,7 @@ description: >-
   "where should I optimize", "flat profile", "hot path review", "estimate
   before benchmarking", or "make this inference path faster". Estimates remain
   DRAFT until production-shaped measurement confirms them.
-allowed-tools:
-  - mcp__profile_and_optimize__search_runbooks
-  - mcp__profile_and_optimize__search_evidence
-  - Read
+allowed-tools: "mcp__profile_and_optimize__search_runbooks mcp__profile_and_optimize__search_evidence Read"
 ---
 
 # inference-performance-hints
@@ -73,7 +73,7 @@ mcp__profile_and_optimize__search_runbooks with:
 ```
 
 Read
-[`performance-hints.md`](/plugins/profile-and-optimize/server/docs/performance-hints.md)
+[`performance-hints.md`](../../server/docs/performance-hints.md)
 and use its current formulas and routing rules. The upstream guide is attribution
 and general technique. This repo document is the GPU-inference contract.
 
@@ -102,7 +102,7 @@ explicit efficiency assumption.
 
 For overlapping work, use the maximum as the lower bound. Add serialized work.
 Round uncertain inputs and show units. The checked-in synthetic example at
-[`examples/performance-hints/`](/examples/performance-hints) demonstrates the
+[`examples/performance-hints/`](../../../../examples/performance-hints) demonstrates the
 JSON shape.
 
 ### Phase 3: compare the estimate with measurement
@@ -179,7 +179,7 @@ ROUTE: <sibling skill>
 
 All rough costs, extrapolations, and single observations are DRAFT. A result can
 become a VERDICT only through the variance, baseline, capture, and full-context
-rules in [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md). The estimate ledger may
+rules in [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md). The estimate ledger may
 prioritize a measurement. It cannot promote a claim.
 
 ## Safety
@@ -192,7 +192,7 @@ prioritize a measurement. It cannot promote a claim.
 
 ## Source-of-truth references
 
-- [`performance-hints.md`](/plugins/profile-and-optimize/server/docs/performance-hints.md)
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md)
-- [`configs/sol-ceilings.yaml`](/configs/sol-ceilings.yaml)
-- [`examples/performance-hints/README.md`](/examples/performance-hints/README.md)
+- [`performance-hints.md`](../../server/docs/performance-hints.md)
+- [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md)
+- [`configs/sol-ceilings.yaml`](../../../../configs/sol-ceilings.yaml)
+- [`examples/performance-hints/README.md`](../../../../examples/performance-hints/README.md)

@@ -110,4 +110,4 @@ Numbering (`C1`, `H1`, `M1`, `L1`) is auto-assigned in input order.
 
 ## Contact
 
-Open an issue using the [`question.md`](/.github/ISSUE_TEMPLATE/question.md) template.
+Open an issue using the [`question.md`](../.github/ISSUE_TEMPLATE/question.md) template.

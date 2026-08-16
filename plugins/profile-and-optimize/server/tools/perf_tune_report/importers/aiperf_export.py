@@ -8,8 +8,7 @@ Reads an AIPerf variant directory laid out as::
       c16/profile_export_aiperf.csv
       c32/profile_export_aiperf.csv
 
-(produced by ``aiperf profile`` runs, e.g. the
-``perf-tune-glm51/cluster-probes/<ts>-aiperf-allvariants/raw/<variant>/`` campaign)
+(produced by ``aiperf profile`` runs and grouped by variant)
 and writes a perf-report-compatible ``cells/<cell-id>/normalized.json``.
 
 This closes the gap noted in the 2026-05-31 AIPerf campaign: the perf_tune_report
@@ -51,6 +50,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from tools.perf_tune_report.helpers import resolve_cell_dir
 from tools.perf_tune_report.schema import (
     BACKEND_AIPERF,
     STATUS_FULL,
@@ -307,7 +307,7 @@ def import_aiperf_bundle(
 
     concurrencies = sorted({r.concurrency for r in rows})
     overall_status = STATUS_PARTIAL if partial_cells else STATUS_FULL
-    cell_dir = campaign_dir / "cells" / cell_id
+    cell_dir = resolve_cell_dir(campaign_dir, cell_id)
     normalized_path = cell_dir / "normalized.json"
     if dry_run:
         return AiperfImportResult(

@@ -16,7 +16,8 @@ from tools.slurm.slurm_cli import CONTRACT, build_parser, main
 def _seed_repo_root(tmp_path: Path) -> Path:
     root = tmp_path / "fake-repo-root"
     root.mkdir()
-    (root / "CLAUDE.md").write_text("# fake\n")
+    (root / "pyproject.toml").write_text("[project]\nname = 'fake'\nversion = '0'\n")
+    (root / "mcp_surface.py").write_text("# marker\n")
     (root / "tools").mkdir()
     return root
 
@@ -37,6 +38,7 @@ def test_drain_contract_shape() -> None:
     assert spec["safety"] == "substitutes_nodes"
     assert spec["ack"] == "--i-understand-this-substitutes-nodes"
     assert "--nodes" in spec["required"]
+    assert "--ns" in spec["required"]
     assert spec["json"] is True
 
 
@@ -45,6 +47,7 @@ def test_resume_contract_shape() -> None:
     assert spec["safety"] == "substitutes_nodes"
     assert spec["ack"] == "--i-understand-this-substitutes-nodes"
     assert "--nodes" in spec["required"]
+    assert "--ns" in spec["required"]
 
 
 def test_quiet_window_contract_shape() -> None:
@@ -53,6 +56,7 @@ def test_quiet_window_contract_shape() -> None:
     assert spec["ack"] == "--i-understand-this-substitutes-nodes"
     assert "--nodes" in spec["required"]
     assert "--cmd" in spec["required"]
+    assert "--ns" in spec["required"]
 
 
 def test_match_signatures_oom() -> None:
@@ -79,7 +83,8 @@ def test_match_signatures_shm_bloat_oom_2026_05_15_pattern() -> None:
     assert hits, "expected at least one match"
     top_sig, _ = hits[0]
     assert top_sig.klass == "shm_bloat_oom"
-    assert "shm_health_clear_apply" in top_sig.next_probe
+    assert "k8s-troubleshooting" in top_sig.next_probe
+    assert "slurm_drain" in top_sig.next_probe
 
 
 def test_match_signatures_shm_bloat_oom_no_space_on_tmpfs() -> None:
@@ -171,6 +176,30 @@ def test_triage_cli_classifies_oom_from_synthetic_slurmout(
     assert envelope["signature_hit_count"] >= 1
 
 
+def test_triage_repo_root_bounds_recursive_log_search(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _seed_repo_root(tmp_path)
+    nested = root / "runs" / "one"
+    nested.mkdir(parents=True)
+    expected = nested / "slurm-4242.out"
+    expected.write_text("out of memory: killed process by signal 9\n")
+    unrelated = tmp_path / "unrelated"
+    unrelated.mkdir()
+    (unrelated / "slurm-4242.out").write_text("everything is fine\n")
+    monkeypatch.chdir(unrelated)
+
+    assert main(["triage", "--jobid", "4242", "--repo-root", str(root), "--json"]) == 0
+    envelope = json.loads(capsys.readouterr().out)
+
+    assert envelope["repo_root"] == str(root)
+    assert envelope["search_root"] == str(root)
+    assert envelope["slurm_out_path"] == str(expected)
+    assert envelope["classification"]["class"] == "oom"
+
+
 def test_triage_cli_nccl_hang_recommends_ibcheck_handoff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -184,9 +213,15 @@ def test_triage_cli_nccl_hang_recommends_ibcheck_handoff(
     envelope = json.loads(capsys.readouterr().out)
     assert envelope["classification"]["class"] == "nccl_hang"
     # When sacct is not available (no Slurm on the test workstation), handoff is None.
-    # When sacct IS available + WorkDir doesn't say mlperf, handoff suggests support:ib-bw-check.
+    # When sacct is available, cluster incidents use the maintained public skill.
     if envelope["handoff_skill"] is not None:
-        assert "ib-bw-check" in envelope["handoff_skill"] or envelope["handoff_skill"] == "mlperf-debug-failed-run"
+        assert envelope["handoff_skill"] == "k8s-troubleshooting"
+
+
+def test_cluster_handoff_uses_maintained_public_skill() -> None:
+    sacct = {"WorkDir": "/work/experiments/artifacts/campaign/test"}
+    assert slurm_cli._cluster_handoff("oom", sacct) == "k8s-troubleshooting"
+    assert slurm_cli._cluster_handoff("nccl_hang", {"WorkDir": "/work/run"}) == "k8s-troubleshooting"
 
 
 def test_build_parser_help_does_not_crash() -> None:
@@ -197,7 +232,7 @@ def test_build_parser_help_does_not_crash() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# drain / resume / quiet_window — substitutes_nodes verbs added in v1.17.0
+# drain / resume / quiet_window tests
 # --------------------------------------------------------------------------- #
 
 
@@ -237,7 +272,7 @@ def _common_drain_args(bundle: Path) -> list[str]:
         "--reason",
         "test reason",
         "--ns",
-        "<slurm-namespace>",
+        "test-namespace",
         "--ctl",
         "deploy/slurm-controller",
         "--ctl-container",
@@ -292,6 +327,8 @@ def test_drain_refuses_without_ack(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         "drain",
         "--nodes",
         "x,y",
+        "--ns",
+        "test-namespace",
         "--bundle",
         str(bundle),
     ]
@@ -429,8 +466,7 @@ def test_quiet_window_resumes_when_inner_cmd_fails(
 
 
 def test_quiet_window_resumes_when_inner_cmd_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """If the inner cmd raises an exception (e.g. KeyboardInterrupt-ish), resume
-    MUST still run via finally and the exception must propagate."""
+    """An interrupted inner command still triggers a resume attempt."""
     bundle = tmp_path / "bundle"
     resume_called = {"yes": False}
 
@@ -457,13 +493,13 @@ def test_quiet_window_resumes_when_inner_cmd_raises(tmp_path: Path, monkeypatch:
     assert resume_called["yes"], "resume must run even when inner cmd raises"
 
 
-def test_quiet_window_skips_inner_and_resume_on_drain_failure(
+def test_quiet_window_compensates_after_drain_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """If drain itself fails, the inner cmd MUST NOT run (cluster wasn't actually
-    drained) and resume is skipped (nothing to undo)."""
+    """A failed drain skips the inner command and attempts a compensating resume."""
     bundle = tmp_path / "bundle"
     inner_called = {"yes": False}
+    resume_called = {"yes": False}
 
     def _runner(argv: list[str], *, capture: bool = True, timeout: int | None = 60):
         joined = " ".join(argv)
@@ -473,7 +509,8 @@ def test_quiet_window_skips_inner_and_resume_on_drain_failure(
         if "State=DRAIN" in joined:
             return subprocess.CompletedProcess(args=argv, returncode=1, stdout="", stderr="permission denied\n")
         if "State=RESUME" in joined:
-            pytest.fail("resume must NOT run when drain failed")
+            resume_called["yes"] = True
+            return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
         return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
 
     monkeypatch.setattr(slurm_cli, "RUN", _runner)
@@ -488,11 +525,169 @@ def test_quiet_window_skips_inner_and_resume_on_drain_failure(
     )
     assert rc == 1
     assert inner_called["yes"] is False, "inner cmd must NOT run when drain failed"
+    assert resume_called["yes"] is True
 
     envelope = json.loads(capsys.readouterr().out)
     assert envelope["inner_skipped"] is True
-    assert envelope["resume_skipped"] is True
+    assert envelope["resume_skipped"] is False
     assert envelope["drain_exit"] == 1
+    assert envelope["compensation_attempted"] is True
+    assert envelope["compensation_exit"] == 0
+
+
+@pytest.mark.parametrize("drain_rc", [0, 1])
+def test_quiet_window_snapshot_exception_cannot_preempt_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    drain_rc: int,
+) -> None:
+    bundle = tmp_path / "bundle"
+    sinfo_calls = 0
+    resume_called = False
+    inner_called = False
+
+    def _runner(argv: list[str], *, capture: bool = True, timeout: int | None = 60):
+        nonlocal sinfo_calls, resume_called, inner_called
+        joined = " ".join(argv)
+        if argv and argv[0] != "kubectl":
+            inner_called = True
+            return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+        if "State=DRAIN" in joined:
+            return subprocess.CompletedProcess(
+                args=argv, returncode=drain_rc, stdout="", stderr="drain failed\n" if drain_rc else ""
+            )
+        if "State=RESUME" in joined:
+            resume_called = True
+            return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+        if "sinfo" in joined:
+            sinfo_calls += 1
+            if sinfo_calls == 2:
+                raise subprocess.TimeoutExpired(argv, 30)
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(slurm_cli, "RUN", _runner)
+    rc = main(["quiet_window", *_common_drain_args(bundle), "--cmd", "true"])
+
+    assert rc != 0
+    assert resume_called is True
+    assert inner_called is False
+    envelope = json.loads(capsys.readouterr().out)
+    assert "TimeoutExpired" in " ".join(envelope["diagnostic_errors"])
+
+
+def test_quiet_window_drain_receipt_failure_cannot_preempt_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bundle = tmp_path / "bundle"
+    resume_called = False
+    original_capture = slurm_cli._capture_step
+
+    def _capture(*args, **kwargs):
+        if args[1] == "02-drain":
+            raise OSError("artifact filesystem unavailable")
+        return original_capture(*args, **kwargs)
+
+    def _runner(argv: list[str], *, capture: bool = True, timeout: int | None = 60):
+        nonlocal resume_called
+        if "State=RESUME" in " ".join(argv):
+            resume_called = True
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(slurm_cli, "_capture_step", _capture)
+    monkeypatch.setattr(slurm_cli, "RUN", _runner)
+    rc = main(["quiet_window", *_common_drain_args(bundle), "--cmd", "true"])
+
+    assert rc == 255
+    assert resume_called is True
+    envelope = json.loads(capsys.readouterr().out)
+    assert envelope["inner_skipped"] is True
+    assert "artifact filesystem unavailable" in " ".join(envelope["diagnostic_errors"])
+
+
+def test_quiet_window_resume_failure_after_green_inner_forces_nonzero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bundle = tmp_path / "bundle"
+
+    def _runner(argv: list[str], *, capture: bool = True, timeout: int | None = 60):
+        joined = " ".join(argv)
+        if argv and argv[0] != "kubectl":
+            return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
+        if "State=RESUME" in joined:
+            return subprocess.CompletedProcess(
+                args=argv,
+                returncode=7,
+                stdout="",
+                stderr="resume rejected\n",
+            )
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(slurm_cli, "RUN", _runner)
+    rc = main(["quiet_window", *_common_drain_args(bundle), "--cmd", "true"])
+
+    assert rc == 7
+    envelope = json.loads(capsys.readouterr().out)
+    assert envelope["inner_exit"] == 0
+    assert envelope["resume_exit"] == 7
+    assert envelope["resume_stderr"] == "resume rejected\n"
+    assert envelope["resume_exception"] is None
+
+
+def test_quiet_window_resume_exception_after_green_inner_forces_nonzero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bundle = tmp_path / "bundle"
+
+    def _runner(argv: list[str], *, capture: bool = True, timeout: int | None = 60):
+        joined = " ".join(argv)
+        if argv and argv[0] != "kubectl":
+            return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
+        if "State=RESUME" in joined:
+            raise RuntimeError("controller unavailable")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(slurm_cli, "RUN", _runner)
+    rc = main(["quiet_window", *_common_drain_args(bundle), "--cmd", "true"])
+
+    assert rc == 255
+    envelope = json.loads(capsys.readouterr().out)
+    assert envelope["inner_exit"] == 0
+    assert envelope["resume_exit"] == 255
+    assert "controller unavailable" in envelope["resume_exception"]
+    assert (bundle / "commands" / "05-resume.exit").read_text().strip() == "255"
+
+
+def test_quiet_window_retries_interrupted_resume_and_reports_nonzero(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bundle = tmp_path / "bundle"
+    resume_attempts = 0
+
+    def _runner(argv: list[str], *, capture: bool = True, timeout: int | None = 60):
+        nonlocal resume_attempts
+        joined = " ".join(argv)
+        if argv and argv[0] != "kubectl":
+            return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
+        if "State=RESUME" in joined:
+            resume_attempts += 1
+            if resume_attempts == 1:
+                raise KeyboardInterrupt()
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(slurm_cli, "RUN", _runner)
+    rc = main(["quiet_window", *_common_drain_args(bundle), "--cmd", "true"])
+
+    assert rc == 255
+    assert resume_attempts == 2
+    envelope = json.loads(capsys.readouterr().out)
+    assert envelope["resume_exit"] == 0
+    assert "KeyboardInterrupt" in envelope["resume_exception"]
+    assert "attempt 1" in (bundle / "commands" / "05-resume.stderr").read_text()
 
 
 def test_quiet_window_refuses_without_ack(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -505,6 +700,8 @@ def test_quiet_window_refuses_without_ack(tmp_path: Path, monkeypatch: pytest.Mo
                 "quiet_window",
                 "--nodes",
                 "x",
+                "--ns",
+                "test-namespace",
                 "--cmd",
                 "true",
                 "--bundle",
@@ -532,7 +729,7 @@ def test_quiet_window_refuses_empty_inner_cmd(tmp_path: Path, monkeypatch: pytes
 
 def test_helpers_build_kubectl_argv_correctly() -> None:
     argv = slurm_cli._ctl_exec_argv(
-        "<slurm-namespace>",
+        "test-namespace",
         "deploy/slurm-controller",
         "slurmctld",
         ["scontrol", "update", "NodeName=x", "State=DRAIN", "Reason=foo"],
@@ -540,7 +737,7 @@ def test_helpers_build_kubectl_argv_correctly() -> None:
     assert argv == [
         "kubectl",
         "-n",
-        "<slurm-namespace>",
+        "test-namespace",
         "exec",
         "deploy/slurm-controller",
         "-c",

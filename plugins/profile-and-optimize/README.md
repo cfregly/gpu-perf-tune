@@ -1,9 +1,11 @@
-# profile-and-optimize plugin
+# profile-and-optimize skills and Claude Code adapter
 
-**Version v0.2.0**
+**Version v0.3.0**
 
-The plugin shipped by this marketplace: 32 GPU inference profiling and
-optimization skills plus the bundled `profile_and_optimize` MCP server.
+This package contains 32 GPU inference profiling and optimization Agent Skills,
+the bundled `profile_and_optimize` MCP server, and the Claude Code marketplace
+adapter. The MCP server is client-neutral. See the root README for the current
+client support matrix.
 
 See the [repository README](../../README.md) for the skill families and
 quickstart, and [`docs/METHODOLOGY.md`](../../docs/METHODOLOGY.md) for the
@@ -17,8 +19,8 @@ Its canonical GPU adaptation is available to agents through the bundled MCP as
 ## Skills
 
 One directory per skill under [`skills/`](skills/). Each contains a `SKILL.md`
-(frontmatter: name, description, triggers, allowed tools) and optional assets.
-Start from [`skills/_template/SKILL.md`](skills/_template/SKILL.md) when adding
+with official Agent Skills frontmatter and optional assets.
+Start from [`templates/skill/SKILL.md`](templates/skill/SKILL.md) when adding
 a new one.
 
 ## Bundled MCP server
@@ -35,19 +37,25 @@ points:
 - [`server/install.sh`](server/install.sh) - venv install (add `--full` for the
   report-renderer extras).
 
-[`.mcp.json`](.mcp.json) declares the bundled server plus optional `grafana` and
-`github` servers. Tokens and URLs come from env vars. Claude Code skips any
-server whose env vars are unset, so configure only what you use.
+[`.mcp.json`](.mcp.json) declares only the bundled `profile_and_optimize`
+server. Client installers set its absolute server path.
+
+Grafana and GitHub are optional, user-owned MCP entries. Add them to your
+client configuration only after setting their required URLs and credentials.
+Claude Code treats an unset `${VAR}` without a default as an invalid MCP
+configuration. See the [Claude Code MCP configuration
+reference](https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json).
 
 ### Operator-side optional MCPs
 
-Two external servers are referenced by skills but deliberately not declared in
-`.mcp.json` (Cursor renders undeclared-env servers as connection errors).
-Configure them in your own `~/.claude/settings.json` or `~/.cursor/mcp.json`
-if you have access:
+External servers are deliberately not declared in the plugin `.mcp.json`.
+For Claude Code, add them with `claude mcp add --scope user`. For Cursor, add
+them to `~/.cursor/mcp.json`. Configure only the servers you can authenticate:
 
 | Server | Used by | What it provides |
 | --- | --- | --- |
+| `grafana` | Operator observability workflows | Grafana dashboards, alerts, and data-source queries |
+| `github` | Operator repository workflows | GitHub issues, pull requests, and repository data |
 | `prometheus_mcp` | `prometheus-anchored-query`, `k8s-troubleshooting`, `inference-dcgm-correlate`, and other observability-anchored skills | Prometheus/Loki queries + observability knowledge base |
 | `zymtrace` | `analyze-zymtrace-workload` (and optionally `zymtrace-anchored-query`) | GPU/CPU continuous-profiling flamegraphs and top-functions |
 
@@ -56,7 +64,7 @@ fallback where one exists.
 
 ## Hooks
 
-[`hooks/`](hooks/) ships runtime-agnostic guard scripts wired for both Claude
-Code (`hooks.json`, via `claude-hook-adapter.sh`) and Cursor
-(`cursor-hooks.json`): a campaign-teardown confirmation gate and a provenance
-commit gate.
+[`hooks/`](hooks/) registers the provenance commit gate for Claude Code through
+`claude-hook-adapter.sh`. Enforcement is off by default. Set
+`PROVENANCE_COMMIT_GATE=ask` or `PROVENANCE_COMMIT_GATE=deny` in the hook
+environment to enable it.

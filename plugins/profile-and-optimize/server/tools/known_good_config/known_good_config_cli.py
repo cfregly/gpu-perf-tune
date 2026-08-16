@@ -14,16 +14,15 @@ Two verbs:
   by hand -- PyYAML round-trip would strip the LOUD banner + per-entry prose).
 - ``check`` verifies a deploy's serve args contain every ``required_flag``'s
   ``match`` regex for a model and is **fail-closed** (nonzero exit) on a missing
-  boot-blocker / crash-high-c / deploy-correctness flag. ``--require-registered``
-  makes an unregistered model a failure (used by the grind-closure gate so a
-  champion is not "closed" until its known-good config is captured here).
+  boot-blocker / crash-high-c / deploy-correctness flag or an unregistered
+  model.
 
 Registry: ``perf-tune-report/configs/known-good-configs.yaml`` (schema
 ``known_good_config_v1``) in the INFERENCE workspace. Resolved via ``--registry``,
 then ``$KNOWN_GOOD_CONFIG_REGISTRY``, then a walk-up search from cwd.
 
-Backs the [`inference-known-good-config`](../../skills/inference-known-good-config/SKILL.md)
-skill. Added in profile-and-optimize v1.68.0.
+Backs the [`inference-known-good-config`](../../../skills/inference-known-good-config/SKILL.md)
+skill.
 """
 
 from __future__ import annotations
@@ -54,7 +53,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "safety": "read_only",
         "required": ("--model",),
         "optional": (
-            "--registry", "--serve-args", "--deploy-file", "--require-registered", "--json",
+            "--registry", "--serve-args", "--deploy-file", "--json",
         ),
         "json": True,
         "ack": None,
@@ -65,6 +64,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
 #: A missing required flag at one of these severities is a HARD failure
 #: (nonzero exit). A missing ``perf`` flag is a warning only.
 FAIL_SEVERITIES = {"boot-blocker", "crash-high-c", "deploy-correctness"}
+ALLOWED_SEVERITIES = FAIL_SEVERITIES | {"perf"}
 
 REGISTRY_RELPATH = Path("perf-tune-report") / "configs" / "known-good-configs.yaml"
 
@@ -127,7 +127,18 @@ def _parse_required_flag(raw: str) -> dict[str, str]:
         raise SystemExit(f"FATAL: --required-flag needs at least a flag: {raw!r}")
     out.setdefault("match", re.escape(out["flag"]))
     out.setdefault("severity", "boot-blocker")
+    _validate_severity(out["severity"], source="--required-flag")
     return out
+
+
+def _validate_severity(severity: object, *, source: str) -> str:
+    """Return a documented severity or stop before unsafe warn-only behavior."""
+    if not isinstance(severity, str) or severity not in ALLOWED_SEVERITIES:
+        allowed = ", ".join(sorted(ALLOWED_SEVERITIES))
+        raise SystemExit(
+            f"FATAL: {source} severity must be one of {allowed}; got {severity!r}"
+        )
+    return severity
 
 
 def cmd_record(args: argparse.Namespace) -> int:
@@ -190,7 +201,7 @@ def cmd_record(args: argparse.Namespace) -> int:
     return 0
 
 
-def _scan_text(args: argparse.Namespace) -> str | None:
+def _scan_text(args: argparse.Namespace) -> str:
     if args.serve_args is not None:
         return args.serve_args
     if args.deploy_file:
@@ -198,7 +209,7 @@ def _scan_text(args: argparse.Namespace) -> str | None:
         if not p.is_file():
             raise SystemExit(f"FATAL: --deploy-file not found: {p}")
         return p.read_text()
-    return None
+    raise AssertionError("argparse requires exactly one check input")
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -207,8 +218,6 @@ def cmd_check(args: argparse.Namespace) -> int:
     entry = _find_model(registry, args.model)
 
     if entry is None:
-        registered = False
-        verdict = "fail" if args.require_registered else "pass"
         payload = {
             "tool": "known_good_config_check",
             "library": "known_good_config",
@@ -216,33 +225,36 @@ def cmd_check(args: argparse.Namespace) -> int:
             "safety": CONTRACT["check"]["safety"],
             "registry": str(registry_path),
             "model": args.model,
-            "registered": registered,
+            "registered": False,
             "checked_args": False,
             "missing_required": [],
-            "verdict": verdict,
+            "verdict": "fail",
             "reason": "model_not_registered",
         }
         _emit(payload, as_json=args.json)
-        return 1 if verdict == "fail" else 0
+        return 1
 
     text = _scan_text(args)
     missing: list[dict[str, str]] = []
-    checked_args = text is not None
-    if checked_args:
-        for rf in entry.get("required_flags") or []:
-            match = rf.get("match") or re.escape(rf.get("flag", ""))
-            if not match:
-                continue
-            try:
-                found = re.search(match, text) is not None
-            except re.error as exc:
-                raise SystemExit(f"FATAL: bad `match` regex {match!r} for model {args.model}: {exc}")
-            if not found:
-                missing.append({
-                    "flag": rf.get("flag", match),
-                    "severity": rf.get("severity", "boot-blocker"),
-                    "why": rf.get("why", ""),
-                })
+    checked_args = True
+    for rf in entry.get("required_flags") or []:
+        match = rf.get("match") or re.escape(rf.get("flag", ""))
+        if not match:
+            continue
+        severity = _validate_severity(
+            rf.get("severity", "boot-blocker"),
+            source=f"registry entry for {args.model}",
+        )
+        try:
+            found = re.search(match, text) is not None
+        except re.error as exc:
+            raise SystemExit(f"FATAL: bad `match` regex {match!r} for model {args.model}: {exc}")
+        if not found:
+            missing.append({
+                "flag": rf.get("flag", match),
+                "severity": severity,
+                "why": rf.get("why", ""),
+            })
 
     hard = [m for m in missing if m["severity"] in FAIL_SEVERITIES]
     verdict = "fail" if hard else "pass"
@@ -291,11 +303,13 @@ def build_parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", description=CONTRACT["check"]["description"])
     check.add_argument("--model", required=True, help="HF id / served-model-name to check")
     check.add_argument("--registry", default=None, help="Path to known-good-configs.yaml (else $KNOWN_GOOD_CONFIG_REGISTRY / walk-up)")
-    check.add_argument("--serve-args", default=None, help="The joined serve-args string to scan for required flags")
-    check.add_argument("--deploy-file", default=None, help="A deploy/values file to scan for required flags")
+    check_input = check.add_mutually_exclusive_group(required=True)
+    check_input.add_argument("--serve-args", default=None, help="The joined serve-args string to scan for required flags")
+    check_input.add_argument("--deploy-file", default=None, help="A deploy/values file to scan for required flags")
     check.add_argument(
-        "--require-registered", action="store_true",
-        help="Treat an unregistered model as a FAILURE (for the grind-closure gate)",
+        "--require-registered",
+        action="store_true",
+        help=argparse.SUPPRESS,
     )
     check.add_argument("--json", action="store_true", help="Emit JSON envelope")
     check.set_defaults(func=cmd_check)

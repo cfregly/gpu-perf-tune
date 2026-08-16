@@ -1,4 +1,4 @@
-"""Unit tests for the v1.20.0 TRT-LLM stub backend (Phase 2d)."""
+"""Unit tests for the TRT-LLM stub backend."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def test_run_cell_raises_not_implemented(tmp_path):
         )
 
 
-def test_run_cell_error_message_cites_plan():
+def test_run_cell_error_message_cites_contract():
     cfg = CellConfig(
         cell_id="x", model="m", hardware="H100", quant="FP8",
         tensor_parallel=8, parallel_strategy="EP", mtp=False,
@@ -66,7 +66,7 @@ def test_run_cell_error_message_cites_plan():
         )
     except NotImplementedError as exc:
         msg = str(exc)
-        assert "inference-experiment-plan" in msg
+        assert "runners/trtllm_bench.py" in msg
         assert "stub" in msg
 
 

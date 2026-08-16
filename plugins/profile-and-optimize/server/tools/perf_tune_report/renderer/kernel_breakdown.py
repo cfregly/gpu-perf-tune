@@ -33,7 +33,7 @@ from typing import Any, Sequence
 
 
 # Display order for the stacked bar's categories. Mirrors the bucketing
-# in perf-tune-glm51/03f-variant-runner.sh phase 5d and in
+# in the capture query and in
 # ``importers.zymtrace_kernels._CATEGORY_RULES``.
 CATEGORY_DISPLAY_ORDER: tuple[str, ...] = (
     "NCCL",

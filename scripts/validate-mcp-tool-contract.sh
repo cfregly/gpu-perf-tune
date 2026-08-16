@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # MCP-tool contract sweep: spawn the bundled MCP server over stdio once,
-# iterate over every tool in the surface (73 contract + 2 aux), invoke each
+# iterate over every tool in the current contract and auxiliary surface, invoke each
 # with a minimum-safe arg set based on its safety class, and classify each
 # tool as GREEN / YELLOW / RED based on the envelope it returns.
 #
@@ -32,7 +32,9 @@ if [[ ! -x "${VENV_PY}" ]]; then
   exit 2
 fi
 
-PROFILE_AND_OPTIMIZE_REPO_ROOT="${SERVER}" "${VENV_PY}" - "$OUT_DIR" <<'PYEOF'
+PROJECT_VERSION="$(<"${REPO_ROOT}/VERSION")" \
+  PROFILE_AND_OPTIMIZE_REPO_ROOT="${SERVER}" \
+  "${VENV_PY}" - "$OUT_DIR" <<'PYEOF'
 """MCP tool contract sweep over the bundled server via stdio JSON-RPC."""
 import json
 import os
@@ -87,7 +89,7 @@ def notify(method, params=None):
 
 
 # Initialize handshake.
-init = rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "profile-and-optimize-validate", "version": "0.6.5"}})
+init = rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "profile-and-optimize-validate", "version": os.environ["PROJECT_VERSION"]}})
 if "error" in init:
     print(f"FATAL: initialize: {init['error']}", file=sys.stderr)
     sys.exit(2)

@@ -1,0 +1,98 @@
+name: release
+
+on:
+  workflow_run:
+    workflows:
+      - ci
+    branches:
+      - main
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish release version
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.path == '.github/workflows/ci.yml'
+    concurrency:
+      group: release-main
+      queue: max
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out main and tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Validate version surfaces
+        run: python3 scripts/lint-versions.py
+      - name: Publish annotated tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          # A green version-bump commit remains a valid release candidate when
+          # main advances. Reject only commits that are no longer on main.
+          git fetch --quiet --tags origin \
+            "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor \
+            "${RELEASE_SHA}" refs/remotes/origin/main; then
+            echo "::notice title=Detached release run::Skipping ${RELEASE_SHA}, which is no longer on main."
+            exit 0
+          fi
+
+          version="$(<VERSION)"
+          tag="v${version}"
+
+          transition="$(python3 scripts/check-version-transition.py \
+            --ref "${RELEASE_SHA}" --status-only)"
+
+          if [[ "${transition}" == "same" ]]; then
+            echo "::notice title=No version bump::Skipping ${RELEASE_SHA}, which keeps VERSION ${version}."
+            exit 0
+          fi
+
+          if ! git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${tag}" -m "Release ${tag}" "${RELEASE_SHA}"
+            if ! git push origin "refs/tags/${tag}"; then
+              git fetch --quiet origin "+refs/tags/${tag}:refs/tags/${tag}"
+            fi
+          fi
+
+          bash scripts/check-release-tag.sh --require-at "${RELEASE_SHA}"
+
+          assert_stable_release() {
+            local state
+            state="$(gh release view "${tag}" \
+              --json isDraft,isPrerelease \
+              --jq '"\(.isDraft) \(.isPrerelease)"')" || return 1
+            if [[ "${state}" != "false false" ]]; then
+              echo "GitHub Release ${tag} exists but is a draft or prerelease." >&2
+              return 1
+            fi
+          }
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            assert_stable_release
+          else
+            notes_file="$(mktemp)"
+            trap 'rm -f "${notes_file}"' EXIT
+            make release-notes VERSION="${tag}" >"${notes_file}"
+            test -s "${notes_file}"
+            if ! gh release create "${tag}" --verify-tag --title "${tag}" \
+              --notes-file "${notes_file}"; then
+              assert_stable_release
+            fi
+            assert_stable_release
+          fi

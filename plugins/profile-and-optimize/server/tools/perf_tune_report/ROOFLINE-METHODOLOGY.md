@@ -4,8 +4,9 @@ Canonical, model-agnostic methodology for the prefill/decode roofline the
 `perf_tune_report` renderer emits as **page 7** and that the Superset
 `fact_perf_tune_report_roofline` dashboard renders. This is the single source of
 truth. The renderer (`renderer/prefill_decode_roofline.py`), the analytical math
-(`roofline_math.py`), the importer (`importers/roofline_sweep.py`), and the
-serving-side `roofline-sweep.sh` capture all implement it.
+(`roofline_math.py`), and the importer (`importers/roofline_sweep.py`) all
+implement it. The capture producer is operator-owned and must emit the layout
+accepted by the importer.
 
 It answers, per (model, config), the four questions an inference perf reviewer
 always asks:
@@ -111,7 +112,7 @@ carries the flat provenance columns.
 ## Model shapes + ceilings (sources)
 
 - Shapes: each family's published `config.json` (`roofline_math.from_hf_config`),
-  or the in-pod `/work/model/config.json` captured by `roofline-sweep.sh`. The
+  or the target pod's captured `/work/model/config.json`. The
   `_REGISTRY` in `roofline_math.py` carries the exemplar (GLM-5.1) verbatim so
   pre-embedded campaigns still render.
 - Ceilings: `configs/sol-ceilings.yaml` (datasheet peaks, never

@@ -1,6 +1,6 @@
 """Importer for the always-on prefill+decode roofline sweep bundle.
 
-Ingests the output of ``perftune-specdec/profiling/roofline-sweep.sh``:
+Ingests an operator-produced serving roofline bundle:
 
     <bundle>/decode_sweep.jsonl    # one cell.py JSON line per decode concurrency
     <bundle>/prefill_sweep.jsonl   # one cell.py JSON line per prefill ISL
@@ -33,6 +33,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from tools.perf_tune_report.helpers import resolve_cell_dir, safe_path_segment
+
 from tools.perf_tune_report import roofline_math
 from tools.perf_tune_report.schema import (
     BACKEND_VLLM_SWEEP,
@@ -43,7 +45,7 @@ from tools.perf_tune_report.schema import (
 DECODE_FILE = "decode_sweep.jsonl"
 PREFILL_FILE = "prefill_sweep.jsonl"
 MANIFEST_FILE = "roofline_sweep_manifest.json"
-# A model config.json captured in-pod by roofline-sweep.sh (so the analytical
+# A model config.json captured in the target pod, so the analytical
 # roofline math is self-contained without a registry hit at render time).
 MODEL_CONFIG_FILE = "model_config.json"
 
@@ -318,8 +320,8 @@ def _resolve_identity(bundle: Path, overrides: dict[str, Any]) -> dict[str, Any]
     hardware = hw.split(" ")[0] if isinstance(hw, str) else hw
     quant = pick("quant", default="NVFP4")
     # Full-context descriptors (2026-06-07) so roofline cells can pass
-    # publish_to_lake --strict. dataset defaults to "random" (roofline-sweep.sh's
-    # cell.py always drives --dataset-name random); cudagraph_mode follows the
+    # publish_to_lake --strict. Dataset defaults to "random", the conventional
+    # capture value. cudagraph_mode follows the
     # eager flag like inference_perf_bench; the rest come from override/manifest.
     cudagraph_mode = pick("cudagraph_mode", default="unknown")
     if cudagraph_mode == "unknown" and pick("enforce_eager") is True:
@@ -352,7 +354,7 @@ def _steady_window_warnings(decode: list[dict[str, Any]]) -> list[dict[str, Any]
     """Decode cells whose num_prompts < 2*c -> steady-state window too short ->
     output_throughput undercounts high-concurrency throughput ~1.6-1.8x. This is
     the runtime guard for docs/METHODOLOGY.md trap 4 (the 2026-06-07
-    roofline-sweep.sh num=c+4 bug). Caught for ANY driver, so a future
+    producer num=c+4 bug). Caught for any driver, so a future
     undercounted sweep is surfaced at import, never silently published."""
     warns: list[dict[str, Any]] = []
     for cell in decode:
@@ -387,7 +389,7 @@ def import_roofline_sweep_bundle(
             f"[{cells}] -- num_prompts < 2*c, so output_throughput is ramp/drain-"
             f"dominated and UNDERCOUNTS high-concurrency throughput ~1.6-1.8x "
             f"(docs/METHODOLOGY.md trap 4). Re-run with num_prompts >= 2*c "
-            f"(roofline-sweep.sh now defaults this).",
+            "(the capture producer should set this explicitly).",
             file=_sys.stderr,
         )
     if not decode and not prefill:
@@ -400,7 +402,7 @@ def import_roofline_sweep_bundle(
     if captured_at is None:
         captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    base = identity["cell_id"]
+    base = safe_path_segment(identity["cell_id"], label="cell-id")
     cell_dirs: list[str] = []
     plans = [("decode", decode), ("prefill", prefill)]
     for phase, cells in plans:
@@ -415,7 +417,7 @@ def import_roofline_sweep_bundle(
         ]
         if not rows:
             continue
-        cell_dir = campaign_dir / "cells" / f"{base}-{phase}"
+        cell_dir = resolve_cell_dir(campaign_dir, f"{base}-{phase}")
         cell_dirs.append(str(cell_dir))
         if dry_run:
             continue

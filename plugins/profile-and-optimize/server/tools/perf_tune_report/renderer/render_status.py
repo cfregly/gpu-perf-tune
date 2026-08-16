@@ -114,10 +114,10 @@ OMISSION_REASONS: dict[str, OmissionReason] = {
             "prefill/decode roofline + per-(c,ISL) DCGM utilization was not captured."
         ),
         how_to_fix=(
-            "Run *-deploy/profiling/roofline-sweep.sh against the deploy "
-            "(decode concurrency + prefill ISL sweep with in-pod dcgmi), import "
-            "it with perf_tune_report import_roofline_sweep so each config carries a "
-            "roofline_sweep.json, then re-render."
+            "Capture a serving-side decode-concurrency and prefill-ISL roofline "
+            "bundle with in-pod dcgmi. Import it with perf_tune_report "
+            "import_roofline_sweep so each config carries a roofline_sweep.json, "
+            "then re-render."
         ),
     ),
     "champion_select": OmissionReason(
@@ -166,8 +166,8 @@ PARTIAL_REASONS: dict[str, OmissionReason] = {
             "Do NOT read this as a full roofline."
         ),
         how_to_fix=(
-            "Re-capture with --roofline-min (or --set full) per the ncu-sister "
-            "REPLAY-MODE-APPLICATION-RUNBOOK.md, re-import with import_ncu, then "
+            "Re-capture with --roofline-min (or --set full), re-import with "
+            "import_ncu, then "
             "re-render for a true arithmetic-intensity roofline."
         ),
     ),
@@ -179,8 +179,7 @@ PARTIAL_REASONS: dict[str, OmissionReason] = {
             "dcgm_correlation.json with per_category_attribution was found."
         ),
         how_to_fix=(
-            "Re-capture ncu with --roofline-min / --set full (see the ncu-sister "
-            "REPLAY-MODE-APPLICATION-RUNBOOK.md), or add DCGM per_category "
+            "Re-capture ncu with --roofline-min or --set full, or add DCGM per_category "
             "attribution, then re-render."
         ),
     ),
@@ -206,12 +205,12 @@ class RenderStatus:
     plot_ready_points: int = 0
     non_plot_ready_full_cells: int = 0
     sol_complete: bool = True
-    # focus (added v1.33.0): the run's intent -- "latency" | "throughput" |
+    # focus: the run's intent -- "latency" | "throughput" |
     # "mixed". Recorded so latency-focused runs (c=1 decode, kernel probes) are
     # first-class published results, not "drafts". Set from the campaign
     # config.yaml `focus:` key; defaults "mixed".
     focus: str = "mixed"
-    # sol_rigor (added v1.33.0): which Speed-of-Light evidence levels are
+    # sol_rigor: which Speed-of-Light evidence levels are
     # present, highest first -- "L4" (ncu per-kernel arithmetic intensity),
     # "L3" (DCGM byte/FLOP), "L1" (zymtrace sample-share proxy), or "none".
     # The proxy-vs-tight distinction is now a RECORDED field, never a publish
@@ -224,7 +223,7 @@ class RenderStatus:
     # off zymtrace alone yet dcgm_grounded=False (no Prometheus byte
     # cross-attribution), which is exactly the silent gap this flag closes.
     dcgm_grounded: bool = True
-    # PER-ARM Speed-of-Light coverage (added v1.68.0). sol_complete above is
+    # PER-ARM Speed-of-Light coverage. sol_complete above is
     # CAMPAIGN-level ("any SoL page rendered"), so a multi-arm campaign whose
     # baseline carries a roofline but whose variants do NOT still reads
     # complete. These fields make the per-variant gap explicit + machine-

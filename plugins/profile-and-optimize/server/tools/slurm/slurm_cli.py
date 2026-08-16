@@ -2,28 +2,23 @@
 
 Four verbs:
 
-- ``triage``        — read-only failure classification (the v0.5.0 verb).
-- ``drain``         — substitutes_nodes; drain a comma-list of Slurm node names
+- ``triage`` classifies failures without changing cluster state.
+- ``drain`` uses the `substitutes_nodes` safety class and drains a comma-list of Slurm node names
                       with an operator-supplied Reason. Ack-gated.
-- ``resume``        — substitutes_nodes; resume the same nodes back to IDLE.
+- ``resume`` uses the `substitutes_nodes` safety class and returns those nodes to IDLE.
                       Ack-gated.
-- ``quiet_window``  — substitutes_nodes; orchestrator that drains, runs an
-                      operator-supplied inner command, and ALWAYS resumes via
-                      a try/finally even on inner-cmd failure or KeyboardInterrupt.
+- ``quiet_window`` uses the `substitutes_nodes` safety class. It drains, runs an
+                      operator-supplied inner command, and attempts a resume
+                      from a finally block after inner-command failure or interruption.
                       Ack-gated.
 
-The drain/resume/quiet_window verbs back the
-[``slurm-quiet-window``](../../skills/slurm-quiet-window/SKILL.md) skill and
-provide pre-bench Slurm-state hygiene for the
-[``inference-perf-bench``](../../skills/inference-perf-bench/SKILL.md) workflow
+The drain/resume/quiet_window verbs provide pre-bench Slurm-state hygiene for
+the [``inference-perf-bench``](../../../skills/inference-perf-bench/SKILL.md) workflow
 on Slurm-on-K8s clusters where slurmd worker pods co-host inference vLLM pods on the
 same GPU nodes.
 
-The triage verb backs the
-[``slurm-job-triage-generic``](../../skills/slurm-job-triage-generic/SKILL.md)
-skill. The MLPerf-specific failure-classification variant is the existing
-[``mlperf-debug-failed-run``](../../skills/mlperf-debug-failed-run/SKILL.md)
-which adds ``submission_failure_taxonomy`` MCP classification on top.
+The triage verb handles generic Slurm failures. Cluster-level Slurm-on-K8s
+incidents hand off to the current `k8s-troubleshooting` skill.
 
 Evidence-bundle layout (drain / resume / quiet_window):
 
@@ -38,11 +33,9 @@ Evidence-bundle layout (drain / resume / quiet_window):
       05-resume.{cmd,stdout,stderr,exit}
       06-slurm-post-resume.stdout
 
-The numeric step IDs match the existing
-``perf-tune-kimi/experiments/artifacts/inference-perf-bench/kimi-k26-incluster-multireplica-20260525T162354Z/``
-precedent so cross-window diffs stay trivial.
+The numeric step IDs keep drain, benchmark, resume, and inspection receipts in
+execution order so operators can compare evidence bundles directly.
 
-Added in profile-and-optimize v0.5.0; drain / resume / quiet_window added in v1.17.0.
 """
 
 from __future__ import annotations
@@ -54,11 +47,11 @@ import os
 import shlex
 import shutil
 import subprocess
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 from tools.slurm.signature_patterns import Signature, match_signatures
-
 
 CONTRACT: dict[str, dict[str, Any]] = {
     "triage": {
@@ -71,33 +64,33 @@ CONTRACT: dict[str, dict[str, Any]] = {
     },
     "drain": {
         "safety": "substitutes_nodes",
-        "required": ("--nodes",),
-        "optional": ("--reason", "--ns", "--ctl", "--ctl-container", "--bundle", "--json"),
+        "required": ("--nodes", "--ns"),
+        "optional": ("--reason", "--ctl", "--ctl-container", "--bundle", "--json"),
         "json": True,
         "ack": "--i-understand-this-substitutes-nodes",
         "description": "Drain a comma-list of Slurm node names (scontrol update State=DRAIN) on a Slurm-on-K8s cluster, with full evidence-bundle capture.",
     },
     "resume": {
         "safety": "substitutes_nodes",
-        "required": ("--nodes",),
-        "optional": ("--reason", "--ns", "--ctl", "--ctl-container", "--bundle", "--json"),
+        "required": ("--nodes", "--ns"),
+        "optional": ("--reason", "--ctl", "--ctl-container", "--bundle", "--json"),
         "json": True,
         "ack": "--i-understand-this-substitutes-nodes",
         "description": "Resume a comma-list of Slurm node names (scontrol update State=RESUME) on a Slurm-on-K8s cluster, with full evidence-bundle capture.",
     },
     "quiet_window": {
         "safety": "substitutes_nodes",
-        "required": ("--nodes", "--cmd"),
-        "optional": ("--reason", "--ns", "--ctl", "--ctl-container", "--bundle", "--json"),
+        "required": ("--nodes", "--ns", "--cmd"),
+        "optional": ("--reason", "--ctl", "--ctl-container", "--bundle", "--json"),
         "json": True,
         "ack": "--i-understand-this-substitutes-nodes",
-        "description": "Drain Slurm nodes, run an operator-supplied inner command, and ALWAYS resume via try/finally even on failure or KeyboardInterrupt.",
+        "description": "Drain Slurm nodes, run an operator-supplied inner command, and attempt a resume from a finally block after failure or interruption.",
     },
 }
 
 
 # --------------------------------------------------------------------------- #
-# triage helpers (unchanged from v0.5.0)
+# triage helpers
 # --------------------------------------------------------------------------- #
 
 
@@ -109,7 +102,11 @@ def _resolve_repo_root(arg: str | None) -> Path:
         return Path(env).expanduser().resolve()
     current = Path.cwd().resolve()
     while current != current.parent:
-        if (current / "CLAUDE.md").is_file() and (current / "tools").is_dir():
+        if (
+            (current / "pyproject.toml").is_file()
+            and (current / "mcp_surface.py").is_file()
+            and (current / "tools").is_dir()
+        ):
             return current
         current = current.parent
     raise SystemExit("FATAL: cannot resolve repo root; pass --repo-root or set PROFILE_AND_OPTIMIZE_REPO_ROOT")
@@ -136,7 +133,7 @@ def _run_sacct(jobid: str) -> dict[str, str] | None:
         "--format=JobID,State,ExitCode,Elapsed,DerivedExitCode,Reason,NodeList,WorkDir,Submit,Start,End",
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10, check=False)
     except (subprocess.TimeoutExpired, OSError):
         return None
     if proc.returncode != 0 or not proc.stdout.strip():
@@ -158,13 +155,10 @@ def _run_sacct(jobid: str) -> dict[str, str] | None:
     return dict(zip(keys, fields, strict=False))
 
 
-def _find_slurm_out(jobid: str, logdir: Path | None) -> Path | None:
+def _find_slurm_out(jobid: str, search_root: Path) -> Path | None:
     candidates: list[Path] = []
-    if logdir is not None:
-        candidates.append(logdir / f"slurm-{jobid}.out")
-        candidates.extend(logdir.rglob(f"slurm-{jobid}.out"))
-    else:
-        candidates.extend(Path.cwd().rglob(f"slurm-{jobid}.out"))
+    candidates.append(search_root / f"slurm-{jobid}.out")
+    candidates.extend(search_root.rglob(f"slurm-{jobid}.out"))
     for c in candidates:
         if c.is_file():
             return c
@@ -177,7 +171,7 @@ def _classify(signature_hits: list[tuple[Signature, int]]) -> dict[str, Any]:
             "class": "unknown",
             "confidence": "LOW",
             "evidence": [],
-            "next_probe": "no signature matched; capture last 500 lines + ask operator",
+            "next_probe": "no signature matched. Capture the last 500 lines and ask the operator",
         }
     top, count = signature_hits[0]
     return {
@@ -189,32 +183,33 @@ def _classify(signature_hits: list[tuple[Signature, int]]) -> dict[str, Any]:
     }
 
 
-def _mlperf_handoff(klass: str, sacct: dict[str, str] | None) -> str | None:
+def _cluster_handoff(klass: str, sacct: dict[str, str] | None) -> str | None:
     if sacct is None:
         return None
     workdir = sacct.get("WorkDir", "")
     if "experiments/artifacts/campaign" in workdir or "mlperf" in workdir.lower():
-        return "mlperf-debug-failed-run"
-    if klass == "gpu_xid":
-        return "(operator) drain the node; then PE's <node-diagnosis-tool>-node-diagnosis"
-    if klass in {"nccl_hang", "nccl_setup", "fabric"}:
-        return "(operator) support:ib-bw-check on the suspect node"
+        return "k8s-troubleshooting"
+    if klass in {"gpu_xid", "nccl_hang", "nccl_setup", "fabric"}:
+        return "k8s-troubleshooting"
     return None
 
 
 def cmd_triage(args: argparse.Namespace) -> int:
     jobid = args.jobid
     logdir = Path(args.logdir).expanduser().resolve() if args.logdir else None
+    repo_root = None if logdir else _resolve_repo_root(args.repo_root)
+    search_root = logdir or repo_root
+    assert search_root is not None
 
     sacct = _run_sacct(jobid)
-    slurm_out = _find_slurm_out(jobid, logdir)
+    slurm_out = _find_slurm_out(jobid, search_root)
     text = slurm_out.read_text(errors="replace") if slurm_out else ""
     if text.count("\n") > 5000:
         text = "\n".join(text.splitlines()[-5000:])
 
     hits = match_signatures(text)
     classification = _classify(hits)
-    handoff = _mlperf_handoff(classification["class"], sacct)
+    handoff = _cluster_handoff(classification["class"], sacct)
 
     payload: dict[str, Any] = {
         "tool": "slurm_triage",
@@ -223,6 +218,8 @@ def cmd_triage(args: argparse.Namespace) -> int:
         "safety": CONTRACT["triage"]["safety"],
         "jobid": jobid,
         "logdir": str(logdir) if logdir else None,
+        "repo_root": str(repo_root) if repo_root else None,
+        "search_root": str(search_root),
         "slurm_out_path": str(slurm_out) if slurm_out else None,
         "sacct": sacct,
         "classification": classification,
@@ -248,16 +245,16 @@ def cmd_triage(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# drain / resume / quiet_window helpers (added in v1.17.0)
+# drain / resume / quiet_window helpers
 # --------------------------------------------------------------------------- #
 
 
 def _utc_stamp() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return _dt.datetime.now(_dt.UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def _utc_iso() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _ctl_exec_argv(
@@ -293,6 +290,7 @@ def _run(
         capture_output=capture,
         text=True,
         timeout=timeout,
+        check=False,
     )
 
 
@@ -389,6 +387,52 @@ def _capture_step(
         _write_atomic(commands_dir / f"{step}{suffix}", body)
 
 
+def _capture_step_best_effort(
+    bundle: Path,
+    step: str,
+    *,
+    cmd_argv: Sequence[str] | None = None,
+    proc: subprocess.CompletedProcess[str] | None = None,
+    extra_files: dict[str, str] | None = None,
+) -> BaseException | None:
+    """Capture a receipt without allowing an artifact failure to block cleanup."""
+    try:
+        _capture_step(
+            bundle,
+            step,
+            cmd_argv=cmd_argv,
+            proc=proc,
+            extra_files=extra_files,
+        )
+    except BaseException as exc:  # noqa: BLE001
+        return exc
+    return None
+
+
+def _capture_snapshot_best_effort(
+    args: argparse.Namespace,
+    bundle: Path,
+    step: str,
+) -> list[BaseException]:
+    """Capture a Slurm snapshot and return every failure to the caller."""
+    errors: list[BaseException] = []
+    try:
+        snapshot = _sinfo_snapshot(args.ns, args.ctl, args.ctl_container)
+    except BaseException as exc:  # noqa: BLE001
+        errors.append(exc)
+        return errors
+    if snapshot.startswith("# sinfo failed"):
+        errors.append(RuntimeError(snapshot.strip()))
+    capture_error = _capture_step_best_effort(
+        bundle,
+        step,
+        extra_files={".stdout": snapshot},
+    )
+    if capture_error is not None:
+        errors.append(capture_error)
+    return errors
+
+
 def _envelope(
     *,
     verb: str,
@@ -427,6 +471,57 @@ def _ack_required_or_die(args: argparse.Namespace, verb: str) -> None:
         raise SystemExit(
             f"FATAL: {verb} is ack-gated (safety=substitutes_nodes). Pass {ack} to confirm operator approval."
         )
+
+
+def _attempt_resume(
+    args: argparse.Namespace,
+    bundle: Path,
+    nodes: str,
+) -> tuple[int, str, str | None]:
+    """Attempt a node resume twice and capture a complete step-05 receipt."""
+    resume_inner = _scontrol_update_argv(nodes, "RESUME", "cleared")
+    resume_argv = _ctl_exec_argv(args.ns, args.ctl, args.ctl_container, resume_inner)
+    exceptions: list[str] = []
+    resume_proc: subprocess.CompletedProcess[str] | None = None
+    for attempt in (1, 2):
+        try:
+            resume_proc = RUN(resume_argv, capture=True, timeout=60)
+            break
+        except BaseException as exc:  # noqa: BLE001
+            exceptions.append(f"resume attempt {attempt} raised: {exc!r}")
+
+    if resume_proc is None:
+        message = "\n".join(exceptions) + "\n"
+        capture_error = _capture_step_best_effort(
+            bundle,
+            "05-resume",
+            cmd_argv=resume_argv,
+            extra_files={".stderr": message, ".exit": "255\n"},
+        )
+        if capture_error is not None:
+            exceptions.append(f"resume receipt raised: {capture_error!r}")
+            message = "\n".join(exceptions) + "\n"
+        return 255, message, "; ".join(exceptions)
+
+    if exceptions:
+        combined_stderr = "\n".join(exceptions) + "\n" + (resume_proc.stderr or "")
+        resume_proc = subprocess.CompletedProcess(
+            args=resume_proc.args,
+            returncode=resume_proc.returncode,
+            stdout=resume_proc.stdout,
+            stderr=combined_stderr,
+        )
+
+    capture_error = _capture_step_best_effort(
+        bundle,
+        "05-resume",
+        cmd_argv=resume_argv,
+        proc=resume_proc,
+    )
+    if capture_error is not None:
+        exceptions.append(f"resume receipt raised: {capture_error!r}")
+    exception_summary = "; ".join(exceptions) or None
+    return resume_proc.returncode, resume_proc.stderr or "", exception_summary
 
 
 def _do_drain_or_resume(
@@ -528,13 +623,13 @@ def cmd_resume(args: argparse.Namespace) -> int:
 
 
 def cmd_quiet_window(args: argparse.Namespace) -> int:
-    """Drain → run inner cmd → ALWAYS resume.
+    """Drain, run an inner command, then attempt to resume in ``finally``.
 
     Resume runs in a try/finally so an exception in the inner command, a
     KeyboardInterrupt, or a SystemExit cannot leave the partition stuck in
     ``drained``. The inner command's return code is propagated as the
-    verb's exit code; resume failures are recorded in the bundle but do not
-    override the inner rc (the operator can audit ``05-resume.exit``).
+    verb's exit code when it is nonzero. A resume failure after a successful
+    inner command forces a nonzero result.
     """
     _ack_required_or_die(args, "quiet_window")
     nodes: str = args.nodes
@@ -550,111 +645,140 @@ def cmd_quiet_window(args: argparse.Namespace) -> int:
 
     drain_inner = _scontrol_update_argv(nodes, "DRAIN", reason)
     drain_argv = _ctl_exec_argv(args.ns, args.ctl, args.ctl_container, drain_inner)
-    drain_proc = RUN(drain_argv, capture=True, timeout=60)
-    _capture_step(
-        bundle,
-        "02-drain",
-        cmd_argv=drain_argv,
-        proc=drain_proc,
-        extra_files={".reason": reason + "\n"},
-    )
-    if drain_proc.returncode != 0:
-        # Drain failed; nothing was changed on the cluster, so do NOT attempt
-        # the inner cmd or a resume. Operator must inspect 02-drain.stderr.
-        payload = _envelope(
-            verb="quiet_window",
-            bundle=bundle,
-            nodes=nodes,
-            reason=reason,
-            extras={
-                "drain_exit": drain_proc.returncode,
-                "drain_stderr": drain_proc.stderr,
-                "inner_skipped": True,
-                "resume_skipped": True,
-            },
-        )
-        _emit(
-            args,
-            payload,
-            human_lines=[
-                "verb:        quiet_window",
-                f"bundle:      {bundle}",
-                f"drain_exit:  {drain_proc.returncode} (FAILED — inner + resume skipped)",
-            ],
-        )
-        return drain_proc.returncode
-
-    post_drain = _sinfo_snapshot(args.ns, args.ctl, args.ctl_container)
-    _capture_step(bundle, "03-slurm-post-drain", extra_files={".stdout": post_drain})
-
-    inner_rc = 1
+    drain_proc: subprocess.CompletedProcess[str] | None = None
+    drain_exception: BaseException | None = None
+    inner_rc: int | None = None
     inner_proc: subprocess.CompletedProcess[str] | None = None
     inner_exception: BaseException | None = None
+    pending_exception: BaseException | None = None
+    diagnostic_errors: list[BaseException] = []
+    resume_exit = 255
+    resume_stderr = ""
+    resume_exception: str | None = None
+
+    # From the first drain attempt onward, every path reaches this finally and
+    # attempts a resume. A command timeout can occur after a partial mutation.
     try:
-        _capture_step(
-            bundle,
-            "04-bench-start",
-            extra_files={".txt": _utc_iso() + "\n"},
-        )
         try:
-            inner_proc = RUN(inner_argv, capture=True, timeout=None)
-            inner_rc = inner_proc.returncode
-        except BaseException as exc:  # noqa: BLE001
-            inner_exception = exc
-            inner_rc = 1
-            raise
-        finally:
-            _capture_step(
+            drain_proc = RUN(drain_argv, capture=True, timeout=60)
+        except BaseException as exc:
+            drain_exception = exc
+            if not isinstance(exc, Exception):
+                pending_exception = exc
+
+        if drain_proc is not None:
+            capture_error = _capture_step_best_effort(
                 bundle,
-                "04-bench",
-                cmd_argv=inner_argv,
-                proc=inner_proc,
+                "02-drain",
+                cmd_argv=drain_argv,
+                proc=drain_proc,
+                extra_files={".reason": reason + "\n"},
             )
-            _capture_step(
+        else:
+            message = f"drain invocation raised: {drain_exception!r}\n"
+            capture_error = _capture_step_best_effort(
                 bundle,
-                "04-bench-end",
+                "02-drain",
+                cmd_argv=drain_argv,
+                extra_files={
+                    ".stderr": message,
+                    ".exit": "255\n",
+                    ".reason": reason + "\n",
+                },
+            )
+        if capture_error is not None:
+            diagnostic_errors.append(capture_error)
+            if not isinstance(capture_error, Exception):
+                pending_exception = pending_exception or capture_error
+
+        diagnostic_errors.extend(_capture_snapshot_best_effort(args, bundle, "03-slurm-post-drain"))
+        for error in diagnostic_errors:
+            if not isinstance(error, Exception):
+                pending_exception = pending_exception or error
+
+        drain_succeeded = (
+            drain_proc is not None and drain_proc.returncode == 0 and drain_exception is None and not diagnostic_errors
+        )
+        if drain_succeeded:
+            capture_error = _capture_step_best_effort(
+                bundle,
+                "04-bench-start",
                 extra_files={".txt": _utc_iso() + "\n"},
             )
-    finally:
-        # ALWAYS resume regardless of inner outcome.
-        resume_inner = _scontrol_update_argv(nodes, "RESUME", "cleared")
-        resume_argv = _ctl_exec_argv(args.ns, args.ctl, args.ctl_container, resume_inner)
-        try:
-            resume_proc = RUN(resume_argv, capture=True, timeout=60)
-        except Exception as exc:  # noqa: BLE001
-            # Even if the resume call itself blows up, capture a marker so the
-            # operator knows resume was attempted.
-            commands_dir = bundle / "commands"
-            commands_dir.mkdir(parents=True, exist_ok=True)
-            _write_atomic(
-                commands_dir / "05-resume.cmd",
-                _shell_quote_argv(resume_argv) + "\n",
-            )
-            _write_atomic(
-                commands_dir / "05-resume.stderr",
-                f"resume invocation raised: {exc!r}\n",
-            )
-            _write_atomic(commands_dir / "05-resume.exit", "255\n")
-        else:
-            _capture_step(
-                bundle,
-                "05-resume",
-                cmd_argv=resume_argv,
-                proc=resume_proc,
-            )
-            post_resume = _sinfo_snapshot(args.ns, args.ctl, args.ctl_container)
-            _capture_step(bundle, "06-slurm-post-resume", extra_files={".stdout": post_resume})
+            if capture_error is not None:
+                diagnostic_errors.append(capture_error)
+            else:
+                try:
+                    inner_proc = RUN(inner_argv, capture=True, timeout=None)
+                    inner_rc = inner_proc.returncode
+                except BaseException as exc:
+                    inner_exception = exc
+                    inner_rc = 1
+                    if not isinstance(exc, Exception):
+                        pending_exception = pending_exception or exc
 
+                if inner_proc is not None:
+                    capture_error = _capture_step_best_effort(
+                        bundle,
+                        "04-bench",
+                        cmd_argv=inner_argv,
+                        proc=inner_proc,
+                    )
+                else:
+                    capture_error = _capture_step_best_effort(
+                        bundle,
+                        "04-bench",
+                        cmd_argv=inner_argv,
+                        extra_files={
+                            ".stderr": f"inner invocation raised: {inner_exception!r}\n",
+                            ".exit": "255\n",
+                        },
+                    )
+                if capture_error is not None:
+                    diagnostic_errors.append(capture_error)
+                end_error = _capture_step_best_effort(
+                    bundle,
+                    "04-bench-end",
+                    extra_files={".txt": _utc_iso() + "\n"},
+                )
+                if end_error is not None:
+                    diagnostic_errors.append(end_error)
+    finally:
+        # Every attempted drain reaches compensation, even when diagnostics or
+        # evidence writes fail after the mutation.
+        resume_exit, resume_stderr, resume_exception = _attempt_resume(
+            args,
+            bundle,
+            nodes,
+        )
+        diagnostic_errors.extend(_capture_snapshot_best_effort(args, bundle, "06-slurm-post-resume"))
+
+    drain_exit = drain_proc.returncode if drain_proc is not None else 255
+    drain_stderr = drain_proc.stderr if drain_proc is not None else ""
+    inner_skipped = inner_rc is None
+    compensation = drain_exit != 0 or drain_exception is not None
     payload = _envelope(
         verb="quiet_window",
         bundle=bundle,
         nodes=nodes,
         reason=reason,
         extras={
-            "drain_exit": drain_proc.returncode,
+            "drain_exit": drain_exit,
+            "drain_stderr": drain_stderr,
+            "drain_exception": repr(drain_exception) if drain_exception else None,
             "inner_cmd": inner_cmd,
             "inner_exit": inner_rc,
             "inner_exception": repr(inner_exception) if inner_exception else None,
+            "inner_skipped": inner_skipped,
+            "resume_exit": resume_exit,
+            "resume_stderr": resume_stderr,
+            "resume_exception": resume_exception,
+            "resume_skipped": False,
+            "compensation_attempted": True,
+            "compensation_exit": resume_exit if compensation else None,
+            "compensation_stderr": resume_stderr if compensation else None,
+            "compensation_exception": resume_exception if compensation else None,
+            "diagnostic_errors": [repr(error) for error in diagnostic_errors],
         },
     )
     _emit(
@@ -665,10 +789,22 @@ def cmd_quiet_window(args: argparse.Namespace) -> int:
             f"bundle:      {bundle}",
             f"nodes:       {nodes}",
             f"reason:      {reason}",
-            f"inner_exit:  {inner_rc}",
+            f"drain_exit:  {drain_exit}",
+            f"inner_exit:  {inner_rc if inner_rc is not None else 'skipped'}",
+            f"resume_exit: {resume_exit}",
         ],
     )
-    return inner_rc
+    if pending_exception is not None:
+        raise pending_exception
+    if drain_exit != 0 or drain_exception is not None:
+        return drain_exit or 255
+    if diagnostic_errors:
+        return 255
+    if inner_rc is not None and inner_rc != 0:
+        return inner_rc
+    if resume_exception is not None:
+        return 255
+    return resume_exit if resume_exit > 0 else int(resume_exit != 0)
 
 
 # --------------------------------------------------------------------------- #
@@ -681,7 +817,7 @@ def _add_common_substitutes_nodes_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--nodes",
         required=True,
-        help="Comma-separated list of Slurm node names to target (e.g., 'slurm-b200-193-223,slurm-b200-193-247').",
+        help="Comma-separated list of Slurm node names to target, for example 'gpu-node-01,gpu-node-02'.",
     )
     p.add_argument(
         "--reason",
@@ -690,8 +826,8 @@ def _add_common_substitutes_nodes_args(p: argparse.ArgumentParser) -> None:
     )
     p.add_argument(
         "--ns",
-        default="<slurm-namespace>",
-        help="Kubernetes namespace hosting the slurm controller (default: <slurm-namespace>).",
+        required=True,
+        help="Kubernetes namespace hosting the Slurm controller.",
     )
     p.add_argument(
         "--ctl",

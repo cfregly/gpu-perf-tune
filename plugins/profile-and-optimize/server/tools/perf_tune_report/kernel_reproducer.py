@@ -1,4 +1,4 @@
-"""perf_tune_report kernel_reproducer_scaffold (v1.69.0).
+"""perf_tune_report kernel_reproducer_scaffold.
 
 Scaffold a standalone CUDA/CUTLASS kernel reproducer (.cu + build script) for white-box
 kernel debugging -- Track B of the `inference-kernel-whitebox-debug` skill. Emits a

@@ -1,6 +1,9 @@
 ---
 name: inference-capacity-sizing
-last_validated: 2026-08-03
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-08-03"
 description: >-
   SLA-first GPU capacity sizing for a serving deployment: given a tokens-per-minute
   (TPM) target AND the interactivity SLA (output tokens/s/user), compute the pods and
@@ -14,12 +17,7 @@ description: >-
   "size for the customer", "interactivity SLA", "tokens per second per user", "GPU count
   for throughput", or any combination of "size / capacity / how-many" with "GPU / pod /
   TPM / SLA / tok-per-user / concurrency".
-allowed-tools:
-  - mcp__profile_and_optimize__search_runbooks
-  - mcp__profile_and_optimize__search_evidence
-  - Bash(python3:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__search_runbooks mcp__profile_and_optimize__search_evidence Bash(python3:*) Read Write"
 ---
 
 # inference-capacity-sizing
@@ -45,7 +43,7 @@ or to rank models (that is `inference-fleet-leaderboard`). This skill consumes a
 already-measured tok/s/user-vs-concurrency curve.
 
 This is the measured-capacity continuation of the
-[`performance-hints` estimate loop](/plugins/profile-and-optimize/server/docs/performance-hints.md).
+[`performance-hints` estimate loop](../../server/docs/performance-hints.md).
 A back-of-the-envelope throughput estimate can sanity-check orders of magnitude,
 but it cannot replace the SLA-matched measured curve used for GPU counts.
 
@@ -65,7 +63,7 @@ invariant. A "2x TP4 pod" is 8 GPUs.
 ## Workflow
 
 1. Get the measured curve. Pull the model's tok/s/user anchors from the fleet leaderboards
-   ([`inference-fleet-leaderboard`](/plugins/profile-and-optimize/skills/inference-fleet-leaderboard/SKILL.md)
+   ([`inference-fleet-leaderboard`](../inference-fleet-leaderboard/SKILL.md)
    gives c=1 and c=10. The throughput leaderboard gives the knee), or, for a VERDICT, the
    full roofline sweep (c=8..128).
 2. Run the tool:
@@ -139,7 +137,7 @@ the skill produces no measurements.
 Backed by the standalone `server/tools/capacity_sizing.py` (sibling of
 `tp_rightsize_advisor.py`. Pure-Python, fail-loud, unit-tested in `test_capacity_sizing.py`).
 Companions:
-[`inference-fleet-leaderboard`](/plugins/profile-and-optimize/skills/inference-fleet-leaderboard/SKILL.md)
+[`inference-fleet-leaderboard`](../inference-fleet-leaderboard/SKILL.md)
 (ranks models. Supplies the tok/s/user anchors),
-[`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
+[`inference-perf-bench`](../inference-perf-bench/SKILL.md)
 (measures the curve).

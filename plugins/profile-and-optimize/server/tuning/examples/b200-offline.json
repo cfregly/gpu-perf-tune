@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "id": "example-b200-offline",
+  "status": "example",
+  "description": "Offline example only. Replace these values with workload-specific bounds before tuning.",
+  "target": {
+    "benchmark": "llama31_8b",
+    "default_nodes": 1,
+    "partition": "example",
+    "quality_metric": "final_log_ppl",
+    "quality_target": 3.3
+  },
+  "objectives": [
+    {
+      "name": "mlperf_submission_readiness",
+      "direction": "maximize",
+      "primary_metric": "submission_ready",
+      "minimum_successful_runs": 1,
+      "quality_metric": "final_log_ppl",
+      "quality_target": 3.3
+    },
+    {
+      "name": "time_to_quality",
+      "direction": "minimize",
+      "primary_metric": "elapsed_minutes",
+      "minimum_successful_runs": 2,
+      "quality_metric": "final_log_ppl",
+      "quality_target": 3.3
+    }
+  ],
+  "parameters": [
+    {
+      "name": "RUN_MODE",
+      "category": "workflow",
+      "kind": "enum",
+      "values": ["smoke", "gate", "submission"],
+      "wire": "example environment variable",
+      "description": "Example workflow stage."
+    },
+    {
+      "name": "EXPERIMENT_NODES",
+      "category": "shape",
+      "kind": "enum",
+      "values": ["1", "8"],
+      "wire": "example scheduler shape",
+      "description": "Example node count."
+    },
+    {
+      "name": "NEXP",
+      "category": "repeatability",
+      "kind": "enum",
+      "values": ["1", "5"],
+      "wire": "example run count",
+      "description": "Example repeat count."
+    },
+    {
+      "name": "TRAINER_MICRO_BATCH_SIZE",
+      "category": "training",
+      "kind": "enum",
+      "values": ["1", "2"],
+      "wire": "template patch",
+      "description": "Example trainer micro-batch size.",
+      "requires_config_patch": true,
+      "mutation_contract": {
+        "method": "template_patch",
+        "target_file": "config_DGXB200_8x8x1xtp1pp1cp1_8b_fp4.sh"
+      }
+    }
+  ],
+  "config_mutation_contracts": [
+    {
+      "parameter": "TRAINER_MICRO_BATCH_SIZE",
+      "method": "template_patch",
+      "target_file": "config_DGXB200_8x8x1xtp1pp1cp1_8b_fp4.sh"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-"""Tests for tools.perf_tune_report.raw_bench_compare (v1.24.0).
+"""Tests for tools.perf_tune_report.raw_bench_compare.
 
 Promoted from the GLM-LWS workshop renderers
 (./campaigns workspacescripts/render_lws_baseline_report.py +

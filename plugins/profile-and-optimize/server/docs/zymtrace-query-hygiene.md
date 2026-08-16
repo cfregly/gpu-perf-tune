@@ -3,11 +3,12 @@
 Single source of truth for the **wait + requery** discipline when a zymtrace query
 comes back empty. Cited by the zymtrace skills (`zymtrace-anchored-query`,
 `analyze-zymtrace-workload`), the per-kernel importer
-(`tools/perf_tune_report/importers/zymtrace_kernels.py`), and the skill `_template`.
-The capture-side mechanism (a poll-until-rows loop) lives in
-`scripts/zymtrace-ingest-wait.sh`. The policy
-canon is `docs/METHODOLOGY.md` "Zymtrace data is not instantaneous
-(ClickHouse ingest lag)".
+(`tools/perf_tune_report/importers/zymtrace_kernels.py`), and the skill template
+at `plugins/profile-and-optimize/templates/skill/SKILL.md`.
+The reusable wait helper lives in `scripts/zymtrace-ingest-wait.sh`. An
+operator-owned capture workflow may source it. The policy canon is
+`docs/METHODOLOGY.md` under "Zymtrace data is not instantaneous (ClickHouse
+ingest lag)".
 
 ## Why a zymtrace query can be empty even though capture worked
 
@@ -37,8 +38,8 @@ to wait for the flush and requery for the freshest data - NOT to declare a gap.
    actual run.
 3. **Real telemetry gap (capture failure).** Only after (1) and (2) are ruled
    out: the injection never intercepted the pod, the implant was absent, or the
-   pod exited before flushing. Run `capture-run-env.sh` (the `gpu_frames_gate`)
-   and the implant/intercept checks in `PROFILING-RUNBOOK.md`.
+   pod exited before flushing. Inspect the operator-owned capture receipt,
+   implant status, pod lifetime, and intercept logs.
 
 ## The wait + requery recipe
 
@@ -46,7 +47,7 @@ Poll a cheap count probe with backoff until it returns a positive count, then ru
 the real (heavier) query against the now-present data:
 
 ```bash
-# Conceptually (capture-sol-window.sh does this automatically via the shared helper):
+# Source scripts/zymtrace-ingest-wait.sh in an operator-owned capture workflow.
 attempt=1
 until [ "$(count_probe)" -gt 0 ] || [ "$attempt" -gt "${ZYM_INGEST_MAX_ATTEMPTS:-6}" ]; do
   sleep "${ZYM_INGEST_WAIT_SEC:-20}"   # default 6 x 20s ~= 120s, outlasts the ~60s flush
@@ -54,14 +55,12 @@ until [ "$(count_probe)" -gt 0 ] || [ "$attempt" -gt "${ZYM_INGEST_MAX_ATTEMPTS:
 done
 ```
 
-- The canonical implementation is `zym_wait_for_rows` in
-  `scripts/zymtrace-ingest-wait.sh` (sourced by
-  `capture-sol-window.sh`). Tune with `ZYM_INGEST_WAIT_SEC`,
+- The checked-in implementation is `zym_wait_for_rows` in
+  `scripts/zymtrace-ingest-wait.sh`. Tune with `ZYM_INGEST_WAIT_SEC`,
   `ZYM_INGEST_MAX_ATTEMPTS`, `ZYM_INGEST_BACKOFF`. Set `ZYM_INGEST_DISABLE=1`
   when backfilling an old, already-flushed window from retained telemetry.
-- For self-driving capture pods, **hold the pod ~60s past the bench before exit**
-  so the implant flushes before the pod (and its frames) go away
-  (`PROFILING-RUNBOOK.md`).
+- For automated capture pods, **hold the pod about 60 seconds past the bench
+  before exit** so the implant flushes before the pod and its frames go away.
 - The wait is **advisory**: it delays until data is present or the poll is
   exhausted. It does not fabricate data. After the poll, the existing empty-output
   check is what decides a real gap - now legitimately, because you waited.
@@ -73,4 +72,4 @@ requery ClickHouse. It therefore stays **fail-fast** (a header-only / empty TSV 
 a loud `ZymtraceTSVMalformed` / `ZymtraceTSVMissing`, never a silent pass) but its
 error message names ingest lag as a likely cause and points back here: the fix is
 to re-capture after the flush (the capture script now polls), not to weaken the
-importer.
+  importer.

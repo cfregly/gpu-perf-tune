@@ -1,6 +1,9 @@
 ---
 name: inference-model-eval
-last_validated: 2026-05-23
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-08-16"
 description: >-
   Drive lm-eval-harness quality evals (GPQA, MMLU-Pro) inside model pods
   plus optional ExternalEval (externally operated). Use to validate model
@@ -12,15 +15,7 @@ description: >-
   "run evals", "run gpqa", "run mmlu", "run external-eval", "run evals on the
   model", or any combination of "eval / quality / accuracy" with
   "inference / model / vllm".
-allowed-tools:
-  - mcp__profile_and_optimize__search_runbooks
-  - mcp__profile_and_optimize__search_evidence
-  - Bash(kubectl:*)
-  - Bash(curl:*)
-  - Bash(jq:*)
-  - Bash(date:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__search_runbooks mcp__profile_and_optimize__search_evidence Bash(kubectl:*) Bash(curl:*) Bash(jq:*) Bash(date:*) Read Write"
 ---
 
 # inference-model-eval
@@ -35,21 +30,20 @@ Three benchmark families:
   [lm-eval-harness](https://github.com/EleutherAI/lm-evaluation-harness).
 - **MMLU-Pro** - broad multi-task understanding. Runs inside the model
   pod via lm-eval-harness.
-- **ExternalEval** - externally operated. Cockpit surfaces contact info
-  and endpoint details, operator coordinates with the ExternalEval
+- **ExternalEval** - externally operated. The workflow records contact and
+  endpoint details, and the operator coordinates with the ExternalEval
   operator out-of-band.
 
 The eval workflow itself (task selection, in-pod lm-eval-harness
 invocation, monitoring, results download, ExternalEval handoff) is
 summarized under "Workflow" below. This skill's main job is the
-cockpit-specific glue - the evidence bundle and the perf-baseline
-tie-in.
+project-specific glue for the evidence bundle and the perf-baseline tie-in.
 
 ## When to use
 
 - Before promoting a new model to staging or prod - validate quality
   alongside the perf check
-  ([`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)).
+  ([`inference-perf-bench`](../inference-perf-bench/SKILL.md)).
 - After vLLM version bumps, quantization changes (NVFP4 vs FP8 vs
   BF16), KV-cache-dtype changes - ensure no quality regression.
 - Regression check against published baselines (HuggingFace model
@@ -59,7 +53,7 @@ tie-in.
 Do **not** use this skill for:
 
 - Inference performance measurement - that is
-  [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md).
+  [`inference-perf-bench`](../inference-perf-bench/SKILL.md).
 - Terminal-Bench 2.0 / SWE-Bench Verified at scale - those are larger
   evaluation-harness runs driven by a dedicated eval pipeline. This
   skill covers the in-pod lm-eval-harness path only.
@@ -86,7 +80,7 @@ operator chooses which evals to run.
 
 ## Workflow
 
-### Phase A: scaffold an evidence bundle (cockpit-side)
+### Phase A: scaffold an evidence bundle
 
 ```text
 /evidence-bundle-init --family inference-model-eval \
@@ -100,7 +94,7 @@ target model pod against the served endpoint, monitor the run, and
 download the results into the evidence bundle. For ExternalEval, hand off
 to the ExternalEval operator out-of-band and record the returned scores.
 
-### Phase C: tie evals to a perf-baseline registry entry (cockpit-side)
+### Phase C: tie evals to a perf-baseline registry entry
 
 When a model passes both `inference-perf-bench` and
 `inference-model-eval`, register the perf baseline with a `notes`
@@ -114,7 +108,7 @@ field that names the eval scores:
 ```
 
 This lets a future
-[`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md)
+[`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md)
 diff confirm that a perf regression isn't masked by a quality gain
 (or vice versa).
 
@@ -125,7 +119,7 @@ diff confirm that a perf regression isn't masked by a quality gain
 - **No customer-data leakage.** GPQA / MMLU-Pro datasets are public.
   Any in-pod intermediate artifacts should be cleared before the
   bundle is shared externally.
-- **ExternalEval is operator-mediated.** The cockpit only displays
+- **ExternalEval is operator-mediated.** The skill only displays
   contact info. Do not auto-DM the ExternalEval operator from any agent surface.
 
 ## Full-context reporting (no bare numbers)
@@ -149,7 +143,7 @@ roofline-bound, so this skill does NOT add a `%SoL` column to its
 output. Per `docs/METHODOLOGY.md` "Speed-of-light framing", the
 methodology applies to *measurement-producing perf skills* - eval
 accuracy is orthogonal. When eval pairs with perf
-([`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)) for a
+([`inference-perf-bench`](../inference-perf-bench/SKILL.md)) for a
 quant-quality-vs-throughput comparison, the perf side carries `%SoL`
 and the eval side carries accuracy %.
 
@@ -169,8 +163,8 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Source-of-truth references
 
-- Pair: [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) - the
+- Pair: [`inference-perf-bench`](../inference-perf-bench/SKILL.md) - the
   perf counterpart for full pre-promotion validation.
-- [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md)
+- [`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md)
  - ties eval scores to a perf-baseline registry entry (Phase C).
 - `docs/METHODOLOGY.md` - full-context reporting + verdict rigor.

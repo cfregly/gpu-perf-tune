@@ -4,9 +4,9 @@ Re-exports `CONTRACT`, `build_parser`, and `main` from the canonical
 implementation at
 [`tools/perf_baseline/perf_baseline_cli.py`](../tools/perf_baseline/perf_baseline_cli.py).
 
-Added in profile-and-optimize v0.4.0. Backs the
-[`perf-baseline-record`](../skills/perf-baseline-record/SKILL.md) and
-[`perf-baseline-diff`](../skills/perf-baseline-diff/SKILL.md) skills.
+Backs the
+[`perf-baseline-record`](../../skills/perf-baseline-record/SKILL.md) and
+[`perf-baseline-diff`](../../skills/perf-baseline-diff/SKILL.md) skills.
 """
 
 from __future__ import annotations

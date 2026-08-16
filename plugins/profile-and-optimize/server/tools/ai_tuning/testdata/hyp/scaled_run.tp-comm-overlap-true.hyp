@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+export MINIBS={{ hypertune.range=[1,8] }}
+export TENSOR_MODEL_PARALLEL={{ hypertune.range=[1,8] }}
+export PIPELINE_MODEL_PARALLEL={{ hypertune.range=[1,4] }}
+export MICRO_BATCH_SIZE={{ hypertune.range=[1,8] }}
+export INTERLEAVED_PIPELINE={{ hypertune.array=[True, False] }}
+export LR={{ hypertune.array=[0.0001, 0.0002] }}

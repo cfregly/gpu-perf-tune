@@ -1,6 +1,6 @@
 """Helpers for the perf-baseline registry.
 
-Pure functions; no MCP / Slurm / network dependencies. Unit-testable in
+Pure functions with no MCP, Slurm, or network dependencies. Unit-testable in
 isolation.
 """
 
@@ -10,19 +10,46 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import socket
+import subprocess
 from pathlib import Path
 from typing import Any
 
 
+_SAFE_SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def safe_segment(value: str, *, label: str) -> str:
+    """Validate one operator-controlled artifact path segment."""
+    if (
+        not isinstance(value, str)
+        or not value
+        or value in {".", ".."}
+        or "/" in value
+        or "\\" in value
+        or _SAFE_SEGMENT.fullmatch(value) is None
+    ):
+        raise ValueError(f"{label} must be one safe path segment")
+    return value
+
+
+def _contained_path(root: Path, *segments: str) -> Path:
+    resolved_root = root.resolve()
+    candidate = resolved_root.joinpath(*segments).resolve()
+    if not candidate.is_relative_to(resolved_root):
+        raise ValueError("artifact path escapes its registry root")
+    return candidate
+
+
 def utc_now_iso() -> str:
     """ISO-8601 UTC timestamp, second precision, suitable for filenames."""
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def utc_now_slug() -> str:
     """Compact UTC timestamp suitable as a directory name (no colons)."""
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def sha256_of_path(path: Path) -> str:
@@ -51,12 +78,26 @@ def sha256_of_path(path: Path) -> str:
 
 def registry_dir_for(repo_root: Path, family: str, measurement: str) -> Path:
     """Return ``<repo_root>/experiments/artifacts/perf-baselines/<family>/<measurement>/``."""
-    return repo_root / "experiments" / "artifacts" / "perf-baselines" / family / measurement
+    family = safe_segment(family, label="family")
+    measurement = safe_segment(measurement, label="measurement")
+    root = repo_root / "experiments" / "artifacts" / "perf-baselines"
+    return _contained_path(root, family, measurement)
 
 
 def registry_entry_dir(repo_root: Path, family: str, measurement: str, slug: str) -> Path:
     """Return the immutable per-registration directory path."""
-    return registry_dir_for(repo_root, family, measurement) / slug
+    slug = safe_segment(slug, label="slug")
+    registry = registry_dir_for(repo_root, family, measurement)
+    return _contained_path(registry, slug)
+
+
+def diff_entry_dir(repo_root: Path, family: str, measurement: str, slug: str) -> Path:
+    """Return a contained per-diff artifact directory."""
+    family = safe_segment(family, label="family")
+    measurement = safe_segment(measurement, label="measurement")
+    slug = safe_segment(slug, label="slug")
+    root = repo_root / "experiments" / "artifacts" / "perf-baseline-diffs"
+    return _contained_path(root, family, measurement, slug)
 
 
 def write_baseline_json(
@@ -65,6 +106,7 @@ def write_baseline_json(
     family: str,
     measurement: str,
     value: float | None,
+    direction: str = "two-sided",
     unit: str | None,
     source_path: Path,
     source_sha256: str,
@@ -84,13 +126,13 @@ def write_baseline_json(
         "family": family,
         "measurement": measurement,
         "value": value,
+        "direction": direction,
         "unit": unit,
         "source_path": str(source_path),
         "source_sha256": source_sha256,
         "schema_path": str(schema_path) if schema_path is not None else None,
         "registered_at_utc": registered_at_utc,
         "registered_by": {
-            "team": "the MLPerf team",
             "operator_user": operator_user,
         },
         "workstation": {"hostname": hostname, "uname": uname},
@@ -120,7 +162,7 @@ def write_source_md(
     body = f"""# SOURCE: perf-baseline {family} / {measurement}
 
 **Registered at (UTC):** `{registered_at_utc}`
-**Registered by:** the MLPerf team (operator: `{operator_user}` on `{hostname}`)
+**Registered by:** `{operator_user}` on `{hostname}`
 **profile-and-optimize SHA at registration:** `{sha_short}`
 
 ## Source
@@ -134,18 +176,19 @@ def write_source_md(
 
 {notes or "_(none)_"}
 
-## Per workspace CLAUDE.md "Team Attribution"
+## Attribution
 
-This baseline is attributed to the MLPerf team, not an individual. The operator user
-above is captured as audit trail; no individual is asserted as "submission
-lead" / "submission owner" / "MLPerf lead".
+This file records the operator account and host for audit. It does not infer
+individual ownership or organizational affiliation.
 """
     out = entry_dir / "SOURCE.md"
     out.write_text(body)
     return out
 
 
-def append_index(registry_dir: Path, *, slug: str, registered_at_utc: str, value: float | None, unit: str | None, notes: str) -> Path:
+def append_index(
+    registry_dir: Path, *, slug: str, registered_at_utc: str, value: float | None, unit: str | None, notes: str
+) -> Path:
     """Append a row to INDEX.md (creating it with a header on first write)."""
     index_path = registry_dir / "INDEX.md"
     if not index_path.exists():
@@ -165,28 +208,17 @@ def append_index(registry_dir: Path, *, slug: str, registered_at_utc: str, value
 
 
 def discover_profile_and_optimize_sha(repo_root: Path) -> str | None:
-    """Attempt to discover the current git SHA of the bundled server.
-
-    Walks up from repo_root looking for a .git directory; if found, reads HEAD.
-    Returns None if git metadata is unavailable (e.g. the plugin was installed
-    via tarball rather than git clone).
-    """
-    current = repo_root.resolve()
-    while current != current.parent:
-        git_dir = current / ".git"
-        if git_dir.exists():
-            try:
-                head = (git_dir / "HEAD").read_text().strip()
-                if head.startswith("ref: "):
-                    ref_path = git_dir / head[len("ref: "):]
-                    if ref_path.exists():
-                        return ref_path.read_text().strip()
-                else:
-                    return head
-            except OSError:
-                return None
-        current = current.parent
-    return None
+    """Return the current Git SHA, including from a linked worktree."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_root.resolve()), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.strip()
+    return sha if re.fullmatch(r"[0-9a-fA-F]{40,64}", sha) else None
 
 
 def gather_workstation_facts() -> tuple[str, str, str]:

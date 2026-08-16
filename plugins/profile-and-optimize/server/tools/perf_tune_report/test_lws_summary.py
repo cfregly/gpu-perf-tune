@@ -1,4 +1,4 @@
-"""Tests for tools.perf_tune_report.importers.lws_summary (v1.23.1).
+"""Tests for tools.perf_tune_report.importers.lws_summary.
 
 Covers the GLM-LWS multi-variant ``summary.json`` -> ``atlas.jsonl``
 direct-emission path. Sibling to ``test_inference_drive_load.py`` and

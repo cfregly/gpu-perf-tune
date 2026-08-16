@@ -1,8 +1,8 @@
-"""FastMCP runtime for the contract-derived MLPerf tool surface.
+"""FastMCP runtime for contract-derived GPU performance tools.
 
 The MCP runtime imports ``mcp_surface.py`` from the repo root and
-registers exactly one MCP tool per launcher / selector / validator CLI
-verb. There is no hand-maintained registry.
+registers one MCP tool per supported CLI verb. There is no second tool
+registry to maintain.
 """
 
 from __future__ import annotations
@@ -11,8 +11,10 @@ import contextlib
 import importlib
 import io
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -24,16 +26,7 @@ RESOURCE_PATHS: dict[str, str] = {
     "perftune://repo/docs/mcp-tool-io-contract.md": "docs/mcp-tool-io-contract.md",
     "perftune://repo/docs/mcp-composition.md": "docs/mcp-composition.md",
     "perftune://repo/docs/performance-hints.md": "docs/performance-hints.md",
-    "perftune://repo/runbooks/gb300_405b.md": "runbooks/gb300_405b.md",
-    "perftune://repo/runbooks/dsv3_671b.md": "runbooks/dsv3_671b.md",
-    "perftune://repo/runbooks/b200_8b.md": "runbooks/b200_8b.md",
-    "perftune://repo/tools/leaderboard/RELEASE-DAY.md": "tools/leaderboard/RELEASE-DAY.md",
-    "perftune://repo/experiments/artifacts/leaderboard/CURRENT.md": "experiments/artifacts/leaderboard/CURRENT.md",
-    # Phase 5: operator-runnable shell scripts exposed as static resources so
-    # callers can pull the source verbatim. The two scripts are runnable as
-    # `bash <path>`; the MCP surface does NOT execute them.
-    "perftune://repo/tools/pipeline/submission/capture_evidence_bundle.sh": "tools/pipeline/submission/capture_evidence_bundle.sh",
-    "perftune://repo/tools/leaderboard/scripts/build_bundle.sh": "tools/leaderboard/scripts/build_bundle.sh",
+    "perftune://repo/runbooks/profile-a-regression.md": "runbooks/profile-a-regression.md",
 }
 
 
@@ -42,21 +35,103 @@ SEARCH_TOOL_SPECS: dict[str, list[str]] = {
     "search_evidence": ["experiments/artifacts"],
 }
 
+_MAX_SEARCH_RESULTS = 100
+_MAX_SEARCH_LINE_CHARS = 8192
+_MAX_SEARCH_STDERR_CHARS = 8192
+
+
+def _search_command(
+    query: str,
+    paths: list[str],
+    limit: int,
+    *,
+    program: str = "rg",
+) -> list[str]:
+    if Path(program).name == "rg":
+        return [
+            program,
+            "--line-number",
+            "--max-columns",
+            "4096",
+            "--max-columns-preview",
+            "--max-count",
+            str(limit),
+            "--",
+            query,
+            *paths,
+        ]
+    if Path(program).name == "grep":
+        return [program, "-r", "-n", "-E", "--", query, *paths]
+    raise ValueError(f"unsupported search program: {program}")
+
 
 def _search(name: str, paths: list[str], query: str, *, limit: int = 50) -> dict[str, Any]:
-    """Wrap `rg` in the same envelope the contract-derived MCP tools use.
+    """Wrap a bounded text search in the contract-derived MCP envelope.
 
     The auxiliary MCP-only tools (`search_runbooks`, `search_evidence`) are
     not CLI verbs, so they have no library / verb / ack semantics from the
     CLI contract. They still return the same envelope shape so MCP clients
-    can use one parser path; library is set to ``mcp_aux`` and verb to
+    can use one parser path. Library is set to ``mcp_aux`` and verb to
     ``search`` to make the auxiliary nature visible.
     """
+    if isinstance(limit, bool) or not isinstance(limit, int):
+        raise TypeError("limit must be an integer")
+    if not 1 <= limit <= _MAX_SEARCH_RESULTS:
+        raise ValueError(f"limit must be between 1 and {_MAX_SEARCH_RESULTS}")
+
     repo = find_repo_root()
     argv = [query, "--limit", str(limit), "--paths", *paths]
-    cmd = ["rg", "--line-number", "--max-count", str(limit), query, *paths]
-    proc = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, check=False)
-    matches = proc.stdout.splitlines() if proc.returncode in (0, 1) else []
+    program = shutil.which("rg") or shutil.which("grep")
+    if program is None:
+        payload = {"query": query, "paths": paths, "matches": []}
+        return {
+            "tool": name,
+            "library": "mcp_aux",
+            "verb": "search",
+            "safety": "read_only",
+            "ack_required": False,
+            "ack_field": None,
+            "args": argv,
+            "returncode": 127,
+            "stdout": "",
+            "stderr": "search requires ripgrep or grep on PATH",
+            "json": payload,
+        }
+    cmd = _search_command(query, paths, limit, program=program)
+    matches: list[str] = []
+    stderr = ""
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_file:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=repo,
+            stdout=subprocess.PIPE,
+            stderr=stderr_file,
+            text=True,
+        )
+        assert proc.stdout is not None
+        while len(matches) < limit:
+            line = proc.stdout.readline(_MAX_SEARCH_LINE_CHARS)
+            if not line:
+                break
+            matches.append(line.rstrip("\n"))
+
+        capped = len(matches) == limit and proc.poll() is None
+        if capped:
+            proc.terminate()
+        try:
+            returncode = proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            returncode = proc.wait(timeout=2)
+
+        stderr_file.seek(0)
+        stderr = stderr_file.read(_MAX_SEARCH_STDERR_CHARS)
+
+    if capped and matches:
+        returncode = 0
+    stdout = "".join(f"{match}\n" for match in matches)
+    if returncode not in (0, 1):
+        matches = []
     payload = {"query": query, "paths": paths, "matches": matches}
     return {
         "tool": name,
@@ -66,9 +141,9 @@ def _search(name: str, paths: list[str], query: str, *, limit: int = 50) -> dict
         "ack_required": False,
         "ack_field": None,
         "args": argv,
-        "returncode": int(proc.returncode),
-        "stdout": proc.stdout,
-        "stderr": proc.stderr,
+        "returncode": int(returncode),
+        "stdout": stdout,
+        "stderr": stderr,
         "json": payload,
     }
 
@@ -102,16 +177,73 @@ def _args_from_params(params: dict[str, Any]) -> list[str]:
     return list(raw)
 
 
+def _is_option_abbreviation(value: str, option: str) -> bool:
+    return value.startswith("--") and value != option and option.startswith(value)
+
+
+def _dynamic_ack(
+    module: Any,
+    verb: str,
+    argv: list[str],
+) -> tuple[str | None, bool, str | None]:
+    declarations = getattr(module, "MCP_DYNAMIC_ACKS", {})
+    verb_declarations = declarations.get(verb, {}) if isinstance(declarations, dict) else {}
+    if not argv or not isinstance(verb_declarations, dict):
+        return None, False, None
+    declaration = verb_declarations.get(argv[0])
+    if not isinstance(declaration, dict):
+        return None, False, None
+    ack_flag = declaration.get("ack")
+    required_with = declaration.get("required_with")
+    safety = declaration.get("safety")
+    if not isinstance(ack_flag, str) or not isinstance(required_with, str):
+        raise TypeError(f"invalid dynamic acknowledgement declaration for {verb} {argv[0]}")
+    for arg in argv[1:]:
+        if _is_option_abbreviation(arg, required_with):
+            raise ValueError(
+                f"abbreviated option {arg!r} is not allowed; use {required_with!r}"
+            )
+    return ack_flag, required_with in argv, str(safety) if safety else None
+
+
 def run_surface_tool(name: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     surface = _load_mcp_surface()
     params = dict(params or {})
     spec = surface.find_spec(name)
-    module = surface._load_cli_module(spec.library)  # noqa: SLF001 - MCP runtime intentionally mirrors the CLI contract.
+    module = surface._load_cli_module(spec.library)
     ack_flag = module.CONTRACT[spec.verb].get("ack")
-    ack_field = _ack_field(ack_flag)
     argv = _args_from_params(params)
-    if ack_flag and ack_field and params.get(ack_field):
-        argv.append(ack_flag)
+    dynamic_ack_flag, dynamic_ack_required, dynamic_safety = _dynamic_ack(
+        module,
+        spec.verb,
+        argv,
+    )
+    effective_ack_flag = ack_flag or dynamic_ack_flag
+    ack_exempt_when = module.CONTRACT[spec.verb].get("ack_exempt_when", ())
+    if not isinstance(ack_exempt_when, (tuple, list)) or not all(
+        isinstance(flag, str) for flag in ack_exempt_when
+    ):
+        raise TypeError(f"invalid acknowledgement exemption for {spec.library} {spec.verb}")
+    static_ack_required = bool(ack_flag) and not any(flag in argv for flag in ack_exempt_when)
+    ack_required = static_ack_required or dynamic_ack_required
+    ack_field = _ack_field(effective_ack_flag)
+    raw_ack = next(
+        (
+            arg
+            for arg in argv
+            if effective_ack_flag
+            and (arg == effective_ack_flag or _is_option_abbreviation(arg, effective_ack_flag))
+        ),
+        None,
+    )
+    if effective_ack_flag and raw_ack:
+        raise ValueError(
+            f"pass {ack_field}=true instead of including {raw_ack!r} in params.args"
+        )
+    if ack_required and ack_field and params.get(ack_field) is not True:
+        raise PermissionError(f"{spec.name} requires {ack_field}=true")
+    if ack_required and effective_ack_flag and ack_field:
+        argv.append(effective_ack_flag)
     if spec.json and "--json" not in argv:
         argv.append("--json")
 
@@ -150,8 +282,8 @@ def run_surface_tool(name: str, params: dict[str, Any] | None = None) -> dict[st
         "tool": name,
         "library": spec.library,
         "verb": spec.verb,
-        "safety": spec.safety,
-        "ack_required": spec.ack_required,
+        "safety": dynamic_safety if dynamic_ack_required and dynamic_safety else spec.safety,
+        "ack_required": ack_required,
         "ack_field": ack_field,
         "args": argv,
         "returncode": int(rc),
@@ -159,7 +291,7 @@ def run_surface_tool(name: str, params: dict[str, Any] | None = None) -> dict[st
         "stderr": err,
         "json": parsed,
     }
-    if rc != 0 and not params.get("allow_nonzero", False):
+    if rc != 0 and params.get("allow_nonzero") is not True:
         raise RuntimeError(json.dumps(result, sort_keys=True))
     return result
 
@@ -176,17 +308,15 @@ def create_server() -> Any:
     mcp = FastMCP(
         "profile_and_optimize",
         instructions=(
-            "MLPerf Training + inference perf tools derived from launcher "
-            "/ selector / validator CLI contracts. Mutating tools mirror the CLI ack "
-            "flags. GRIND MANDATE (always-applied): performance work is never 'done' "
-            "-- after every measured result, always hunt the next BREAKTHROUGH (the "
-            "highest-EV unlock toward Speed-of-Light), not just the next micro-lever; "
-            "every finding names its next_lever, and a breakthrough claim stays a DRAFT "
-            "until variance-controlled, metric-isolated, fair-baselined, profiled, and "
-            "SoL-grounded. Before broad sweeps or captures, apply the Dean-Ghemawat "
-            "estimate-then-measure loop in perftune://repo/docs/performance-hints.md: "
-            "write a cost ledger, bound each idea by measured profile share, and route "
-            "one controlled experiment. Estimates never establish a verdict."
+            "GPU profiling and performance optimization tools derived from 8 CLI "
+            "contracts. Ack-gated tools require the matching structured field. "
+            "External S3 publish requires current-call approval, while publish dry "
+            "runs write local files only and need no acknowledgement. "
+            "Keep estimates and single observations labeled DRAFT. Before broad sweeps "
+            "or captures, follow perftune://repo/docs/performance-hints.md. Write a cost "
+            "ledger, rank ideas by measured contributor share, and run one controlled "
+            "experiment. End each measured result with the next candidate lever and the "
+            "gate that will prove or refute it."
         ),
     )
 

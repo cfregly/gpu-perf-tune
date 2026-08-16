@@ -1,6 +1,9 @@
 ---
 name: evidence-bundle-init
-last_validated: 2026-05-21
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-21"
 description: >-
   Scaffold a new evidence bundle directory ready for reproducibility-grade
   evidence capture: SOURCE.md (operator + cluster + git
@@ -12,15 +15,7 @@ description: >-
   "evidence-bundle-init", "set up a bundle", or any combination of "new /
   init / scaffold / create / start" with "evidence / bundle / artifact /
   run-id / experiment".
-allowed-tools:
-  - mcp__profile_and_optimize__evidence_init
-  - Bash(mkdir:*)
-  - Bash(date:*)
-  - Bash(git:*)
-  - Bash(hostname:*)
-  - Bash(whoami:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__evidence_init Bash(mkdir:*) Bash(date:*) Bash(git:*) Bash(hostname:*) Bash(whoami:*) Read Write"
 ---
 
 # evidence-bundle-init
@@ -32,7 +27,7 @@ Set up a new evidence bundle directory under `experiments/artifacts/<family>/<ru
 - `SOURCE.md` - operator identity, cluster, git SHA, UTC timestamp, the original prompt / intent.
 - `summary.md` - verdict skeleton operator fills in as the experiment progresses.
 - `commands/` - directory for the four-file `<NN>-<step>.{cmd,stdout,stderr,exit}` tuples one per shell command run during the experiment.
-- `.gitkeep` markers so the directory layout survives an empty commit.
+- `.gitkeep` markers for the local directory shape.
 
 This skill is the operator-facing convenience over `mkdir + cat > SOURCE.md`. Half a minute of friction is enough that people skip the discipline. This skill makes it 5 seconds.
 
@@ -64,7 +59,7 @@ Scaffold these in any measurement bundle:
   directly, each pointing at 01/02.
 - A ` ```provenance ` block (`experiment_provenance_v1`) in `SOURCE.md` pinning the exact
   vLLM/SGLang commit + delivery + patch, so the rendered roofline carries a source link (see
-  [`server/tools/perf_tune_report/ROOFLINE-METHODOLOGY.md`](/plugins/profile-and-optimize/server/tools/perf_tune_report/ROOFLINE-METHODOLOGY.md)).
+  [`server/tools/perf_tune_report/ROOFLINE-METHODOLOGY.md`](../../server/tools/perf_tune_report/ROOFLINE-METHODOLOGY.md)).
   Record the REAL `delivery` (`image|overlay|patchedVllm|infr-patch`) the bundle ran -- it is the
   code-under-test identity: a number from this bundle may be cited only as
   evidence for THAT delivery, never cross-tier (an `overlay`/offline-prepped run is not evidence for
@@ -90,7 +85,7 @@ This repo's reproducibility-grade-evidence convention requires that significant 
 - Starting any experiment that will produce >1 artifact file.
 - Reviewer asked "where's the evidence for that claim?" and the answer is a bundle.
 - Periodic capture (weekly perf-of-record snapshot, monthly drain audit, etc.).
-- Pairs with every skill that writes artifacts ([`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md), [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md)).
+- Pairs with every skill that writes artifacts ([`prometheus-anchored-query`](../prometheus-anchored-query/SKILL.md), [`perf-baseline-record`](../perf-baseline-record/SKILL.md)).
 
 Do **not** use this skill for:
 
@@ -233,27 +228,30 @@ Write ${bundle}/commands/README.md with:
       00-<step-slug>.stderr    # captured stderr
       00-<step-slug>.exit      # exit code
 
-  Filenames are zero-padded sequential (00, 01, 02, ...) so the chronological order
-  is preserved in `ls`. Use a helper to capture all four atomically, e.g.:
+  Filenames are zero-padded sequential (00, 01, 02, ...) so natural sort order
+  matches execution order. From the server root, use the checked-in helper:
 
-      run() {
-        local n="$1". Shift
-        local slug="$1". Shift
-        local prefix="$(printf '%02d-%s' "${n}" "${slug}")"
-        printf '%s ' "$@" > "${prefix}.cmd". Echo >> "${prefix}.cmd"
-        "$@" > "${prefix}.stdout" 2> "${prefix}.stderr"
-        echo $? > "${prefix}.exit"
-      }
-      run 0 ls-image ls /mnt/data/images/
+      capture_rc=0
+      ART_DIR="${bundle}" \
+        bash tools/shared/capture_cmd.sh ls-image -- ls /mnt/data/images/ \
+        || capture_rc=$?
+      if [ "$capture_rc" -ne 0 ]; then
+        exit "$capture_rc"
+      fi
 
-Touch ${bundle}/commands/.gitkeep so the empty directory survives a git add.
+  `tools/shared/capture_cmd.sh` shell-quotes exact argv, writes stdout and stderr
+  separately, writes the exit code before returning, and is tested by
+  `tools/shared/test_capture_cmd.sh`. The `||` branch keeps the tuple complete
+  when the caller uses `set -e` and the wrapped command fails.
+
+Touch ${bundle}/commands/.gitkeep to preserve the local directory shape.
 ```
 
 ### Phase 3: report
 
 Print the bundle path and the next-step pointer:
 
-- "Add captures: `cd <bundle>` then run your commands with the `run` helper above."
+- "Add captures from the server root with `tools/shared/capture_cmd.sh`."
 - "Finalize: edit `summary.md` with verdict + findings before sharing."
 - "Register a baseline if applicable: `perf-baseline-record --source <bundle>`."
 
@@ -272,10 +270,19 @@ ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/<family>/<run-id>/
 
 - **Never overwrite an existing bundle.** Bundles are immutable. The skill refuses to init over a populated directory.
 - **Audit trail.** `SOURCE.md` records the operator's `${USER}` + hostname so future readers know who captured the evidence, where, and from what prompt.
-- **No automatic commit.** The skill creates the directory + scaffold files but does NOT run `git add` / `git commit`. The operator does that after the experiment is captured.
+- **Local-only by default.** The public repository ignores the full
+  `server/experiments/artifacts/` tree except `.gitkeep` markers. An ordinary
+  `git add` does not stage `SOURCE.md`, command output, or measurements.
+- **Intentional publication requires review.** Scrub secrets, private paths,
+  operator details, and sensitive workload data. Review the complete bundle,
+  then use `git add -f <bundle>` only when the operator explicitly chose to
+  publish it.
+- **The provenance hook checks force-staged bundles.** When the gate is enabled,
+  it reads the staged `SOURCE.md` from the Git index. It does not make local
+  evidence public and it does not stage artifacts itself.
 
 ## Source-of-truth references
 
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - the measurement-methodology canon every bundle feeds.
-- [`server/CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) - bundled-server discovery contract.
+- [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) - the measurement-methodology canon every bundle feeds.
+- [`server/AGENTS.md`](../../server/AGENTS.md) - bundled-server discovery contract.
 - All sibling skills that write artifacts - they all assume the bundle this skill creates.

@@ -31,28 +31,30 @@ For each new or changed skill, list:
 
 Current: `0.X.Y` -> Proposed: `0.A.B`
 
-Justification (PATCH / MINOR / MAJOR per [REVIEWERS.md](/REVIEWERS.md#version-bump-scope)):
+Justification (PATCH / MINOR / MAJOR per [REVIEWERS.md](https://github.com/cfregly/gpu-perf-tune/blob/main/REVIEWERS.md#version-review)):
 
 <!-- Why this bump? -->
 
 ## Validation checklist
 
-- [ ] `claude plugin validate plugins/profile-and-optimize` returns PASS.
-- [ ] Every new / changed SKILL.md has valid YAML frontmatter (`name` matches directory, `description` <=1024 chars, `allowed-tools` is a list).
-- [ ] Skill bodies are <=500 lines (use progressive disclosure for deep reference).
+- [ ] `make all` returns PASS.
+- [ ] Every new or changed skill passes `make validate-agent-skills`.
+- [ ] Every new or changed SKILL.md uses only supported frontmatter fields, and `allowed-tools` is a space-delimited string.
+- [ ] Long skills move stable reference material into sibling files when that improves discovery and loading.
 - [ ] No Windows-style paths (`\\`) in any SKILL.md.
-- [ ] All file references are one-level-deep and use relative paths.
-- [ ] Source-of-truth docs in `server/` are cited, not duplicated.
+- [ ] Source-of-truth docs are cited, not copied into the skill.
 - [ ] No `slack_send_message` / `slack_schedule_message` / other chat-write tool referenced (skills are read-only toward chat systems).
 - [ ] If any new mutating MCP tool is referenced, the corresponding `i_understand_this_*` ack flag is enforced in the workflow.
 - [ ] Root `README.md` updated: skill family list, plus the skill-count line if the total changed.
 - [ ] If a new MCP server was added: env-var placeholders only. No real tokens / URLs checked in.
 - [ ] If the bundled server tool surface changed: `make smoke-test` confirms `mcp_surface.py` derives the expected tool count.
 
-## Optional but appreciated
+## Adapter checks
 
-- [ ] Local install test: `claude plugin update profile-and-optimize@profile-and-optimize-plugins` succeeds and the new / changed skills appear in `claude plugin list`.
-- [ ] If a new perf-test skill: ran the bash workflow against a real cohort and captured an evidence bundle in the PR description.
+- [ ] Not applicable because Claude packaging did not change.
+- [ ] `make validate-claude-plugin` passes because Claude packaging changed.
+- [ ] A dry run of each changed client installer writes nothing and prints no existing private config.
+- [ ] For a new performance skill, the PR states what ran on real hardware and links sanitized evidence, or explains what remains unvalidated.
 
 ## Notes for reviewers
 

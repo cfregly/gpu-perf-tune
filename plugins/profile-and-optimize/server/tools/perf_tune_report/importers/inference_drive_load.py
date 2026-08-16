@@ -2,7 +2,7 @@
 ``drive_load.py`` JSONL load-driver pattern (Kimi K2.6 layout).
 
 Sibling to ``inference_perf_bench.py`` (which handles the vLLM
-``bench serve`` text-output pattern). Added in profile-and-optimize v1.21.0.
+``bench serve`` text-output pattern).
 
 Source format conventions
 -------------------------
@@ -101,6 +101,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from tools.perf_tune_report.helpers import resolve_cell_dir
 
 from tools.perf_tune_report.schema import (
     BACKEND_VLLM_SWEEP,
@@ -467,7 +469,7 @@ def import_drive_load_bundle(
 
     status = STATUS_FULL if not skipped else STATUS_PARTIAL
 
-    cell_dir = campaign_dir / "cells" / identity.cell_id
+    cell_dir = resolve_cell_dir(campaign_dir, identity.cell_id)
     concurrencies = sorted({r.concurrency for r in rows})
     k_values: list[int] = []  # drive_load.py does not currently sweep K
     kernels_result = import_zymtrace_kernels(bundle, cell_dir, dry_run=dry_run)
@@ -501,7 +503,7 @@ def import_drive_load_bundle(
     (cell_dir / "SOURCE.md").write_text(
         f"# {identity.cell_id}\n\n"
         f"- imported_from: {bundle}\n"
-        f"- importer:      inference_drive_load (v1.21.0)\n"
+        f"- importer:      inference_drive_load\n"
         f"- captured_at:   {captured_at}\n"
         f"- concurrencies: {concurrencies}\n"
         f"- row_count:     {len(rows)}\n"

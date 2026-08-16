@@ -37,7 +37,10 @@ call to prevent hangs from blocking always-resume.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
+import math
 import subprocess
 import time
 from pathlib import Path
@@ -49,6 +52,15 @@ from tools.perf_tune_report.orchestrator.campaign_run import CellPlan, StepFns
 _CMD_TIMEOUT_S = 120
 _WARMUP_TIMEOUT_S = 60
 _WARMUP_POLL_INTERVAL_S = 5
+_SERVER_ROOT = Path(__file__).resolve().parents[3]
+
+_BASELINE_METRICS: dict[str, tuple[str, str, str]] = {
+    "output_tps_per_gpu": ("higher-is-better", "max", "tokens/s/GPU"),
+    "request_throughput_avg": ("higher-is-better", "max", "requests/s"),
+    "tpot_median_ms": ("lower-is-better", "min", "ms"),
+    "itl_avg_ms": ("lower-is-better", "min", "ms"),
+    "ttft_avg_ms": ("lower-is-better", "min", "ms"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -138,23 +150,26 @@ def step_warmup(namespace: str, release: str, cell_id: str) -> bool:
 def _cell_config_from_plan(cell: CellPlan):
     """Build a runner ``CellConfig`` from a ``CellPlan``.
 
-    Identity axes (model/hardware/quant/...) come from ``helm_overrides`` with
-    the same defaults the vllm-sweep branch uses, so an aa/aiperf cell that
-    omits them still produces well-formed AtlasCell identity fields.
+    Canonical identity axes come from the cell's top-level runner config.
+    Legacy matrices that stored those fields in ``helm_overrides`` continue to
+    work, with the same defaults used before canonical matrix normalization.
     """
     from tools.perf_tune_report.runners.common import CellConfig
+
+    def value(name: str, default: Any) -> Any:
+        return cell.runner_config.get(name, cell.helm_overrides.get(name, default))
+
     return CellConfig(
         cell_id=cell.id,
-        model=cell.helm_overrides.get("model", "unknown"),
-        hardware=cell.helm_overrides.get("hardware", "B200"),
-        quant=cell.helm_overrides.get("quant", "NVFP4"),
-        tensor_parallel=int(cell.helm_overrides.get("tensor_parallel", 8)),
-        parallel_strategy=cell.helm_overrides.get("parallel_strategy", "TP"),
-        mtp=bool(cell.helm_overrides.get("mtp", False)),
-        max_num_batched_tokens=int(
-            cell.helm_overrides.get("max_num_batched_tokens", 4096)
-        ),
+        model=str(value("model", "unknown")),
+        hardware=str(value("hardware", "B200")),
+        quant=str(value("quant", "NVFP4")),
+        tensor_parallel=int(value("tensor_parallel", 8)),
+        parallel_strategy=str(value("parallel_strategy", "TP")),
+        mtp=bool(value("mtp", False)),
+        max_num_batched_tokens=int(value("max_num_batched_tokens", 4096)),
         concurrencies=tuple(cell.concurrencies),
+        extras=dict(value("extras", {})),
     )
 
 
@@ -168,23 +183,13 @@ def step_bench(campaign_dir: Path, cell: CellPlan) -> bool:
     try:
         if cell.backend == "vllm-sweep":
             from tools.perf_tune_report.runners.vllm_sweep import run_cell as run_vllm
-            from tools.perf_tune_report.runners.common import CellConfig
-            cfg = CellConfig(
-                cell_id=cell.id,
-                model=cell.helm_overrides.get("model", "unknown"),
-                hardware=cell.helm_overrides.get("hardware", "B200"),
-                quant=cell.helm_overrides.get("quant", "NVFP4"),
-                tensor_parallel=int(cell.helm_overrides.get("tensor_parallel", 8)),
-                parallel_strategy=cell.helm_overrides.get("parallel_strategy", "TP"),
-                mtp=bool(cell.helm_overrides.get("mtp", False)),
-                max_num_batched_tokens=int(
-                    cell.helm_overrides.get("max_num_batched_tokens", 4096)
-                ),
-                concurrencies=tuple(cell.concurrencies),
-                backend="vllm-sweep",
+            cfg = _cell_config_from_plan(cell)
+            serve_cmd = cell.backend_config.get(
+                "serve_cmd", cell.helm_overrides.get("serve_cmd", "")
             )
-            serve_cmd = cell.helm_overrides.get("serve_cmd", "")
-            bench_cmd = cell.helm_overrides.get("bench_cmd", "")
+            bench_cmd = cell.backend_config.get(
+                "bench_cmd", cell.helm_overrides.get("bench_cmd", "")
+            )
             if not serve_cmd or not bench_cmd:
                 return False
             res = run_vllm(
@@ -379,25 +384,111 @@ def step_render(campaign_dir: Path, out_pdf: Path) -> bool:
         return False
 
 
+def _baseline_repo_root() -> Path:
+    """Resolve the artifact root without depending on the MCP client's cwd."""
+    import os
+
+    override = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
+    return Path(override).expanduser().resolve() if override else _SERVER_ROOT
+
+
+def _cell_headline(campaign_dir: Path, cell_id: str) -> dict[str, Any] | None:
+    """Materialize one comparable scalar headline for a campaign cell."""
+    import yaml
+
+    config_path = campaign_dir / "config.yaml"
+    atlas_path = campaign_dir / "atlas.jsonl"
+    if not config_path.is_file() or not atlas_path.is_file():
+        return None
+    config = yaml.safe_load(config_path.read_text()) or {}
+    if not isinstance(config, dict):
+        return None
+    campaign_config = config.get("campaign")
+    if not isinstance(campaign_config, dict):
+        campaign_config = {}
+    focus = campaign_config.get("focus", config.get("focus"))
+    metric = campaign_config.get("baseline_metric", config.get("baseline_metric"))
+    if metric is None:
+        if focus == "throughput":
+            metric = "output_tps_per_gpu"
+        elif focus == "latency":
+            metric = "tpot_median_ms"
+        else:
+            return None
+    if metric not in _BASELINE_METRICS:
+        return None
+    direction, reduction, unit = _BASELINE_METRICS[metric]
+    requested_concurrency = campaign_config.get(
+        "baseline_concurrency", config.get("baseline_concurrency")
+    )
+
+    candidates: list[tuple[float, int | None]] = []
+    try:
+        for line in atlas_path.read_text().splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict) or row.get("cell_id") != cell_id:
+                continue
+            concurrency = row.get("concurrency")
+            if requested_concurrency is not None and concurrency != requested_concurrency:
+                continue
+            value = row.get(metric)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                continue
+            candidates.append((numeric, concurrency if isinstance(concurrency, int) else None))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not candidates:
+        return None
+
+    selected = max(candidates) if reduction == "max" else min(candidates)
+    value, concurrency = selected
+    measurement = metric if concurrency is None else f"{metric}-c{concurrency}"
+    cell_dir = campaign_dir / "cells" / cell_id
+    cell_dir.mkdir(parents=True, exist_ok=True)
+    source = cell_dir / "baseline-headline.json"
+    payload = {
+        "schema": "campaign_headline_v1",
+        "cell_id": cell_id,
+        "metric": metric,
+        "concurrency": concurrency,
+        "direction": direction,
+        "unit": unit,
+        "value": value,
+    }
+    source.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return {
+        **payload,
+        "measurement": measurement,
+        "source": source,
+    }
+
+
 def step_baseline_record(campaign_dir: Path, cell_id: str) -> bool:
-    """Register the cell's atlas row(s) as a new perf-baseline entry."""
+    """Register one directional scalar headline for the campaign cell."""
     try:
         from tools.perf_baseline.perf_baseline_cli import cmd_record
-        atlas = campaign_dir / "atlas.jsonl"
-        if not atlas.is_file():
+        headline = _cell_headline(campaign_dir, cell_id)
+        if headline is None:
             return False
         ns = argparse.Namespace(
             family="inference",
-            measurement=f"campaign-{campaign_dir.name}",
-            source=str(atlas),
-            value=None,
-            unit="row",
-            schema="atlas_v1",
-            notes=f"auto-recorded by campaign_run; cell_id={cell_id}",
-            repo_root=None,
-            json=False,
+            measurement=headline["measurement"],
+            source=str(headline["source"]),
+            value=headline["value"],
+            unit=headline["unit"],
+            direction=headline["direction"],
+            schema=None,
+            notes=f"auto-recorded by campaign_run, cell_id={cell_id}",
+            repo_root=str(_baseline_repo_root()),
+            json=True,
         )
-        return cmd_record(ns) == 0
+        with contextlib.redirect_stdout(io.StringIO()):
+            return cmd_record(ns) == 0
     except SystemExit:
         return False
     except Exception:
@@ -413,34 +504,39 @@ def step_baseline_diff(campaign_dir: Path, cell_id: str, comparator: str) -> str
     if not comparator:
         return "NA"
     comparator_path = Path(comparator).expanduser()
-    if not comparator_path.exists():
-        return "NA"
+    if not comparator_path.is_dir():
+        return "RED"
     try:
         from tools.perf_baseline.perf_baseline_cli import cmd_diff
-        atlas = campaign_dir / "atlas.jsonl"
-        if not atlas.is_file():
-            return "NA"
+        headline = _cell_headline(campaign_dir, cell_id)
+        if headline is None:
+            return "RED"
+        baseline_payload = json.loads((comparator_path / "baseline.json").read_text())
+        if (
+            baseline_payload.get("measurement") != headline["measurement"]
+            or baseline_payload.get("direction", "two-sided") != headline["direction"]
+        ):
+            return "RED"
         ns = argparse.Namespace(
             baseline=str(comparator_path),
-            current=str(atlas),
+            current=str(headline["source"]),
             tolerance_percent=2.0,
             tolerance_absolute=None,
-            repo_root=None,
+            repo_root=str(_baseline_repo_root()),
             json=True,
         )
-        # cmd_diff prints a JSON envelope to stdout; we capture via a wrapped
-        # process call to keep it isolated. Simpler approach: just return
-        # NA from this wired step in v1.21.0 unless we want to parse stdout.
-        # Future v1.22.0 should refactor cmd_diff to return the verdict.
-        rc = cmd_diff(ns)
-        # rc==0 means diff ran; we'd need to also parse the printed JSON to
-        # extract the verdict. For now treat rc==0 as GREEN (no regression)
-        # and rc!=0 as YELLOW. The full verdict round-trip is a follow-up.
-        return "GREEN" if rc == 0 else "YELLOW"
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            rc = cmd_diff(ns)
+        if rc != 0:
+            return "RED"
+        payload = json.loads(output.getvalue())
+        verdict = payload.get("verdict")
+        return verdict if verdict in {"GREEN", "YELLOW", "RED"} else "RED"
     except SystemExit:
-        return "NA"
+        return "RED"
     except Exception:
-        return "NA"
+        return "RED"
 
 
 # ---------------------------------------------------------------------------

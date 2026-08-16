@@ -1,4 +1,4 @@
-"""TPM-supported-across-hardware rollup (added v1.35.0).
+"""TPM-supported-across-hardware rollup.
 
 A pure post-processing rollup of an already-aggregated ``atlas.jsonl``: no new
 cluster runs. For each distinct ``(model, hardware, quant, tensor_parallel,
@@ -30,7 +30,7 @@ OpenAI/Azure TPM convention) are reported side by side. Total-TPM is ``None``
 for any group whose rows lack ``total_tps_per_gpu`` (backends that do not emit
 a "Total token throughput" line); it renders as ``n/a`` downstream.
 
-Methodology caveat (see workspace ``CLAUDE.md`` "Benchmark methodology hygiene"):
+Methodology caveat (see ``AGENTS.md`` "Benchmark methodology hygiene"):
 the peak point is the warm sweep best-case, NOT a cold steady-state, and TPM
 inherits whatever warm/cold + ISL/OSL methodology the underlying sweep used.
 The summary header carries this caveat plus the campaign's ISL/OSL context so a
@@ -52,7 +52,7 @@ from tools.perf_tune_report.schema import AtlasCell
 SECONDS_PER_MINUTE = 60
 DEFAULT_GPUS_PER_NODE = 8
 
-# Code-defaults (v1.49.0) so EVERY campaign gets an SLA operating point + a
+# Code defaults ensure EVERY campaign gets an SLA operating point + a
 # $/1M-token column without needing a per-campaign tpm:/cost: block. A campaign
 # config block still overrides these (and can add hardware keys, e.g. GB300).
 #
@@ -137,7 +137,7 @@ def _find_cost_yaml(campaign_dir: Path) -> Path | None:
 def discover_tpm_config(campaign_dir: Path) -> TpmConfig:
     """Read the ``tpm:`` and ``cost:`` blocks from ``<campaign_dir>/config.yaml``.
 
-    Code-defaults (v1.49.0): when a field/block is absent the campaign still
+    Code defaults: when a field/block is absent the campaign still
     gets the default SLA (TTFT<=2000ms, TPOT<=50ms), ``gpus_per_node=8``, and
     the assumed public-list cost table -- so SLA-TPM + $/1M populate for every
     campaign. A per-campaign ``tpm:``/``cost:`` block overrides per field
@@ -233,7 +233,7 @@ class TpmPoint:
     # cell_id of the originating atlas row (used to join the cell's DCGM power
     # for tokens-per-watt in the economics/cost_v1 table).
     cell_id: str = ""
-    # $/1M tokens (added v1.42.0): populated when a cost: config block supplies
+    # $/1M tokens: populated when a cost: config block supplies
     # the hardware's $/GPU-hour; None otherwise. Basis-independent (per-GPU
     # normalizes out GPU count).
     usd_per_1m_output_tokens: float | None = None

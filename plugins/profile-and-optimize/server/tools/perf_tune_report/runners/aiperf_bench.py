@@ -1,8 +1,7 @@
-"""aiperf backend: drives the inference-tools/perf-bench runbook.
+"""AIPerf backend for the inference-perf-bench workflow.
 
-Automates phases 2-8 of the vendored ``server/inference-tools/perf-bench/SKILL.md``
-runbook (bench-pod create/wait, dataset copy, concurrency sweep via ``aiperf
-profile``, log download). Parses AIPerf's JSON/log output into canonical
+Automates bench-pod creation, dataset copy, concurrency sweeps through
+``aiperf profile``, and log download. Parses AIPerf's JSON and log output into canonical
 AtlasCell rows under ``<campaign>/cells/<cell-id>/normalized.json``.
 
 The runner is deliberately thin: it shells out to ``kubectl exec`` for the

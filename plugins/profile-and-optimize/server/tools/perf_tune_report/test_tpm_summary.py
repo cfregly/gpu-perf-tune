@@ -188,7 +188,7 @@ def test_discover_tpm_config_reads_block(tmp_path):
 
 
 def test_discover_tpm_config_defaults_when_absent(tmp_path):
-    # No config.yaml at all -> code-defaults (v1.49.0): default SLA + default
+    # No config.yaml at all -> code defaults: default SLA + default
     # cost table so SLA-TPM + $/1M populate for every campaign.
     cfg = discover_tpm_config(tmp_path)
     assert cfg.ttft_sla_ms == DEFAULT_TTFT_SLA_MS

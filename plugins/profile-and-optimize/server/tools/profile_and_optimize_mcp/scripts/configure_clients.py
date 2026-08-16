@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure local MCP clients for the checked-in profile_and_optimize MCP server."""
+"""Configure local MCP clients for the checked-in profile_and_optimize server."""
 
 from __future__ import annotations
 
@@ -7,75 +7,246 @@ import argparse
 import json
 import os
 import re
+import shlex
+import shutil
+import stat
+import subprocess
+import tempfile
+import tomllib
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-
 CLIENTS = ("cursor", "claude", "codex", "gemini", "antigravity")
+SERVER_NAME = "profile_and_optimize"
+CLI_CLIENTS = ("claude", "codex")
+_TOML_TABLE_RE = re.compile(r"^\s*\[{1,2}([^\[\]]+)\]{1,2}\s*(?:#.*)?$")
 
 
-def server_block(args: argparse.Namespace) -> dict[str, Any]:
-    return {
+def server_block(
+    args: argparse.Namespace,
+    *,
+    client: str | None = None,
+) -> dict[str, Any]:
+    block: dict[str, Any] = {
         "command": str(args.python),
         "args": ["-m", "profile_and_optimize_mcp", "serve"],
         "env": {
             "PROFILE_AND_OPTIMIZE_REPO_ROOT": str(args.repo_root),
-            "PROFILE_AND_OPTIMIZE_LOGIN_HOST": args.login_host,
         },
     }
+    if client == "claude":
+        block = {"type": "stdio", **block}
+    return block
 
 
-def _write(path: Path, text: str, *, dry_run: bool) -> None:
+def _atomic_write(path: Path, text: str) -> None:
+    """Replace one config atomically while preserving its mode and symlink."""
+
+    write_path = path.resolve(strict=False) if path.is_symlink() else path
+    write_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_mode = stat.S_IMODE(write_path.stat().st_mode) if write_path.exists() else None
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        dir=write_path.parent,
+        prefix=f".{write_path.name}.",
+        suffix=".tmp",
+        text=True,
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if existing_mode is not None:
+            os.chmod(temporary_path, existing_mode)
+        os.replace(temporary_path, write_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def _preview(path: Path, text: str) -> None:
+    """Print only the proposed server entry, never the existing config."""
+
+    print(f"# DRY-RUN would update {path}")
+    print(text.rstrip())
+
+
+def _write(path: Path, text: str, *, dry_run: bool, preview: str) -> None:
     if dry_run:
-        print(f"# DRY-RUN would write {path}")
-        print(text)
+        _preview(path, preview)
         return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    _atomic_write(path, text)
     print(f"updated {path}")
 
 
-def update_json_mcp(path: Path, args: argparse.Namespace) -> None:
+def update_json_mcp(
+    path: Path,
+    args: argparse.Namespace,
+    *,
+    client: str | None = None,
+) -> None:
     if path.exists():
         data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"{path} must contain a JSON object")
     else:
         data = {}
+
     servers = data.setdefault("mcpServers", {})
-    servers["profile_and_optimize"] = server_block(args)
-    _write(path, json.dumps(data, indent=2, sort_keys=False) + "\n", dry_run=args.dry_run)
+    if not isinstance(servers, dict):
+        raise ValueError(f"{path}: mcpServers must be a JSON object")  # noqa: TRY004
+    servers[SERVER_NAME] = server_block(args, client=client)
+
+    full_text = json.dumps(data, indent=2, sort_keys=False) + "\n"
+    preview_text = json.dumps(
+        {"mcpServers": {SERVER_NAME: server_block(args, client=client)}},
+        indent=2,
+        sort_keys=False,
+    )
+    _write(path, full_text, dry_run=args.dry_run, preview=preview_text)
+
+
+def _toml_string(value: object) -> str:
+    """JSON strings are valid TOML basic strings and escape paths safely."""
+
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def _codex_block(args: argparse.Namespace) -> str:
+    return "\n".join(
+        [
+            f"[mcp_servers.{SERVER_NAME}]",
+            f"command = {_toml_string(args.python)}",
+            'args = ["-m", "profile_and_optimize_mcp", "serve"]',
+            "enabled = true",
+            "startup_timeout_sec = 30",
+            "tool_timeout_sec = 300",
+            "",
+            f"[mcp_servers.{SERVER_NAME}.env]",
+            f"PROFILE_AND_OPTIMIZE_REPO_ROOT = {_toml_string(args.repo_root)}",
+            "",
+        ]
+    )
+
+
+def _without_profile_tables(text: str) -> str:
+    """Remove all existing profile_and_optimize TOML tables.
+
+    This deliberately accepts duplicate target tables left by older installer
+    versions. Unrelated content is kept byte-for-byte except for trailing blank
+    lines before the newly generated block.
+    """
+
+    kept: list[str] = []
+    skip = False
+    target_prefix = f"mcp_servers.{SERVER_NAME}"
+    for line in text.splitlines(keepends=True):
+        match = _TOML_TABLE_RE.match(line.rstrip("\r\n"))
+        if match:
+            table = match.group(1).strip()
+            skip = table == target_prefix or table.startswith(f"{target_prefix}.")
+        if not skip:
+            kept.append(line)
+    return "".join(kept).rstrip()
 
 
 def update_codex_toml(path: Path, args: argparse.Namespace) -> None:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
-    pattern = re.compile(
-        r"(?ms)^\\[mcp_servers\\.mlperf\\]\\n.*?(?=^\\[[^\\n]+\\]\\n|\\Z)"
+    block = _codex_block(args)
+    base = _without_profile_tables(text)
+    new_text = f"{base}\n\n{block}" if base else block
+
+    try:
+        tomllib.loads(new_text)
+    except tomllib.TOMLDecodeError as error:
+        raise ValueError(f"refusing to write invalid TOML to {path}: {error}") from error
+
+    _write(path, new_text, dry_run=args.dry_run, preview=block)
+
+
+def _official_add_command(client: str, executable: str, args: argparse.Namespace) -> list[str]:
+    environment = server_block(args)["env"]
+    launch = [str(args.python), "-m", "profile_and_optimize_mcp", "serve"]
+    if client == "claude":
+        command = [
+            executable,
+            "mcp",
+            "add",
+            "--scope",
+            "user",
+            "--transport",
+            "stdio",
+            SERVER_NAME,
+        ]
+        for key, value in environment.items():
+            command.extend(["--env", f"{key}={value}"])
+        return [*command, "--", *launch]
+    if client == "codex":
+        command = [executable, "mcp", "add"]
+        for key, value in environment.items():
+            command.extend(["--env", f"{key}={value}"])
+        return [*command, SERVER_NAME, "--", *launch]
+    raise ValueError(f"no official MCP registration command for {client}")
+
+
+def try_official_cli(
+    client: str,
+    args: argparse.Namespace,
+    *,
+    which: Callable[[str], str | None] = shutil.which,
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> bool:
+    """Register a new server with a client CLI when it is safe to do so.
+
+    Existing registrations use the atomic config updater instead. This avoids a
+    remove-then-add window and makes repeat installs deterministic.
+    """
+
+    executable = which(client)
+    if executable is None:
+        return False
+
+    add_command = _official_add_command(client, executable, args)
+    if args.dry_run:
+        print(f"# DRY-RUN would register {SERVER_NAME} with the {client} CLI")
+        print(shlex.join(add_command))
+        return True
+
+    get_result = run(
+        [executable, "mcp", "get", SERVER_NAME],
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    text = pattern.sub("", text).rstrip()
-    block = f"""
+    if get_result.returncode == 0:
+        return False
 
-[mcp_servers.profile_and_optimize]
-command = "{args.python}"
-args = ["-m", "profile_and_optimize_mcp", "serve"]
-enabled = true
-startup_timeout_sec = 30
-tool_timeout_sec = 300
+    add_result = run(
+        add_command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if add_result.returncode == 0:
+        print(f"registered {SERVER_NAME} with the {client} CLI")
+        return True
 
-[mcp_servers.profile_and_optimize.env]
-PROFILE_AND_OPTIMIZE_REPO_ROOT = "{args.repo_root}"
-PROFILE_AND_OPTIMIZE_LOGIN_HOST = "{args.login_host}"
-""".lstrip()
-    new_text = (text + "\n\n" + block if text else block).rstrip() + "\n"
-    _write(path, new_text, dry_run=args.dry_run)
+    print(
+        f"warning: {client} CLI registration failed with exit {add_result.returncode}. "
+        "Using the atomic config-file updater."
+    )
+    return False
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--client",
         action="append",
         choices=(*CLIENTS, "all"),
         default=[],
-        help="client to configure; may be passed multiple times. Default: cursor.",
+        help="Client to configure. May be passed multiple times. Default: cursor.",
     )
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument(
@@ -84,60 +255,77 @@ def parse_args() -> argparse.Namespace:
         default=Path.home() / ".local/share/profile-and-optimize-mcp-venv/bin/python",
     )
     parser.add_argument(
-        "--login-host",
-        default=os.environ.get(
-            "PROFILE_AND_OPTIMIZE_LOGIN_HOST", f"{os.environ.get('USER', 'operator')}@192.0.2.10"
+        "--registration",
+        choices=("auto", "file"),
+        default="auto",
+        help=(
+            "Use a supported client CLI for a new Claude or Codex registration, "
+            "with atomic file fallback. Use 'file' to skip client CLIs."
         ),
     )
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print only the proposed server entry or CLI command. Write nothing.",
+    )
     parser.add_argument("--cursor-config", type=Path, default=Path.home() / ".cursor/mcp.json")
-    parser.add_argument(
-        "--claude-config", type=Path, default=Path.home() / ".claude/settings.json"
-    )
-    parser.add_argument(
-        "--codex-config", type=Path, default=Path.home() / ".codex/config.toml"
-    )
-    parser.add_argument(
-        "--gemini-config", type=Path, default=Path.home() / ".gemini/settings.json"
-    )
+    parser.add_argument("--claude-config", type=Path, default=Path.home() / ".claude.json")
+    parser.add_argument("--codex-config", type=Path, default=Path.home() / ".codex/config.toml")
+    parser.add_argument("--gemini-config", type=Path, default=Path.home() / ".gemini/settings.json")
     parser.add_argument(
         "--antigravity-config",
         type=Path,
-        default=Path.home() / ".config/antigravity/mcp_config.json",
+        default=Path.home() / ".gemini/config/mcp_config.json",
         help=(
-            "Path to Antigravity raw MCP config. In Antigravity, use Agent "
-            "window -> Manage MCP Servers -> View raw config to confirm."
+            "Path to Antigravity MCP config. Defaults to the official global "
+            "path. Pass a workspace .agents/mcp_config.json when desired."
         ),
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> int:
-    args = parse_args()
+def _file_config_path(client: str, args: argparse.Namespace) -> Path:
+    return {
+        "cursor": args.cursor_config,
+        "claude": args.claude_config,
+        "codex": args.codex_config,
+        "gemini": args.gemini_config,
+        "antigravity": args.antigravity_config,
+    }[client]
+
+
+def configure_client(client: str, args: argparse.Namespace) -> None:
+    if (
+        args.registration == "auto"
+        and client in CLI_CLIENTS
+        and try_official_cli(client, args)
+    ):
+        return
+
+    config_path = _file_config_path(client, args)
+    if client == "codex":
+        update_codex_toml(config_path, args)
+    else:
+        update_json_mcp(config_path, args, client=client)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
     clients = args.client or ["cursor"]
     if "all" in clients:
         clients = list(CLIENTS)
-    args.repo_root = args.repo_root.resolve()
-    # Preserve venv interpreter paths. Path.resolve() follows the venv
-    # symlink to Homebrew's base interpreter, which makes Cursor bypass the
-    # venv site-packages and fail to import profile_and_optimize_mcp.
+    else:
+        clients = list(dict.fromkeys(clients))
+
+    args.repo_root = args.repo_root.expanduser().resolve()
+    # Do not call resolve() here. Venv Python is often a symlink to the base
+    # interpreter, and clients must launch the venv path to load its packages.
     args.python = args.python.expanduser()
     if not args.python.is_absolute():
         args.python = (Path.cwd() / args.python).absolute()
 
     for client in clients:
-        if client == "cursor":
-            update_json_mcp(args.cursor_config, args)
-        elif client == "claude":
-            update_json_mcp(args.claude_config, args)
-        elif client == "codex":
-            update_codex_toml(args.codex_config, args)
-        elif client == "gemini":
-            update_json_mcp(args.gemini_config, args)
-        elif client == "antigravity":
-            update_json_mcp(args.antigravity_config, args)
-        else:
-            raise AssertionError(client)
+        configure_client(client, args)
     return 0
 
 

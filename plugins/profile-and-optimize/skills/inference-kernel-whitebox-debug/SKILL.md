@@ -1,6 +1,9 @@
 ---
 name: inference-kernel-whitebox-debug
-last_validated: 2026-06-07
+license: MIT
+compatibility: Requires a skills-compatible agent and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-06-07"
 description: >-
   White-box debug a custom CUDA/CUTLASS kernel producing a WRONG numeric result
   (over-amplification, NaN, coherence) after black-box bisection is
@@ -16,15 +19,7 @@ description: >-
   over-amplifies / NaN", "standalone reproducer", "in-kernel trace", "operand
   dump", "cutlass UMMA bug", or any combination of "white-box / reproducer /
   in-kernel / operand-trace" with "kernel / cutlass / UMMA / megakernel / vllm".
-allowed-tools:
-  - Bash(kubectl:exec,*)
-  - Bash(kubectl:get,*)
-  - Bash(nvcc:*)
-  - Bash(cuda-gdb:*)
-  - Bash(jq:*)
-  - Bash(sha256sum:*)
-  - Read
-  - Write
+allowed-tools: "Bash(kubectl:exec,*) Bash(kubectl:get,*) Bash(nvcc:*) Bash(cuda-gdb:*) Bash(jq:*) Bash(sha256sum:*) Read Write"
 ---
 
 # inference-kernel-whitebox-debug
@@ -34,7 +29,7 @@ allowed-tools:
 Localize a NUMERIC defect inside a custom CUDA/CUTLASS kernel (not a thin error -- a real
 wrong result) to a specific internal stage: operand-load / MMA-accumulate / epilogue /
 descriptor. This is the deepest tier of the rigor ladder, above
-[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) (proves H +
+[`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md) (proves H +
 P -- tensor-core engagement + %SoL) and the "Read the source" rule (reads the kernel
 statically). White-box engineering goes further: it instruments or re-runs the kernel's
 INTERNAL data path with controlled inputs. (The same **isolated single-op harness** pattern --

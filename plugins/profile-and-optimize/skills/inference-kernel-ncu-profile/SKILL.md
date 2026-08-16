@@ -1,6 +1,9 @@
 ---
 name: inference-kernel-ncu-profile
-last_validated: 2026-08-03
+license: MIT
+compatibility: Requires a skills-compatible agent and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-08-03"
 description: >-
   Capture per-kernel CUDA hardware-counter data (occupancy, achieved warps
   active, regs/thread, smem/block, DRAM throughput, arithmetic intensity,
@@ -16,16 +19,7 @@ description: >-
   "branch divergence", or any combination of "ncu / nsight-compute /
   occupancy / regs / smem / dram / roofline" with "vllm / kimi / glm /
   deepseek / inference".
-allowed-tools:
-  - Bash(kubectl:debug,*)
-  - Bash(kubectl:exec,*)
-  - Bash(kubectl:cp,*)
-  - Bash(kubectl:get,*)
-  - Bash(ncu:*)
-  - Bash(jq:*)
-  - Bash(sha256sum:*)
-  - Read
-  - Write
+allowed-tools: "Bash(kubectl:debug,*) Bash(kubectl:exec,*) Bash(kubectl:cp,*) Bash(kubectl:get,*) Bash(ncu:*) Bash(jq:*) Bash(sha256sum:*) Read Write"
 ---
 
 # inference-kernel-ncu-profile
@@ -50,14 +44,14 @@ The three sibling skills cover complementary kernel-profile dimensions:
 | c=1 decode-step budget (GPU-busy vs host-gap) + kernel-vs-host-vs-comm verdict | vLLM profiler endpoint / nsys | `inference-decode-step-budget` |
 
 **Sequencing note:** for the decode/latency tier, run
-[`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md)
+[`inference-decode-step-budget`](../inference-decode-step-budget/SKILL.md)
 FIRST. If at c=1 it returns "host-bound" (GPU idle >> busy per step, as GLM-5.1
 does), per-kernel SoL is **moot** - the kernels are a small fraction of TPOT and
 are launch-latency-scale at one token. Only escalate to this skill when the
 budget says kernel-bound, or for the prefill/throughput tier.
 
 Per the
-[`Dean-Ghemawat performance-hints adaptation`](/plugins/profile-and-optimize/server/docs/performance-hints.md),
+[`Dean-Ghemawat performance-hints adaptation`](../../server/docs/performance-hints.md),
 bound the candidate win by the kernel's measured end-to-end share before capture.
 Hardware-counter improvements cannot recover time outside that share.
 
@@ -86,7 +80,7 @@ Do **not** use this skill for:
 ## Sidecar image
 
 Same image as `inference-kernel-profile`:
-**`ghcr.io/cfregly/nsys-sidecar:0.1.0`** (publicly readable).
+**`ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d`** (publicly readable).
 Image includes nsys 2025.6.3 + **ncu 2026.1.1** + py-spy 0.4.1 +
 python3 + jq.
 
@@ -126,7 +120,7 @@ headroom for a profiler's host/device buffers. A long capture window (observed
 with a 40s nsys window on a GLM-5.1 canary) can OOM-crash vllm mid-capture and
 truncate the report. Keep windows short, scope ncu to one kernel + low
 `--launch-count`, and prefer the endpoint-triggered bounded windows in
-[`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md).
+[`inference-decode-step-budget`](../inference-decode-step-budget/SKILL.md).
 
 ## Gate 0 (precondition): CUPTI must even initialize (CUDA image-vs-driver skew)
 
@@ -257,22 +251,17 @@ ncu --mode attach --hostname 127.0.0.1 --port 49152 \
 Multiple captures against the same long-lived sister pod are
 supported - vllm stays warm. The sidecar runs ncu N times sequentially.
 
-### Reference helm + capture scaffolding
+### Operator-owned deployment and capture flow
 
-A reusable sister-deploy scaffold (one directory per model) contains:
-
-- `values-ncu-sister.yaml` - helm values overrides
-- `install.sh` - `helm upgrade --install` wrapper
-- `capture.sh` - full capture flow (wait-ready, warmup, sidecar
-  attach, N-kernel loop, extract, helm uninstall). Flags:
-  `--launch-count N`, `--set basic|full`, `--roofline-min` (AI-roofline
-  `--metrics` set only), `--replay-mode kernel|application|range`, and
-  `--campaign <slug> --cell-id <cell>` to auto-import the result into a
-  perf-report campaign cell.
-- `README.md` - runbook + canonical 5-kernel list
-- a replay-mode-application runbook - the ack-gated path past the
-  TP=8 NVFP4 `ContextSaveFailed` kernel-replay blocker (use
-  `--replay-mode application --roofline-min`).
+This repository does not ship model deployment manifests. Keep the sister pod
+and Helm values in the workload repository that owns the deployment. A safe
+operator flow must wait for readiness, warm the model, attach the sidecar,
+capture the selected kernels, extract the results, and remove the temporary
+release. Record the launch count, section set, replay mode, campaign, cell ID,
+deployment revision, and cleanup receipt in the evidence bundle. For the TP=8
+NVFP4 `ContextSaveFailed` kernel-replay blocker, use application replay with
+the minimum roofline metrics and the acknowledgement required by your cluster
+workflow.
 
 ### Identifying hot kernels
 
@@ -376,7 +365,7 @@ ipb = json.loads((bundle / "inference_perfbench_v1.json").read_text())
 ipb["kernel_internals"] = {
     "captured_at": "<UTC>",
     "method": "ncu-sidecar-kernel-scoped",
-    "sidecar_image": "ghcr.io/cfregly/nsys-sidecar:0.1.0",
+    "sidecar_image": "ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d",
     "vllm_pid": $VLLM_PID,
     "per_kernel": {
         # one entry per kernel captured:
@@ -462,8 +451,8 @@ because they lack the FLOPS + bytes counters this skill captures
 Workflow when proper %SoL is needed:
 
 1. Identify the dominant hot kernel via
-   [`zymtrace-anchored-query`](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) +
-   [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md).
+   [`zymtrace-anchored-query`](../zymtrace-anchored-query/SKILL.md) +
+   [`inference-kernel-profile`](../inference-kernel-profile/SKILL.md).
 2. Run THIS skill against that kernel name with the roofline-min
    counter set (see Reference below).
 3. Compute arithmetic intensity = FLOPS / bytes. Place the point on
@@ -499,8 +488,7 @@ perftunereport import_ncu --campaign <slug> --cell-id <cell-id> --bundle <bundle
 perftunereport report_render --campaign <slug>   # -> page 5 populated
 ```
 
-(`capture.sh --campaign <slug> --cell-id <cell>` runs this automatically at
-the end.) Notes:
+Run these checked-in import commands explicitly after the capture. Notes:
 
 - **Two CSV shapes are auto-handled.** ncu's `--page raw` is wide (one row per
   kernel, metric columns). Ncu-2026's `--page details --section SpeedOfLight`

@@ -1,34 +1,33 @@
 ---
-name: _template
-last_validated: 2026-08-03
+name: your-skill-name
+license: MIT
+compatibility: Requires a skills-compatible agent and the tools named in allowed-tools.
+metadata:
+  last-validated: "2026-08-16"
 description: >-
   Copy this directory to plugins/profile-and-optimize/skills/<your-skill-name>/ and
   rewrite this description to be third-person + include WHAT the skill does
   and WHEN (specific trigger phrases). Max 1024 chars. Do NOT leave the
   word "template" in the real skill's description.
-disable-model-invocation: true
-allowed-tools:
-  - mcp__profile_and_optimize__search_runbooks
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__search_runbooks Read Write"
 ---
 
-# _template (starter scaffold. Do not invoke)
+# Skill template
 
-> **This is a copy-paste starter for new contributors.** It is intentionally
-> registered with `disable-model-invocation: true` so Claude never auto-loads
-> it. Copy this directory to `plugins/profile-and-optimize/skills/<your-skill-name>/`,
+> **This is a copy-paste starter for new contributors.** It lives outside the
+> installable skills directory, so clients do not discover it as a skill.
+> Copy this directory to `plugins/profile-and-optimize/skills/<your-skill-name>/`,
 > rename it, and edit every section before opening a PR.
 
 ## Where the new contributor starts
 
-1. `cp -r plugins/profile-and-optimize/skills/_template plugins/profile-and-optimize/skills/<your-skill-name>`.
+1. `cp -r plugins/profile-and-optimize/templates/skill plugins/profile-and-optimize/skills/<your-skill-name>`.
 2. Open the new `SKILL.md` and rewrite the YAML frontmatter:
    - `name`: match the new directory name (lowercase + hyphens, max 64 chars).
-   - `description`: third-person, includes WHAT + WHEN, max 1024 chars. **Remove `disable-model-invocation: true`** so the skill is discoverable.
-   - `allowed-tools`: pin to the specific tools the workflow uses. See [`CONTRIBUTING.md`](/CONTRIBUTING.md#mcp-tool-naming-convention).
+   - `description`: third-person, includes WHAT + WHEN, max 1024 chars.
+   - `allowed-tools`: pin to the specific tools the workflow uses. See [`CONTRIBUTING.md`](../../../../CONTRIBUTING.md#mcp-tool-naming).
 3. Rewrite every section below. Anything wrapped in `<...>` is a placeholder.
-4. Read [`CONTRIBUTING.md`](/CONTRIBUTING.md) for the validation + version-bump + PR flow.
+4. Read [`CONTRIBUTING.md`](../../../../CONTRIBUTING.md) for the validation + version-bump + PR flow.
 5. Run `make smoke-test` from the repo root to validate.
 
 ## Purpose
@@ -68,7 +67,7 @@ The skill **fails closed** if any of these are not satisfied.
 
 <Iterative pattern: one step, report, ask before continuing. Borrow language from
 an existing skill such as
-[`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md).>
+[`inference-perf-bench`](../../skills/inference-perf-bench/SKILL.md).>
 
 ## Workflow
 
@@ -80,7 +79,7 @@ If the skill spends GPU time or recommends a performance change, add a
 Dean-Ghemawat hint pass before the first job: classify setup vs per-request vs
 per-token work, write a rough cost ledger, bound candidates by measured profile
 share, and name one experiment with a stop condition. Canon:
-[`server/docs/performance-hints.md`](/plugins/profile-and-optimize/server/docs/performance-hints.md).
+[`server/docs/performance-hints.md`](../../server/docs/performance-hints.md).
 Delete this paragraph only when the skill is neither performance-shaped nor
 cluster-spending.
 
@@ -106,7 +105,7 @@ Report: <what gets reported back>. Ask: <what the next decision is>.
 ## Verdict rigor (DRAFT vs VERDICT)
 
 If this skill emits a performance claim, tier it per the
-[`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md)
+[`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md)
 "Verdict rigor: DRAFT vs VERDICT" rule. Default every number to **DRAFT** (label it
 provisional). Promote to a **VERDICT** only for a decision-grade claim AND only when
 it is: variance-controlled (same-node, >=3 trials, mean +/- std), metric-isolated
@@ -126,14 +125,14 @@ baseline along the five axes (K complexity / R representation / H hardware speci
 over a strictly-lower-H/R baseline
 (e.g. beating generic Triton when production runs the `sm100f` tensor-core library) is a
 **DRAFT, never a VERDICT** - the H + P proof (tensor-core engagement + roofline) comes
-from [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md). Delete
+from [`inference-kernel-ncu-profile`](../../skills/inference-kernel-ncu-profile/SKILL.md). Delete
 this section if the skill never touches custom kernels.
 
 ## Full-context reporting (no bare numbers)
 
 If this skill emits ANY performance number, it MUST carry the number's full
 measurement-context descriptor and match every comparison on it, per
-[`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md)
+[`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md)
 "Full-context reporting". A bare `tok/s` / TPOT / BW / %SoL / speedup is a
 defect - it cannot set a default, ship a config, or appear in a report. Cite all that apply:
 - **Identity:** model (+HF path), hardware (exact ceiling token `GB300`/`B200`), quant, kv-cache dtype.
@@ -158,7 +157,7 @@ skill produces no measurements (read-only diagnostic).
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) "Always be grinding (next-lever framing)". A
+per [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) "Always be grinding (next-lever framing)". A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
@@ -186,7 +185,7 @@ frontier assessed. Delete this section ONLY if the skill produces no measurement
 
 If this skill emits a generated asset (visualization, chart, report, table, PDF, gallery,
 exported data), it is a DELIVERABLE held to the
-[`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) "Asset validation" rule: (1) the generator
+[`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) "Asset validation" rule: (1) the generator
 **FAILS LOUDLY** on missing/bad/degenerate data -- source unreachable, zero rows when rows are
 expected, a required field `unknown`/null/NaN, a near-empty PNG/PDF, a non-finite series -> raise
 / non-zero exit naming what is missing. NEVER a silent placeholder/fabricated asset at exit 0
@@ -215,20 +214,20 @@ reviewer-objection pass (impact scope, numerical approximation, honest gaps).
 redundancy, and decorative visuals (infra PRs do NOT embed charts). De-slop checklist: no
 em-dashes (the #1 AI-slop tell), minimal bold (no bold-lead bullets), plain punctuation, inline
 code out of narrow table cells.
-Source: [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) "Value proposition" + "Full-context
+Source: [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) "Value proposition" + "Full-context
 reporting" + "De-slop". PR-facing surface of
-[`inference-value-ledger`](/plugins/profile-and-optimize/skills/inference-value-ledger/SKILL.md).
+[`inference-value-ledger`](../../skills/inference-value-ledger/SKILL.md).
 Delete this section ONLY if the skill never feeds a PR / shareable artifact.
 
 ## Safety
 
-- **<Ack flag mandatory / read-only / fail-closed condition>** per [`server/docs/mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md).
+- **<Ack flag mandatory / read-only / fail-closed condition>** per [`server/docs/mcp-tool-io-contract.md`](../../server/docs/mcp-tool-io-contract.md).
 - **<No silent fallbacks>** - fail fast rather than silently degrading.
-- **<If this skill queries/consumes zymtrace: empty != gap.>** A zymtrace query empty right after a bench is usually ClickHouse INGEST LAG (async flush), not absence - wait + requery for the freshest data before concluding. See [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md). Delete if the skill never touches zymtrace.
+- **<If this skill queries/consumes zymtrace: empty != gap.>** A zymtrace query empty right after a bench is usually ClickHouse INGEST LAG (async flush), not absence - wait + requery for the freshest data before concluding. See [`server/docs/zymtrace-query-hygiene.md`](../../server/docs/zymtrace-query-hygiene.md). Delete if the skill never touches zymtrace.
 - <Other forbidden actions: e.g. "read-only against external systems. No writes".>
 
 ## Source-of-truth references
 
 - [`<runbook or doc path inside server/>`](../../server/<path>).
 - [`<related skill>`](../<related-skill>/SKILL.md).
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - the measurement-methodology canon.
+- [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) - the measurement-methodology canon.

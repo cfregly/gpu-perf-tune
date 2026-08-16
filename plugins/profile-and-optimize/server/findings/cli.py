@@ -1,8 +1,6 @@
 """findings CLI surface.
 
 Re-exports from [`tools/findings/findings_cli.py`](../tools/findings/findings_cli.py).
-
-Added in profile-and-optimize v0.9.0.
 """
 
 from __future__ import annotations

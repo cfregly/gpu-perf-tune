@@ -2,8 +2,6 @@
 
 Re-exports `CONTRACT`, `build_parser`, and `main` from the canonical
 implementation at [`tools/slurm/slurm_cli.py`](../tools/slurm/slurm_cli.py).
-
-Added in profile-and-optimize v0.5.0.
 """
 
 from __future__ import annotations

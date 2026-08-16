@@ -1,22 +1,21 @@
 Status: Active
 Audience: maintainers keeping MCP tool inputs and outputs reviewable.
-*Last updated: June 2026 | Contact: the repo author*
+*Last updated: August 2026 | Contact: project maintainers*
 
 # MCP Tool I/O Contract
 
-The `profile_and_optimize` MCP server exposes 51 contract-derived MCP tools across
-8 libraries (inherited from the original cluster-performance seed:
-contention, ai_tuning, profile, 8 profile-and-optimize-native: perf_baseline,
-evidence, slurm, experiments, findings, k8s_launch, perf_tune_report,
-known_good_config), plus 2 auxiliary MCP-only tools (`search_runbooks` and
-`search_evidence`) for **53 MCP tools total**. The canonical counts live in
-[`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `_TOTAL_*` constants
+The `profile_and_optimize` MCP server exposes 51 contract-derived MCP tools
+across 8 libraries: `ai_tuning`, `profile`, `perf_baseline`, `evidence`,
+`slurm`, `findings`, `perf_tune_report`, and `known_good_config`. It also
+exposes 2 auxiliary MCP-only tools, `search_runbooks` and `search_evidence`,
+for **53 MCP tools total**. The canonical counts live in
+[`mcp_surface.py`](../mcp_surface.py)'s `_TOTAL_*` constants
 (`_TOTAL_CONTRACT_TOOLS`, `_TOTAL_AUX_TOOLS`, `_TOTAL_MCP_TOOLS`,
 `_TOTAL_LIBRARIES`). The source of truth for the 51 contract-derived
-tools is [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `derive_tool_specs()`,
+tools is [`mcp_surface.py`](../mcp_surface.py)'s `derive_tool_specs()`,
 which introspects the live parsers and derives one MCP tool per CLI
 verb. The auxiliary tools are registered directly in
-[`tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py).
+[`tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py`](../tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py).
 
 ## Request Shape
 
@@ -28,16 +27,18 @@ Supported `params` fields:
   strings. A single string is normalized to a one-item list.
 - `allow_nonzero`: when `true`, return a non-zero command result instead of
   raising a runtime error. Default behavior is fail-fast.
-- `i_understand_this_*`: explicit acknowledgement fields for mutating tools.
+- `i_understand_this_*`: explicit acknowledgement fields for tools whose CLI
+  contract declares an ack flag. Current examples submit jobs or change Slurm
+  node state. Local artifact writers are not ack-gated.
   When present and true, the runtime forwards the matching CLI ack flag.
 
-Example mutating request (`experiments_submit`):
+Example mutating request (`slurm_drain`):
 
 ```json
 {
   "params": {
-    "args": ["--kind", "nccl_tests", "--plan", "plan.json"],
-    "i_understand_this_submits_jobs": true
+    "args": ["--nodes", "gpu-node-01", "--bundle", "/tmp/drain-evidence"],
+    "i_understand_this_substitutes_nodes": true
   }
 }
 ```
@@ -47,15 +48,19 @@ Example mutating request (`experiments_submit`):
 Every wrapped CLI response uses this envelope:
 
 - `tool`: MCP tool name.
-- `library`: one of `selector`, `contention`, `ai_tuning`, `profile`,
-  `perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`,
-  `k8s_launch`, `perf_tune_report`, or `known_good_config`.
+- `library`: one of `ai_tuning`, `profile`, `perf_baseline`, `evidence`,
+  `slurm`, `findings`, `perf_tune_report`, or `known_good_config`.
 - `verb`: underlying CLI verb.
 - `safety`: one of `read_only`, `writes_artifacts`, `submits_jobs`,
-  `pulls_data`, or `substitutes_nodes`. The `substitutes_nodes` class
+  `pulls_data`, `substitutes_nodes`, `mutates_cluster`, or
+  `publishes_external`. The
+  `substitutes_nodes` class
   covers verbs that mutate Slurm cluster state without submitting new
   jobs. Today that is `slurm drain`, `slurm resume`, and
-  `slurm quiet_window`.
+  `slurm quiet_window`. The `publishes_external` class covers data sent to
+  operator-owned external storage.
+  The `mutates_cluster` class covers an orchestrated call that can cordon
+  nodes, change a Helm release, and run benchmark work.
 - `ack_required`: whether the verb has a CLI ack flag.
 - `ack_field`: MCP parameter that forwards the CLI ack flag.
 - `args`: exact forwarded argument list after ack / `--json` normalization.
@@ -66,13 +71,13 @@ Example response skeleton:
 
 ```json
 {
-  "tool": "experiments_describe",
-  "library": "experiments",
-  "verb": "describe",
+  "tool": "slurm_triage",
+  "library": "slurm",
+  "verb": "triage",
   "safety": "read_only",
   "ack_required": false,
   "ack_field": null,
-  "args": ["--json"],
+  "args": ["--jobid", "1234", "--json"],
   "returncode": 0,
   "stdout": "{...}",
   "stderr": "",
@@ -92,15 +97,15 @@ Example response skeleton:
   failing command output.
 - For observability-backed workflows, confirm datasource shape before live
   metrics queries and preserve raw payload provenance per
-  [`perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md).
+  [`perf-lake-contract.md`](perf-lake-contract.md).
 
-[`tools/profile_and_optimize_mcp/tests/test_server_smoke.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/tests/test_server_smoke.py)
+[`tools/profile_and_optimize_mcp/tests/test_server_smoke.py`](../tools/profile_and_optimize_mcp/tests/test_server_smoke.py)
 ensures the runtime surface equals the live CLI contract.
 
 ## Required measurement context (no bare numbers)
 
 Per the methodology rule "every performance number carries its full context (no
-bare numbers)" ([`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md)), every MEASURED
+bare numbers)" ([`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md)), every MEASURED
 atlas row (`AtlasCell` with status `full`/`partial`) MUST carry its full measurement-context
 descriptor. The `perf_tune_report` publish/render path enforces this MECHANICALLY, fail-closed:
 `methodology_problems()` (in `tools/perf_tune_report/lake_writer.py`) refuses a `--strict`

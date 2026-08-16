@@ -1,6 +1,6 @@
 """Contract-derived MCP surface for the bundled `profile_and_optimize` MCP server.
 
-The MCP tool surface is auto-derived from the 8 stub libraries listed in
+The MCP tool surface is derived from the 8 CLI libraries listed in
 ``LIBRARIES`` below. Each library ships a ``cli.py`` with a ``CONTRACT``
 dict whose keys are the CLI verbs and whose values declare safety class,
 ack-flag, and JSON-mode for each verb. One MCP tool is registered per
@@ -14,14 +14,14 @@ The mapping:
 - Ack required: ``True`` whenever the CLI verb's contract entry has a
   non-empty ``ack`` flag.
 - JSON parsing: ``True`` whenever the CLI exposes ``--json`` for the
-  verb, which is true for every contracted verb in v6.0.
+  verb, which is true for every current contracted verb.
 
 The contract test ``tools/profile_and_optimize_mcp/tests/test_server_smoke.py``
 asserts:
 
 1. The MCP-derived tool set equals ``_TOTAL_CONTRACT_TOOLS`` tools across
    ``_TOTAL_LIBRARIES`` libraries (see canonical-counts block below).
-2. Every tool's safety class is one of the five allowed values and
+2. Every tool's safety class is one of the allowed contract values and
    matches the contract.
 3. Running the derivation twice yields the same tool list and safety
    mapping.
@@ -31,8 +31,8 @@ asserts:
 
 This server is a small, auto-derived layer. The ``tools/profile_and_optimize_mcp/``
 runtime imports this module rather than maintaining a second registry,
-and the ``+2`` auxiliary search tools (``search_runbooks``,
-``search_evidence``) live in that runtime — counted via
+and the 2 auxiliary search tools (``search_runbooks``,
+``search_evidence``) live in that runtime. They are counted via
 ``_TOTAL_AUX_TOOLS`` below.
 
 Canonical counts (single source of truth for every doc that names a
@@ -57,7 +57,9 @@ ALLOWED_SAFETIES = {
     "writes_artifacts",
     "submits_jobs",
     "pulls_data",
+    "publishes_external",
     "substitutes_nodes",
+    "mutates_cluster",
 }
 LIBRARIES = (
     "ai_tuning", "profile",
@@ -72,7 +74,7 @@ LIBRARIES = (
 
 
 # ---------------------------------------------------------------------------
-# Canonical counts — single source of truth.
+# Canonical counts. This is the single source of truth.
 #
 # Every doc, smoke script, lint script, and CI gate that names a skill /
 # tool / library count MUST read these constants (directly via Python
@@ -96,10 +98,8 @@ LIBRARIES = (
 #: Verified by ``verify_canonical_counts()`` and by
 #: ``test_server_smoke.test_server_can_be_created_when_mcp_is_installed``.
 #:
-#: 51 reflects the 8 libraries shipped in this public genericized build;
-#: the internal toolchain this repo was rebuilt from carried additional
-#: libraries (and their verbs) that were dropped during genericization.
-#: When a verb is added or removed, update this constant —
+#: The 51 tools are derived from the 8 libraries in ``LIBRARIES``.
+#: When a verb is added or removed, update this constant.
 #: ``scripts/lint-tool-counts.py`` fails any doc that still names the
 #: old number.
 _TOTAL_CONTRACT_TOOLS = 51
@@ -112,7 +112,7 @@ _TOTAL_AUX_TOOLS = 2
 #: Total MCP tools exposed by the bundled server.
 _TOTAL_MCP_TOOLS = _TOTAL_CONTRACT_TOOLS + _TOTAL_AUX_TOOLS  # 53
 
-#: Number of stub libraries under ``server/`` registered in ``LIBRARIES``.
+#: Number of CLI libraries under ``server/`` registered in ``LIBRARIES``.
 _TOTAL_LIBRARIES = len(LIBRARIES)  # 8
 
 # Cheap import-time assertion: the ``LIBRARIES`` tuple must match the
@@ -130,13 +130,13 @@ assert _TOTAL_LIBRARIES == 8, (
 def verify_canonical_counts() -> dict[str, int]:
     """Verify the live MCP surface matches the canonical counts.
 
-    Returns a dict with the live numbers; raises ``AssertionError`` if
+    Returns a dict with the live numbers. Raises ``AssertionError`` if
     any disagree with the canonical constants above. Called by the
     Makefile ``smoke-test`` target, ``install.sh``, and
     ``test_server_smoke.py`` so a single import of this module is
     sufficient to detect drift everywhere it matters.
 
-    This is intentionally NOT run at import time — file-loading every
+    This is intentionally not run at import time. Loading every
     library's ``cli.py`` would slow every importer (including unrelated
     test runs) and would fail in environments where one library's
     optional dependencies (matplotlib, pandas, ...) are not installed.
@@ -210,8 +210,8 @@ def _verb_to_tool_name(library: str, verb: str) -> str:
 def _verb_description(module: Any, verb: str) -> str:
     """Return a one-line description from the CLI parser if available."""
     parser = module.build_parser()
-    for action in parser._actions:  # noqa: SLF001
-        if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
             sub = action.choices.get(verb)
             if sub is not None and sub.description:
                 first_line = sub.description.strip().splitlines()[0]
@@ -225,7 +225,7 @@ def derive_tool_specs() -> list[ToolSpec]:
         module = _load_cli_module(library)
         contract = getattr(module, "CONTRACT", None)
         if not isinstance(contract, dict):
-            raise RuntimeError(f"library {library!r} CLI module is missing CONTRACT dict")
+            raise TypeError(f"library {library!r} CLI module is missing CONTRACT dict")
         for verb in sorted(contract):
             entry = contract[verb]
             safety = str(entry.get("safety"))
@@ -276,8 +276,8 @@ def _format_safety_summary(specs: list[ToolSpec]) -> dict[str, list[str]]:
     summary: dict[str, list[str]] = {safety: [] for safety in sorted(ALLOWED_SAFETIES)}
     for spec in specs:
         summary[spec.safety].append(spec.name)
-    for safety in summary:
-        summary[safety].sort()
+    for names in summary.values():
+        names.sort()
     return summary
 
 
@@ -360,7 +360,7 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("safety", help="print derived tools grouped by safety class")
     sub.add_parser("counts", help="print canonical counts (libraries / contract_tools / aux_tools / total_mcp_tools) and verify they match the live derivation")
     call = sub.add_parser("call", help="invoke a derived MCP tool by name")
-    call.add_argument("tool", help="tool name (for example, selector_pick)")
+    call.add_argument("tool", help="tool name (for example, slurm_triage)")
     call.add_argument("args", nargs=argparse.REMAINDER, help="extra args forwarded to the underlying CLI verb")
     return parser
 

@@ -9,6 +9,9 @@ focus on single-binary C++ rather than distributed systems or ML hardware. This
 document adapts the reusable principles to GPU inference without pretending the
 original CPU examples are GPU measurements.
 
+Exact source revision, license, and modification details are recorded in
+[`THIRD_PARTY_NOTICES.md`](../../../../THIRD_PARTY_NOTICES.md#performance-hints-adaptation).
+
 ## The operating loop
 
 Use one loop for every performance investigation:
@@ -46,7 +49,7 @@ If terms overlap, their lower bound is usually the maximum of the terms. If they
 serialize, add them. State the assumption. Batching means replica throughput is
 not simply the reciprocal of one user's latency.
 
-Use [`configs/sol-ceilings.yaml`](/configs/sol-ceilings.yaml) for published GPU
+Use [`configs/sol-ceilings.yaml`](../../../../configs/sol-ceilings.yaml) for published GPU
 ceilings and local evidence for achieved rates. Do not copy a hardware peak into
 a skill or estimate. Name the ceiling key and the efficiency assumption.
 
@@ -108,7 +111,7 @@ the lever for that workload and should not be promoted as a default.
   hardware-counter profiles, overly general paths, and the cumulative value of
   multiple small changes.
 - Label every estimate and single observation DRAFT. Promotion to VERDICT follows
-  [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md).
+  [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md).
 
 ## Output contract
 
@@ -121,7 +124,7 @@ Every hint pass returns:
 5. the sibling skill that should execute it.
 
 See the synthetic
-[`70B decode estimate`](/examples/performance-hints/README.md) for the expected
+[`70B decode estimate`](../../../../examples/performance-hints/README.md) for the expected
 shape. Search this document through the bundled MCP with `search_runbooks` using
 queries such as `back-of-the-envelope`, `flat profile`, `bulk APIs`, or
 `reduce allocations`.

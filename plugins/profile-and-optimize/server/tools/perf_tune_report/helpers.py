@@ -10,21 +10,48 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_CAMPAIGNS_DIR = Path.home() / "dev" / "inference" / "perf-tune-report" / "campaigns"
+SERVER_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CAMPAIGNS_DIR = SERVER_ROOT / "experiments" / "artifacts" / "perf-tune-report" / "campaigns"
 CAMPAIGNS_ENV = "PERFREPORT_CAMPAIGNS_DIR"
 
 _SLUG_RE = re.compile(r"[^a-z0-9-]+")
+_SAFE_SEGMENT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 def resolve_campaigns_dir(override: str | None = None) -> Path:
     """Resolve the campaigns root, honoring (1) explicit override, (2) env,
-    (3) the default under ``./campaigns``."""
+    (3) the server-local ``experiments/artifacts/perf-tune-report/campaigns``
+    default."""
     if override:
         return Path(override).expanduser().resolve()
     env = os.environ.get(CAMPAIGNS_ENV)
     if env:
         return Path(env).expanduser().resolve()
     return DEFAULT_CAMPAIGNS_DIR.expanduser().resolve()
+
+
+def safe_path_segment(value: str, *, label: str) -> str:
+    """Validate one path segment before joining it under an artifact root."""
+    if (
+        not isinstance(value, str)
+        or not value
+        or value in {".", ".."}
+        or "/" in value
+        or "\\" in value
+        or _SAFE_SEGMENT_RE.fullmatch(value) is None
+    ):
+        raise ValueError(f"{label} must be one safe path segment")
+    return value
+
+
+def resolve_cell_dir(campaign_dir: Path, cell_id: str) -> Path:
+    """Resolve a cell directory and prove it remains under campaign/cells."""
+    safe_cell_id = safe_path_segment(cell_id, label="cell-id")
+    cells_root = (Path(campaign_dir).resolve() / "cells").resolve()
+    cell_dir = (cells_root / safe_cell_id).resolve()
+    if not cell_dir.is_relative_to(cells_root):
+        raise ValueError("cell path escapes the campaign cells root")
+    return cell_dir
 
 
 def resolve_campaign_dir(slug_or_path: str, campaigns_root: Path | None = None) -> Path:

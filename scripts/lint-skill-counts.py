@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """Assert every doc that names the skill count agrees with the on-disk tree.
 
-Background: the v1.13.0 rescan found severe drift between docs that claim
-"21 skills" / "31 skills" / "41 skills" / "44 skills" / "27 skills total"
-while the on-disk count is 44 (45 `SKILL.md` minus `_template`). This
-lint fails any future commit that lets that drift recur.
+The installable skill directories are the source of truth. This lint rejects
+stale totals in public manifests, docs, and command help.
 
 How it works:
 
 1. Walk `plugins/profile-and-optimize/skills/` and count subdirectories with a
-   `SKILL.md` (excluding `_template`). That count is the single source
+   `SKILL.md`. That count is the single source
    of truth.
 2. For each doc in `DOCS_TO_LINT` below, grep for any line that names a
    skill count. Accept the line only if the number matches the on-disk
    count.
-3. Some docs (CHANGELOG.md, CHANGELOG-v0.7.md) intentionally carry
-   historical counts; they are explicitly excluded.
+3. Historical release notes are outside the linted file set.
 
 Exit codes:
   0 - clean (every doc agrees with the on-disk count).
@@ -50,12 +47,8 @@ DOCS_TO_LINT = (
     ".claude-plugin/marketplace.json",
 )
 
-# Total-count patterns. These intentionally match only claims that
-# present themselves as the canonical total. Subset / family breakdowns
-# (`12 MLPerf workflows`, `6 inference skills`, `8 of the 44 skills are
-# backed by native MCP verbs`) are exempted via `LINE_EXEMPT_SUBSTRINGS`
-# below; the lint only fails when a doc names a "total" without scoping
-# language.
+# Total-count patterns. These intentionally match only claims that present
+# themselves as the canonical total. Scoped family breakdowns do not match.
 TOTAL_PATTERNS = (
     # "Skills: 44" / "**Skills:** 44"
     re.compile(r"\bSkills:\s*\*{0,2}\s*(\d+)\b"),
@@ -87,32 +80,14 @@ WORD_TO_INT = {
     "forty-four": 44,
 }
 
-# Lines containing these substrings are exempt (historical-tracking
-# context only; subset / family-breakdown patterns are excluded by the
-# strict TOTAL_PATTERNS regexes above, not by line-level substrings).
-LINE_EXEMPT_SUBSTRINGS = (
-    "-> 44",
-    "35 -> 41",  # historical migration note in plugin README
-    "Skill total:",  # plugin README change-history paragraphs
-    "of the 44",
-    "of 44",
-    "8 of the",
-    "(34 skills)",  # legitimate "matrix covers 34 of 44" CI comment
-    "31 skills",  # historical Makefile help refers to the v0.7-era count; replaced in this cleanup
-    "Skill catalog",  # CATALOG.md table-of-contents row anchors
-)
-
-
 def count_on_disk() -> int:
-    """Return the on-disk skill count (subdirs with SKILL.md, minus _template)."""
+    """Return the on-disk installable skill count."""
     if not SKILLS_DIR.is_dir():
         print(f"FATAL: skills dir not found at {SKILLS_DIR}", file=sys.stderr)
         sys.exit(2)
     count = 0
     for child in SKILLS_DIR.iterdir():
         if not child.is_dir():
-            continue
-        if child.name.startswith("_"):
             continue
         if not (child / "SKILL.md").is_file():
             continue
@@ -130,8 +105,6 @@ def lint_doc(path: Path, expected: int) -> list[str]:
         return [f"{path}: NOT FOUND (still in DOCS_TO_LINT — remove or fix path)"]
     text = path.read_text()
     for line_no, line in enumerate(text.splitlines(), start=1):
-        if any(sub in line for sub in LINE_EXEMPT_SUBSTRINGS):
-            continue
         seen_nums: set[int] = set()
         for pattern in TOTAL_PATTERNS:
             for m in pattern.finditer(line):

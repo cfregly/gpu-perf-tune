@@ -1,6 +1,9 @@
 ---
 name: perf-baseline-diff
-last_validated: 2026-05-20
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-20"
 description: >-
   Diff a current performance measurement against a registered baseline from
   the perf-baselines registry. Works for any measurement type (NCCL BW, MFU,
@@ -12,40 +15,34 @@ description: >-
   "is this regression real", "compare to baseline", "perf-baseline-diff",
   "regression diff", or any combination of "diff / compare / regression /
   check" with "baseline / golden / reference / perf-of-record".
-allowed-tools:
-  - mcp__profile_and_optimize__perf_baseline_diff
-  - mcp__profile_and_optimize__profile_profile_diff
-  - mcp__profile_and_optimize__search_evidence
-  - Bash(sha256sum:*)
-  - Bash(jq:*)
-  - Bash(diff:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__perf_baseline_diff mcp__profile_and_optimize__profile_profile_diff mcp__profile_and_optimize__search_evidence Bash(sha256sum:*) Bash(jq:*) Bash(diff:*) Read Write"
 ---
 
 # perf-baseline-diff
 
 ## Purpose
 
-Take a current perf measurement (any kind) and a registered baseline (from [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md)), produce a structured diff with per-dimension deltas, and classify the overall verdict. Works for scalar, structured, and nsys-rep measurements.
+Take a current perf measurement (any kind) and a registered baseline (from [`perf-baseline-record`](../perf-baseline-record/SKILL.md)), produce a structured diff with per-dimension deltas, and classify the overall verdict. Works for scalar, structured, and nsys-rep measurements.
 
 > This skill is backed by a native MCP verb: `mcp__profile_and_optimize__perf_baseline_diff`. The verb handles scalar + structured-JSON shapes natively and delegates nsys-rep diffs to `mcp__profile_and_optimize__profile_profile_diff`. The Bash-tool path documented below remains supported as a fallback.
 
 Output:
 
 - A **per-dimension delta table** (every (key, baseline-value, current-value, delta, delta-%) row).
-- An **overall verdict**: GREEN (within tolerance), YELLOW (one or two dimensions outside tolerance), RED (multiple dimensions outside tolerance OR the headline dimension regressed beyond tolerance).
-- A **next-action recommendation** (bisect, ignore, file regression, etc.).
+- An **overall verdict**: GREEN (no adverse change beyond tolerance), YELLOW
+  (one or two non-headline adverse changes), or RED (a headline adverse change
+  or at least three adverse changes).
+- A **next-action recommendation** based on the declared direction.
 
 Handles three measurement shapes:
 
 1. **Scalar** - single number (e.g. step-time-ms). Delta is `current - baseline`, delta-% is `100 * (current - baseline) / baseline`.
-2. **Structured key->value** (e.g. per-pair NCCL BW). Computes delta per key. Reports worst-N regressions.
+2. **Structured key->value** (e.g. per-pair NCCL BW). Computes delta per key. Reports the largest changes.
 3. **Nsys-rep** - delegates to `mcp__profile_and_optimize__profile_profile_diff` (the profile-diff harness shipped with the `profile_and_optimize` MCP server).
 
 ### Inference-perf use
 
-For inference perf-bench output specifically, prefer the [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) skill. It is a structured-shape diff (Phase 2b below) keyed on the `inference_perfbench_v1` schema, with per-metric tolerances tuned for inference workloads (TTFT 5%, throughput 3%, cache-hit-rate 2 absolute pts) and a verdict-classification step that knows the headline metric is `throughput_toks_per_s` at concurrency 16. No new MCP verb is introduced. The bridge wraps `perf_baseline_diff` directly.
+For inference perf-bench output specifically, prefer the [`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md) skill. It is a structured-shape diff (Phase 2b below) keyed on the `inference_perfbench_v1` schema, with per-metric tolerances tuned for inference workloads (TTFT 5%, throughput 3%, cache-hit-rate 2 absolute pts) and a verdict-classification step that knows the headline metric is `throughput_toks_per_s` at concurrency 16. No new MCP verb is introduced. The bridge wraps `perf_baseline_diff` directly.
 
 ## When to use
 
@@ -72,7 +69,10 @@ Do **not** use this skill for:
 1. **Baseline path** - `--baseline <registry-path>` (directory from `perf-baseline-record`).
 2. **Current measurement** - `--current <path>` (file or directory).
 3. **Tolerance** - `--tolerance-percent <N>` for scalar measurements, `--tolerance-absolute <N>` for structured. Default: `5%`.
-4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for writing the diff bundle.
+4. **Direction** - read from the immutable baseline. Improvements do not count
+   against a directional baseline. A two-sided baseline treats either change
+   as adverse.
+5. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for writing the diff bundle.
 
 ## Interaction style
 
@@ -111,7 +111,12 @@ The verb auto-detects shape (scalar / structured JSON / nsys-rep), runs the diff
 ```text
 delta = current_value - baseline.value
 delta_pct = 100 * delta / baseline.value
-verdict = "GREEN" if |delta_pct| <= tolerance_percent else "RED"
+adverse = (
+  direction == higher-is-better and delta < 0
+  or direction == lower-is-better and delta > 0
+  or direction == two-sided
+)
+verdict = "RED" if adverse and |delta_pct| > tolerance_percent else "GREEN"
 ```
 
 ### Phase 2b: structured (key->value) diff
@@ -126,10 +131,14 @@ For each key in baseline AND current:
 Sort by |delta_pct| descending; top 20 in the report.
 
 verdict:
-  GREEN  if no key exceeds tolerance
-  YELLOW if 1-2 keys exceed tolerance
-  RED    if 3+ keys exceed OR headline key (operator-flagged) exceeds
+  GREEN  if no adverse key exceeds tolerance
+  YELLOW if 1-2 adverse keys exceed tolerance
+  RED    if 3+ adverse keys exceed OR headline key exceeds
 ```
+
+A structured object must use one valid direction for every numeric key. Split
+mixed latency and throughput metrics into separate baselines. Do not treat a
+single generic verdict over mixed directions as authoritative.
 
 ### Phase 2c: nsys-rep diff (delegate)
 
@@ -157,11 +166,11 @@ ${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/perf-baseline-diffs/<fam
 
 Based on verdict:
 
-- **GREEN**: "no regression detected. No action needed."
-- **YELLOW**: "spot regression on N keys. Recommend re-running the measurement on the same cohort to rule out noise, then re-diff."
+- **GREEN**: "no adverse change exceeded tolerance."
+- **YELLOW**: "one or two adverse keys exceeded tolerance. Re-run on the same cohort, then compare again."
 - **RED**:
   - If shape == `nsys-rep`: drill into the `profile_profile_diff` per-kernel bucket output to name the regressed bucket.
-  - If shape == `structured` and the regressions cluster on specific keys (e.g. all on one node-pair, or all on one collective): name the suspect axis.
+  - If shape == `structured` and the adverse changes cluster on specific keys (e.g. all on one node-pair, or all on one collective): name the suspect axis.
   - If shape == `scalar`: name the absolute + percent delta and ask the operator whether to bisect.
 
 ## Safety
@@ -189,7 +198,7 @@ default, ship a config, or appear in a report.
 Per `docs/METHODOLOGY.md` "Speed-of-light framing", when the baseline
 carries `sol_pct` / `sol_ceiling_key` / `sol_ceiling_value` (the
 optional fields added by
-[`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md)), the diff
+[`perf-baseline-record`](../perf-baseline-record/SKILL.md)), the diff
 output MUST also report **SoL delta** alongside the absolute delta.
 Format:
 
@@ -236,6 +245,6 @@ Supersede a DRAFT everywhere once a controlled VERDICT overturns it.
 
 ## Source-of-truth references
 
-- [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) - the pair skill.
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
-- [`server/CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) - fail-fast and provenance rules.
+- [`perf-baseline-record`](../perf-baseline-record/SKILL.md) - the pair skill.
+- [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
+- [`server/AGENTS.md`](../../server/AGENTS.md) - fail-fast and provenance rules.

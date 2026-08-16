@@ -5,8 +5,8 @@ This package is a thin shim. The real implementation lives at
 which umbrellas `host_overhead.py` (py-spy CPU sampler) and
 `profile_diff.py` (nsys-stats delta tables). The shim exists so the
 MCP surface in [`mcp_surface.py`](../mcp_surface.py) can introspect
-the profile CLI the same way it introspects launcher / selector /
-validator / contention via `<repo_root>/<library>/cli.py`.
+the profile CLI the same way it introspects every library listed in
+`mcp_surface.LIBRARIES` via `<repo_root>/<library>/cli.py`.
 """
 
 from __future__ import annotations

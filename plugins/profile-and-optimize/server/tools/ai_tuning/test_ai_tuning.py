@@ -21,7 +21,9 @@ SPEC.loader.exec_module(ai_tuning)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-FIXTURES = REPO_ROOT / "tests" / "fixtures" / "ai_tuning"
+FIXTURES = Path(__file__).resolve().parent / "testdata"
+B200_SPACE = REPO_ROOT / "tuning" / "examples" / "b200-offline.json"
+GB300_SPACE = REPO_ROOT / "tuning" / "examples" / "gb300-offline.json"
 
 class UtcTimestampTest(unittest.TestCase):
     """Locks Python 3.10 compat for the UTC timestamp helpers.
@@ -49,8 +51,8 @@ class UtcTimestampTest(unittest.TestCase):
         self.assertTrue(derived.stem.startswith("foo.cursor-"), msg=str(derived))
         self.assertTrue(derived.stem.endswith("Z"), msg=str(derived))
 
-class V37ProposalDiffTests(unittest.TestCase):
-    """v3.7 W10: ai_tuning proposal diff PROPOSAL1 PROPOSAL2."""
+class ProposalDiffTests(unittest.TestCase):
+    """Tests for ai_tuning proposal diff PROPOSAL1 PROPOSAL2."""
 
     def _proposal(self, candidates: list[dict]) -> dict:
         return {
@@ -189,6 +191,20 @@ if __name__ == "__main__":
     unittest.main()
 
 class AiTuningCliTestPart1(unittest.TestCase):
+    def test_operational_commands_require_explicit_space(self) -> None:
+        cases = (
+            ["matrix", "--parameter", "RUN_MODE"],
+            ["optimizer", "propose"],
+            ["report"],
+            ["proposal", "validate", "proposal.json"],
+            ["experiment", "create", "proposal.json", "--ledger", "ledger.jsonl"],
+        )
+        parser = ai_tuning.build_parser()
+        for argv in cases:
+            with self.subTest(argv=argv):
+                with self.assertRaises(SystemExit):
+                    parser.parse_args(argv)
+
     def make_finalize_fixture(self, root: Path, run_count: int = 5) -> tuple[Path, Path]:
         workdir = root / "workdir"
         log_dir = root / "logs"
@@ -269,6 +285,8 @@ class AiTuningCliTestPart1(unittest.TestCase):
             rc = ai_tuning.main(
                 [
                     "matrix",
+                    "--space",
+                    str(B200_SPACE),
                     "--parameter",
                     "RUN_MODE",
                     "--parameter",
@@ -293,7 +311,7 @@ class AiTuningCliTestPart1(unittest.TestCase):
                     "optimizer",
                     "propose",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--strategy",
                     "random",
                     "--parameter",
@@ -391,6 +409,8 @@ class AiTuningCliTestPart1(unittest.TestCase):
             rc = ai_tuning.main(
                 [
                     "report",
+                    "--space",
+                    str(B200_SPACE),
                     "--raw-results-dir",
                     str(FIXTURES / "raw-run-dir"),
                     "--raw-benchmark",
@@ -434,7 +454,7 @@ class AiTuningCliTestPart1(unittest.TestCase):
                 [
                     "report",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"),
+                    str(B200_SPACE),
                     "--objective",
                     "time_to_quality",
                     "--raw-results-dir",
@@ -459,7 +479,7 @@ class AiTuningCliTestPart1(unittest.TestCase):
                 [
                     "report",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--raw-benchmark",
                     "llama31_405b",
                     "--output",
@@ -484,6 +504,8 @@ class AiTuningCliTestPart1(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(FIXTURES / "proposal-valid.json"),
+                    "--space",
+                    str(B200_SPACE),
                     "--audit-dir",
                     str(audit_dir),
                     "--output",
@@ -521,6 +543,8 @@ class AiTuningCliTestPart1(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -553,6 +577,8 @@ class AiTuningCliTestPart1(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -586,6 +612,8 @@ class AiTuningCliTestPart1(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -633,6 +661,8 @@ class AiTuningCliTestPart1(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -703,6 +733,8 @@ class AiTuningCliTestPart2(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -719,6 +751,8 @@ class AiTuningCliTestPart2(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(FIXTURES / "proposal-valid.json"),
+                    "--space",
+                    str(B200_SPACE),
                     "--require-complete",
                     "--output",
                     str(output),
@@ -736,6 +770,8 @@ class AiTuningCliTestPart2(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(FIXTURES / "proposal-invalid.json"),
+                    "--space",
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -759,6 +795,8 @@ class AiTuningCliTestPart2(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -780,6 +818,8 @@ class AiTuningCliTestPart2(unittest.TestCase):
                     "proposal",
                     "validate",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -952,6 +992,8 @@ class AiTuningCliTestPart2(unittest.TestCase):
             ai_tuning.main(
                 [
                     "matrix",
+                    "--space",
+                    str(B200_SPACE),
                     "--parameter",
                     "RUN_MODE",
                     "--parameter",
@@ -967,6 +1009,8 @@ class AiTuningCliTestPart2(unittest.TestCase):
                     "experiment",
                     "create",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--ledger",
                     str(ledger),
                     "--artifact-root",
@@ -978,6 +1022,7 @@ class AiTuningCliTestPart2(unittest.TestCase):
             self.assertEqual(rc, 0)
             created = json.loads(create_output.read_text(encoding="utf-8"))
             self.assertEqual(created["created_count"], 2)
+            self.assertEqual(created["experiments"][0]["owner"], "agent-session")
             exp_id = created["experiments"][0]["experiment_id"]
 
             rc = ai_tuning.main(
@@ -1056,7 +1101,7 @@ class AiTuningCliTestPart2(unittest.TestCase):
                     "create",
                     str(proposal),
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"),
+                    str(B200_SPACE),
                     "--ledger",
                     str(ledger),
                     "--output",
@@ -1127,6 +1172,8 @@ class AiTuningCliTestPart3(unittest.TestCase):
             ai_tuning.main(
                 [
                     "matrix",
+                    "--space",
+                    str(B200_SPACE),
                     "--parameter",
                     "RUN_MODE",
                     "--parameter",
@@ -1142,6 +1189,8 @@ class AiTuningCliTestPart3(unittest.TestCase):
                     "experiment",
                     "create",
                     str(proposal),
+                    "--space",
+                    str(B200_SPACE),
                     "--ledger",
                     str(ledger),
                     "--output",

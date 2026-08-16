@@ -1,6 +1,9 @@
 ---
 name: perf-baseline-record
-last_validated: 2026-05-20
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-20"
 description: >-
   Capture any performance measurement (NCCL bandwidth, MFU, step-time,
   latency, throughput, kernel-time, anything operator-defined) into a
@@ -12,17 +15,7 @@ description: >-
   measurement", "save as baseline", "perf-baseline-record", "baseline
   perf-of-record", or any combination of "record / register / save /
   capture / store" with "baseline / golden / reference / perf-of-record".
-allowed-tools:
-  - mcp__profile_and_optimize__perf_baseline_record
-  - mcp__profile_and_optimize__search_runbooks
-  - Bash(sha256sum:*)
-  - Bash(date:*)
-  - Bash(git:*)
-  - Bash(uname:*)
-  - Bash(hostname:*)
-  - Bash(jq:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__perf_baseline_record mcp__profile_and_optimize__search_runbooks Bash(sha256sum:*) Bash(date:*) Bash(git:*) Bash(uname:*) Bash(hostname:*) Bash(jq:*) Read Write"
 ---
 
 # perf-baseline-record
@@ -31,11 +24,11 @@ allowed-tools:
 
 Make perf measurements **durable, comparable, and diff-able** by recording them into a versioned registry with full provenance. Replaces the hand-maintained "best run of record" table pattern: any operator can register any measurement (NCCL BW, MFU, latency, throughput, kernel-time, anything that produces a number or structured JSON) and have future regressions diff against it deterministically.
 
-Pairs with [`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-baseline-diff/SKILL.md). Together they replace the historical "I'll just remember last week's number" anti-pattern with a registry that survives the operator changing.
+Pairs with [`perf-baseline-diff`](../perf-baseline-diff/SKILL.md). Together they replace the historical "I'll just remember last week's number" anti-pattern with a registry that survives the operator changing.
 
 ### Inference-perf use
 
-For inference perf measurements specifically (TTFT / ITL / throughput / tok-per-user / prefix-cache-hit-rate captured by [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)), prefer the [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) skill. It wraps this verb with the canonical `inference_perfbench_v1` schema, parses the upstream perf-bench bundle automatically, and supplies per-metric tolerances tuned for inference workloads (TTFT 5%, throughput 3%, cache-hit-rate 2 absolute pts). No new MCP verb is added. The bridge is a thin frontmatter-fluent wrapper around `perf_baseline_record` + `perf_baseline_diff`.
+For inference perf measurements specifically (TTFT / ITL / throughput / tok-per-user / prefix-cache-hit-rate captured by [`inference-perf-bench`](../inference-perf-bench/SKILL.md)), prefer the [`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md) skill. It wraps this verb with the canonical `inference_perfbench_v1` schema, parses the upstream perf-bench bundle automatically, and supplies per-metric tolerances tuned for inference workloads (TTFT 5%, throughput 3%, cache-hit-rate 2 absolute pts). No new MCP verb is added. The bridge is a thin frontmatter-fluent wrapper around `perf_baseline_record` + `perf_baseline_diff`.
 
 > This skill is backed by a native MCP verb: `mcp__profile_and_optimize__perf_baseline_record`. The verb does the registry write atomically (provenance + source snapshot + INDEX.md update in one shot). The Bash-tool path documented below remains supported as a fallback for environments without the MCP server.
 
@@ -75,9 +68,12 @@ Do **not** use this skill for:
 1. **Source data** - operator names `--source <path>` (file or directory). Must be readable.
 2. **Family + measurement-name** - `--family <name>` (e.g. `llama31_8b`, `gb300-cluster`, `deepseek-v3-inference`) + `--measurement <name>` (e.g. `nccl_busbw`, `step_time`, `nvlink_pairwise_bw`).
 3. **Value** - `--value <number>` for scalar baselines, or `--source` for structured baselines (the source file IS the baseline payload).
-4. **Optional units** - `--unit <gb/s | ms | tokens/s | mfu>`.
-5. **Optional schema** - `--schema <path-to-json-schema>` for structured baselines. Skill validates the source against the schema.
-6. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for the registry path.
+4. **Direction** - `--direction higher-is-better`, `lower-is-better`, or
+   `two-sided`. This is required. Use `two-sided` only when either deviation is
+   adverse.
+5. **Optional units** - `--unit <gb/s | ms | tokens/s | mfu>`.
+6. **Optional schema** - `--schema <path-to-json-schema>` for structured baselines. Skill validates the source against the schema.
+7. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** for the registry path.
 
 ## Interaction style
 
@@ -92,6 +88,7 @@ Resolve and report:
 - **Family** (`<family>` becomes the top-level registry directory).
 - **Measurement name** (`<measurement>` becomes the per-measurement subdirectory).
 - **Value / source** (scalar OR structured).
+- **Direction** (higher-is-better, lower-is-better, or two-sided).
 - **Units** (free-text, operator-supplied).
 - **Schema** (optional. If provided, validate the source).
 - **Registry path**: `${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/perf-baselines/<family>/<measurement>/<UTC-timestamp>/`.
@@ -123,6 +120,7 @@ mcp__profile_and_optimize__perf_baseline_record with:
          "--measurement", "<measurement>",
          "--source", "<source>",
          "--value", "<value>",      # omit for structured baselines
+         "--direction", "<higher-is-better|lower-is-better|two-sided>",
          "--unit", "<unit>",
          "--notes", "<notes>",
          "--json"]
@@ -140,6 +138,7 @@ Write baseline.json with:
     "family": "<family>",
     "measurement": "<measurement>",
     "value": <value or null>,
+    "direction": "<higher-is-better|lower-is-better|two-sided>",
     "unit": "<unit or null>",
     "source_path": "<source>",
     "source_sha256": "<hash>",
@@ -167,7 +166,7 @@ Append a row to the index (one line per registered baseline). Index becomes the 
 
 Print the registry path. Recommend:
 
-- "Diff a future measurement against this baseline" -> [`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-baseline-diff/SKILL.md) `--baseline <registry-path>`.
+- "Diff a future measurement against this baseline" -> [`perf-baseline-diff`](../perf-baseline-diff/SKILL.md) `--baseline <registry-path>`.
 - "Make this the documented run-of-record" -> cite the registry path in your project docs. The `INDEX.md` row is the canonical history.
 
 ## Registry layout
@@ -259,6 +258,6 @@ captured against a production-representative config. Record the tier + provenanc
 
 ## Source-of-truth references
 
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
-- [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md) - raw-payload provenance rules.
-- [`server/CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) - fail-fast + artifact-durability rules.
+- [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor, speed-of-light framing).
+- [`server/docs/perf-lake-contract.md`](../../server/docs/perf-lake-contract.md) - raw-payload provenance rules.
+- [`server/AGENTS.md`](../../server/AGENTS.md) - fail-fast + artifact-durability rules.

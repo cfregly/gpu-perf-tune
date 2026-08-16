@@ -16,11 +16,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from tools.ai_tuning.ai_tuning import (  # noqa: E402
     CONTRACT,
+    MCP_DYNAMIC_ACKS,
     build_parser,
     main,
 )
 
-__all__ = ["CONTRACT", "build_parser", "main"]
+__all__ = ["CONTRACT", "MCP_DYNAMIC_ACKS", "build_parser", "main"]
 
 
 if __name__ == "__main__":  # direct invocation: fail loud, never silently no-op

@@ -1,121 +1,113 @@
-# Reviewing `profile-and-optimize` PRs
+# Reviewing `gpu-perf-tune` changes
 
-A 30-minute reviewer path for `profile-and-optimize` pull requests.
+Review the project surface that changed. Claude Code packaging is one adapter,
+not the default review boundary.
 
-## TL,DR
+## Fast review path
 
-- **Run** `claude plugin validate plugins/profile-and-optimize` locally. Must pass.
-- **Read** the new / changed SKILL.md files end-to-end. Check the frontmatter, the workflow phases, and the safety section.
-- **Confirm** the version bump matches the change scope (PATCH vs. MINOR vs. MAJOR).
-- **Confirm** the README skill listings were updated.
-- **Confirm** no source-of-truth duplication.
+1. Read the changed skills, contracts, runtime code, and public docs.
+2. Run `make all`.
+3. Check the version and changelog against the change scope.
+4. Confirm safety gates fail closed and require the documented acknowledgement.
+5. Confirm claims point to reproducible evidence.
+6. Run `make validate-claude-plugin` when Claude packaging changed.
 
-If all five are green, approve. The rest of this doc is the why.
+## Sources of truth
 
-## What's authoritative, what's derived, what's historical
+| Path | Review focus |
+| --- | --- |
+| `plugins/profile-and-optimize/skills/*/SKILL.md` | Task scope, official frontmatter, workflow, safety, and evidence |
+| `plugins/profile-and-optimize/templates/skill/SKILL.md` | New skill defaults and current specification |
+| `plugins/profile-and-optimize/server/mcp_surface.py` | Public tool registry and canonical counts |
+| `plugins/profile-and-optimize/server/` | Contracts, implementations, tests, and runtime behavior |
+| `VERSION` | Release version source of truth |
+| `plugins/profile-and-optimize/.claude-plugin/plugin.json` | Claude adapter metadata and mirrored version |
+| `plugins/profile-and-optimize/.mcp.json` | Bundled and optional MCP declarations |
+| `AGENTS.md` | Shared agent policy |
+| `CHANGELOG.md` | User-visible release history |
 
-| Path | What it is | Reviewer treatment |
-| --- | --- | --- |
-| `plugins/profile-and-optimize/skills/*/SKILL.md` | The skills themselves. The reviewable unit of the repo. | Read end-to-end. This is most of the PR review. |
-| `plugins/profile-and-optimize/.claude-plugin/plugin.json` | Plugin manifest (`name`, `version`, `description`). | Check `version` bump matches the change scope. |
-| `plugins/profile-and-optimize/.mcp.json` | MCP server declarations. | Check that any new `mcp__<server>__<tool>` reference in a skill has a corresponding server here. |
-| `plugins/profile-and-optimize/README.md` | Plugin-level README. | Check it stays accurate when skills or server libraries change. |
-| `plugins/profile-and-optimize/server/` | Bundled MCP server. | All 8 CLI libraries (`ai_tuning`, `profile`, `perf_baseline`, `evidence`, `slurm`, `findings`, `perf_tune_report`, `known_good_config`) are first-class code and get the same review depth as the skills. Canonical counts (8 libraries, 53 tools = 51 contract + 2 aux) live in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `_TOTAL_*` constants and are asserted by `make lint-tool-counts`. |
-| `.claude-plugin/marketplace.json` | Marketplace registry. | Rarely changes. If it does, confirm the plugin source path is correct. |
-| `LICENSE`, `CONTRIBUTING.md`, `REVIEWERS.md` | Static. | No review unless explicitly changed. |
-| `.github/` templates | Static. | No review unless explicitly changed. |
-| `scripts/` helpers (e.g. `install-skills-into-cursor.sh`, `bootstrap.sh`) | Static operator-facing helpers. | Read once when introduced. Subsequently only re-review when explicitly changed. |
+## Skill review
 
-## Version bump scope
+The official Agent Skills header may contain `name`, `description`, `license`,
+`compatibility`, `metadata`, and `allowed-tools`.
 
-The MINOR / MAJOR distinction is the single most-confusing thing for new contributors. Reviewer is the final check.
+Check that:
 
-| Change | Version | Why |
-| --- | --- | --- |
-| New skill added | MINOR | Skill is a feature. Consumers gain capability. |
-| Existing skill's workflow extends (new phase, new MCP tool used) | MINOR | Operator sees changed behavior. Consumers may rely on the new behavior. |
-| Existing skill's prose tightens, typo, link fix | PATCH | No behavior change. |
-| MCP server added to `.mcp.json` | MINOR | New external dependency surfaces. |
-| MCP server removed from `.mcp.json` | MAJOR | Breaking - any skill that referenced it is now broken. |
-| Skill removed | MAJOR | Breaking - `/<skill-name>` slash command no longer exists. |
-| Skill renamed | MAJOR | Breaking. Even if you add an alias, the old name disappears. |
-| MCP tool prefix renamed (e.g. `prometheus` -> `prometheus_mcp`) | MAJOR for cross-version compat, MINOR if it was a typo fix in the same release as the introduction. |
-| Bundled server contract / tool surface changed | PATCH if no tool surface change. MINOR if new tools / verbs. MAJOR if removed / renamed tools. |
+- `name` matches the directory and uses the supported character set.
+- `description` names the task and concrete trigger phrases.
+- `license` is correct, including for adapted third-party work.
+- `metadata.last-validated` is a quoted ISO date.
+- `allowed-tools` is a space-delimited string with the narrowest required set.
+- Prerequisites fail closed.
+- Each phase has a clear checkpoint.
+- External writes and cluster changes require explicit approval.
+- The output records enough context to reproduce and challenge the result.
+- Shared rules are linked, not copied into the skill.
 
-If the reviewer disagrees with the version bump in the PR, request the bump first. Do not approve.
+`make validate-agent-skills` is the specification gate. Do not replace it with
+an ad hoc YAML parser.
 
-## What to look for in a SKILL.md review
+## Runtime and MCP review
 
-### Frontmatter
+The bundled server has 8 libraries, 51 contract tools, and 2 auxiliary tools.
+The exact surface comes from `mcp_surface.py`.
 
-- `name` matches the directory name. Lowercase, hyphens, max 64 chars.
-- `description` is third-person, <=1024 chars, includes both WHAT and WHEN trigger phrases. Specific trigger phrases (`"run a perf bench sweep"`, `"profile decode kernels"`), not vague ones (`"helps with perf"`).
-- `allowed-tools` is a YAML list. Each entry is either a literal MCP tool (`mcp__<server>__<tool>`) or a Bash selector (`Bash(sbatch:*)`) or a Cursor primitive (`Read`, `Write`, `Grep`).
+For a runtime change, check:
 
-### Body
+- Valid and invalid inputs have tests.
+- Return envelopes keep the documented shape.
+- Read-only tools do not mutate external state.
+- Mutating tools expose the correct safety class and acknowledgement field.
+- Tool names and arguments still match the skill references.
+- The live MCP handshake lists the canonical tool count and completes a call.
 
-- Body <=500 lines. Use progressive disclosure (link to sibling files) for deep reference.
-- All file references one-level-deep, relative paths only, no Windows backslashes.
-- The Workflow section is numbered phases. Each phase has a clear `report and ask` checkpoint. Never auto-advance past a red gate.
-- The Safety section enumerates ack flags + forbidden actions + fail-closed conditions. If the skill could mutate cluster state, the ack flag is explicit.
-- The Source-of-truth references section cites repo docs by relative path. The skill should NOT duplicate the cited content (no copy-paste of runbook stanzas).
+Run:
 
-### Workflow shape
-
-- **Iterative** (pause and ask between phases) is the default. Auto-advance is OK only for fast, fully read-only flows.
-- **Fail-closed** on every prerequisite. If `${PROFILE_AND_OPTIMIZE_REPO_ROOT}` is missing, the skill reports and stops. It does not silently `mkdir -p` a fake path.
-- **Knowledge-base anchoring first** for any PromQL skill (per [`server/docs/mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) "Default Routing").
-- **Raw-payload preservation** for any skill that queries external systems (per [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md)).
-- **Reproducibility-grade evidence** for any skill that writes artifacts: `SOURCE.md`, `summary.md`, four-file `commands/` tuple capture (see the [`evidence-bundle-init`](/plugins/profile-and-optimize/skills/evidence-bundle-init/SKILL.md) skill).
-
-## Hard safety gates
-
-Reviewer must reject any PR that:
-
-- Adds a soft-pass path around a fail-closed gate.
-- Auto-passes the `i_understand_this_submits_jobs` ack flag (or any other `i_understand_this_*` ack) without explicit operator confirmation in the workflow.
-- Weakens a verification invocation (dropping strict flags, loosening thresholds) without calling the change out in the PR description.
-
-## What `WARN`-class lint issues are OK to land
-
-- A typo or link drift discovered in CI on the same PR - fix it inline. No separate PR needed.
-- A new SKILL.md that exceeds 500 lines by 5-10 - request progressive-disclosure refactor (move detail to a sibling file), but do not block if the skill is otherwise clean.
-
-## What ERROR-class issues block
-
-- `claude plugin validate` fails.
-- Frontmatter YAML doesn't parse.
-- `name` field doesn't match directory.
-- `description` > 1024 chars.
-- Windows paths in skill body.
-- Repo source-of-truth duplication (skill copy-pastes a runbook stanza instead of linking).
-- Missing version bump.
-- Chat-write tool referenced (skills are read-only toward chat systems. E.g. no `slack_send_message`).
-
-## Reviewer template comment
-
-When approving:
-
-```
-LGTM. Validated:
-- claude plugin validate: PASS
-- frontmatter: name matches dir, description <=N chars, allowed-tools list of M
-- version bump matches scope: <PATCH|MINOR|MAJOR>
-- README skill listings updated: yes / no (n/a for non-skill PR)
-- No source-of-truth duplication
-- Safety section reviewed
+```bash
+make pytest
+make smoke-mcp-runtime
+make lint-skill-mcp-args
 ```
 
-When requesting changes:
+## Version review
 
+| Change | Expected bump |
+| --- | --- |
+| Documentation or behavior-preserving fix | PATCH |
+| New skill, tool, or supported workflow | MINOR |
+| Breaking public skill, tool, or contract change before 1.0.0 | MINOR plus migration notes |
+| Breaking public skill, tool, or contract change from 1.0.0 onward | MAJOR |
+
+The root `VERSION`, adapter manifest, Python packages, package README, and
+changelog must agree. A release commit must receive the matching annotated tag.
+
+## Blocking findings
+
+Request changes when:
+
+- Any required `make all` gate fails.
+- Official Agent Skills validation fails.
+- A public tool or skill changes without the matching version treatment.
+- A safety check can be bypassed without explicit acknowledgement.
+- A performance claim omits its workload, baseline, context, or evidence.
+- A public artifact contains credentials, private infrastructure details, or
+  customer data.
+- Third-party material lacks a verified source and license.
+- Documentation points to missing files or unsupported client behavior.
+
+## Review comment
+
+A useful approval records the checks that actually ran:
+
+```text
+Validated:
+- make all: PASS
+- version and changelog: PASS
+- safety and acknowledgement paths: PASS
+- public docs and redaction: PASS
+- Claude adapter validation: PASS or not applicable
 ```
-Two questions before approve:
-1. <specific question with file:line cite>
-2. <specific question with file:line cite>
 
-The rest of the PR looks clean; rerun claude plugin validate after the fix and I'll re-review.
-```
-
-## Contact
-
-For reviewer-side process questions, open an issue using [`.github/ISSUE_TEMPLATE/question.md`](/.github/ISSUE_TEMPLATE/question.md).
+For questions about the review process, open an operator question with the
+public issue template. Send security or conduct reports through their private
+channels.

@@ -29,7 +29,9 @@ from optimizer import gp, hyp_format, hyp_session, hyperband, space, tpe  # noqa
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-FIXTURES = REPO_ROOT / "tests" / "fixtures" / "ai_tuning"
+FIXTURES = Path(__file__).resolve().parent / "testdata"
+B200_SPACE = REPO_ROOT / "tuning" / "examples" / "b200-offline.json"
+GB300_SPACE = REPO_ROOT / "tuning" / "examples" / "gb300-offline.json"
 
 def _make_space(values_per_dim: int = 5) -> space.Space:
     dims = [
@@ -300,7 +302,7 @@ class CliTest(unittest.TestCase):
                     "optimizer",
                     "status",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"),
+                    str(B200_SPACE),
                     "--output",
                     str(output),
                 ]
@@ -321,7 +323,7 @@ class CliTest(unittest.TestCase):
                     "optimizer",
                     "propose",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--strategy",
                     "bayesian",
                     "--variant",
@@ -353,7 +355,7 @@ class CliTest(unittest.TestCase):
                     "optimizer",
                     "propose",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--strategy",
                     "bayesian",
                     "--variant",
@@ -385,7 +387,7 @@ class CliTest(unittest.TestCase):
                     "optimizer",
                     "propose",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--strategy",
                     "multifidelity",
                     "--variant",
@@ -424,7 +426,7 @@ class CliTest(unittest.TestCase):
                     "optimizer",
                     "propose",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--strategy",
                     "multifidelity",
                     "--variant",
@@ -464,7 +466,7 @@ class CliTest(unittest.TestCase):
                 "optimizer",
                 "propose",
                 "--space",
-                str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                str(GB300_SPACE),
                 "--strategy",
                 "multifidelity",
                 "--variant",
@@ -507,7 +509,7 @@ class CliTest(unittest.TestCase):
                         "optimizer",
                         "propose",
                         "--space",
-                        str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                        str(GB300_SPACE),
                         "--strategy",
                         "multifidelity",
                         "--variant",
@@ -558,7 +560,7 @@ class CliTest(unittest.TestCase):
                     "--ledger",
                     str(ledger),
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"),
+                    str(B200_SPACE),
                     "--objective",
                     "mlperf_submission_readiness",
                     "--output",
@@ -600,7 +602,7 @@ class CliTest(unittest.TestCase):
                     "--ledger",
                     str(ledger),
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"),
+                    str(B200_SPACE),
                     "--objective",
                     "mlperf_submission_readiness",
                     "--output",
@@ -653,7 +655,7 @@ class CliTest(unittest.TestCase):
                     "--ledger",
                     str(ledger),
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"),
+                    str(B200_SPACE),
                     "--objective",
                     "mlperf_submission_readiness",
                     "--output",
@@ -748,7 +750,7 @@ class CliTest(unittest.TestCase):
                     "optimizer",
                     "propose",
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--strategy",
                     "bayesian",
                     "--variant",
@@ -779,7 +781,7 @@ class CliTest(unittest.TestCase):
                     "create",
                     str(proposal),
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--ledger",
                     str(created_ledger),
                     "--output",
@@ -849,7 +851,7 @@ class CliTest(unittest.TestCase):
                     "--ledger",
                     str(compare_ledger),
                     "--space",
-                    str(REPO_ROOT / "tuning" / "tuning-space.gb300-ops.json"),
+                    str(GB300_SPACE),
                     "--objective",
                     "gb300_operational_readiness",
                     "--output",

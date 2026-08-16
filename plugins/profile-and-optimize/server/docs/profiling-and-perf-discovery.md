@@ -17,10 +17,10 @@ release cadence.
 
 This doc is the cross-runbook strategy for that discovery process. The
 per-target operator SOPs (B200 8B, GB300 405B, DSv3 671B regression
-profiling) belong under [`runbooks/`](/plugins/profile-and-optimize/server/runbooks).
+profiling) belong under [`runbooks/`](../runbooks).
 
 The symptom-to-culprit decision tree lives in
-[`tools/pipeline/submission/profile/regression_bisect.md`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/regression_bisect.md).
+[`tools/pipeline/submission/profile/regression_bisect.md`](../tools/pipeline/submission/profile/regression_bisect.md).
 
 ## What NVIDIA almost certainly does
 
@@ -60,10 +60,11 @@ All three repos already plumb NVTX:
 - `Megatron-Bridge/src/megatron/bridge/training/profiling.py`
   reuses Megatron-LM's `ProfilingConfig`.
 
-The gap is not instrumentation, it is the **driver**: a
-Slurm-aware launcher that turns those flags on and routes the
-`.nsys-rep` somewhere durable. That driver is
-[`tools/pipeline/submission/profile/profile_run.sh`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/profile_run.sh).
+The gap is not instrumentation. It is the capture adapter that turns those
+flags on and routes the `.nsys-rep` somewhere durable. The checked-in
+[`profile_run.sh`](../tools/pipeline/submission/profile/profile_run.sh) adapter
+accepts an operator-supplied launcher through `--launcher` and repeatable
+`--launcher-arg` values. The repository does not bundle workload launchers.
 
 ### 2. Nsight Compute + cpp/cu microbenchmarks (kernel-level)
 
@@ -193,10 +194,10 @@ workstation-only artifact directories.
 
 | Tool | Path | Role |
 | --- | --- | --- |
-| Capture wrapper | [`tools/pipeline/submission/profile/profile_run.sh`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/profile_run.sh) | Slurm-aware nsys + NVTX launcher with operator-gate. Reuses the standard `NSYSCMD` / `NVTX_FLAG` / `NSYS_PREFIX` / `NSYS_SUFFIX` scaffolding. |
-| Diff harness | [`tools/pipeline/submission/profile/profile_diff.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/profile_diff.py) | `nsys stats` over baseline + candidate. Emits NVTX / kernel / NCCL delta tables to `profile-diff.md`. |
-| Host-side probe | [`tools/pipeline/submission/profile/host_overhead.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/host_overhead.py) | py-spy rank-0 sampler for CPU/Python host bottleneck detection. |
-| Bisection SOP | [`tools/pipeline/submission/profile/regression_bisect.md`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/regression_bisect.md) | Symptom -> culprit decision tree, anchored on concrete recent NVIDIA fixes. |
+| Capture wrapper | [`tools/pipeline/submission/profile/profile_run.sh`](../tools/pipeline/submission/profile/profile_run.sh) | Nsys and NVTX environment adapter with an operator gate. It runs only the launcher and arguments supplied by the operator. |
+| Diff harness | [`tools/pipeline/submission/profile/profile_diff.py`](../tools/pipeline/submission/profile/profile_diff.py) | `nsys stats` over baseline + candidate. Emits NVTX / kernel / NCCL delta tables to `profile-diff.md`. |
+| Host-side probe | [`tools/pipeline/submission/profile/host_overhead.py`](../tools/pipeline/submission/profile/host_overhead.py) | py-spy rank-0 sampler for CPU/Python host bottleneck detection. |
+| Bisection SOP | [`tools/pipeline/submission/profile/regression_bisect.md`](../tools/pipeline/submission/profile/regression_bisect.md) | Symptom -> culprit decision tree, anchored on concrete recent NVIDIA fixes. |
 
 ## Discovery loop
 
@@ -241,7 +242,7 @@ structural gap: the nsys / ncu tooling above covers
 **single-rank, single-kernel** profiling, but not **fleet-wide, multi-rank**
 hang and straggler detection. Three pieces close the gap. This section
 is the design appendix for the implementation under
-[`../tools/profiling/`](/plugins/profile-and-optimize/server/tools/profiling)
+[`../tools/profiling/`](../tools/profiling)
 and the matching launcher-side hooks.
 
 ### Piece (a): Launcher-side opt-in for per-rank Nsight Systems capture
@@ -305,7 +306,8 @@ no more than 1 FD per rack regardless of node count.
   observer. The operator's training job is the ground truth.
 - GPUSD plugin not loaded on a node -> `reason=plugin-missing`. The
   cluster-side fix is to ensure `NCCL_PROFILER_PLUGIN` is set in the
-  launcher env. The in-repo selector should consume this signal.
+  launcher env. Keep the affected node out of later placements until the
+  plugin is restored.
 
 ### Piece (c): Per-rank stdout/stderr copy-out
 
@@ -335,7 +337,7 @@ investigation needs them most. A shared copy-out path avoids that.
 | Piece | Status | Anchor |
 | --- | --- | --- |
 | (a) nsys opt-in | Implemented via the `MLPERF_PROFILE_NSYS` env-var-gated launcher block | launcher recipe |
-| (b) Hang detector | Implemented under `tools/profiling/hang_detector/` | [`../tools/profiling/hang_detector/`](/plugins/profile-and-optimize/server/tools/profiling/hang_detector) Python module + tests |
+| (b) Hang detector | Implemented under `tools/profiling/hang_detector/` | [`../tools/profiling/hang_detector/`](../tools/profiling/hang_detector) Python module + tests |
 | (c) Log copy-out | Implemented via the `MLPERF_PERRANK_LOG_COPYOUT` launcher block | launcher recipe |
 
 Future work:

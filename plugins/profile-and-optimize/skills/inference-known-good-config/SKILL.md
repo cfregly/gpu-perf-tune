@@ -1,6 +1,9 @@
 ---
 name: inference-known-good-config
-last_validated: 2026-06-07
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-06-07"
 description: >-
   Capture + enforce per-model KNOWN-GOOD serving configs: the REQUIRED serve
   flags (boot-blockers / crash-at-high-c / deploy-correctness workarounds) plus
@@ -16,12 +19,7 @@ description: >-
   config", "config drift", "what flags does <model> need", or any combination of
   "known-good / required / champion config" with "record / check / register /
   capture / drift / flags / serve".
-allowed-tools:
-  - mcp__profile_and_optimize__known_good_config_record
-  - mcp__profile_and_optimize__known_good_config_check
-  - mcp__profile_and_optimize__search_runbooks
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__known_good_config_record mcp__profile_and_optimize__known_good_config_check mcp__profile_and_optimize__search_runbooks Read Write"
 ---
 
 # inference-known-good-config
@@ -57,7 +55,7 @@ Backed by two native MCP verbs:
   registry. A missing required flag is fail-closed. To run the check automatically on a
   `vllm serve` / `kubectl apply`, wire `known_good_config_check` as a pre-exec guard hook
   using the runtime-agnostic hook contract in
-  [`hooks/README.md`](/plugins/profile-and-optimize/hooks/README.md) (this repo does not ship
+  [`hooks/README.md`](../../hooks/README.md) (this repo does not ship
   that guard pre-wired. The two shipped gates there show the pattern).
 - When an operator asks "what flags does <model> need" / "did we capture that workaround".
 
@@ -117,8 +115,8 @@ mcp__profile_and_optimize__known_good_config_check with:
 
 - Returns `verdict: pass|fail` + `missing_required: [...]`. A missing
   boot-blocker/crash-high-c/deploy-correctness flag -> `fail` + nonzero exit (the gate blocks).
-- `--require-registered` makes an unregistered model a failure (used by the grind-closure gate
-  so a champion must be captured here before it is "closed").
+- An unregistered model also returns `fail` with a nonzero exit. Record and
+  review the model before treating its deployment as known-good.
 
 ## Registry layout
 
@@ -158,8 +156,8 @@ Per `docs/METHODOLOGY.md` "Always be grinding":
 every `record` MUST set `grind_frontier` (the cross-ref into
 `configs/value-findings.yaml` `next_lever`). A
 known-good config is the CONFIG half of closure, `value-findings.yaml` is the GRIND half. The
-grind-closure gate checks BOTH before a champion is "closed": `known_good_config_check
---require-registered` for the CONFIG half, and a recorded `next_lever` in
+grind-closure gate checks BOTH before a champion is "closed":
+`known_good_config_check` for the CONFIG half, and a recorded `next_lever` in
 `value-findings.yaml` for the GRIND half.
 
 ## Source-of-truth references
@@ -167,4 +165,4 @@ grind-closure gate checks BOTH before a champion is "closed": `known_good_config
 - `configs/known-good-configs.yaml` -- the registry.
 - `configs/value-findings.yaml` -- the paired GRIND FRONTIER (`next_lever`).
 - `docs/METHODOLOGY.md` -- verdict rigor + the grind ratchet (the CONFIG-half rule).
-- [`server/tools/known_good_config/known_good_config_cli.py`](/plugins/profile-and-optimize/server/tools/known_good_config/known_good_config_cli.py) -- the verb implementation.
+- [`server/tools/known_good_config/known_good_config_cli.py`](../../server/tools/known_good_config/known_good_config_cli.py) -- the verb implementation.

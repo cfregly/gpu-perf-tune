@@ -394,7 +394,7 @@ def test_ncu_2026_1_1_units_row_filtered(tmp_path):
     aggregation so the bogus "kernel-with-empty-name" doesn't fail the
     `_aggregate_per_kernel()` check.
 
-    Resolves TODO-NCU-IMPORTER-UNITS-ROW per profile_and_optimize OPERATOR-TODO.md.
+    Locks the importer unit normalization contract.
     """
     # Simulate the ncu 2026.1.1 units-row by inserting an empty-Kernel-Name
     # row between the header and the real kernel-instance row.

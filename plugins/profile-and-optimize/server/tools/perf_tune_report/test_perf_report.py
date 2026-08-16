@@ -37,6 +37,7 @@ from tools.perf_tune_report.aggregator import aggregate
 from tools.perf_tune_report.capture_signature import variant_key_for
 from tools.perf_tune_report.coverage import summarize
 from tools.perf_tune_report.fixtures._build_synthetic_atlas import build_rows
+from tools.perf_tune_report.helpers import DEFAULT_CAMPAIGNS_DIR, resolve_campaigns_dir
 from tools.perf_tune_report.perf_tune_report_cli import CONTRACT, main
 from tools.perf_tune_report.runners.aiperf_bench import (
     normalize_outputs as normalize_outputs_aiperf,
@@ -303,8 +304,8 @@ def test_pdf_provenance_handles_missing_capture():
 # ---------------------------------------------------------------------------
 
 def test_contract_verb_set():
-    """The perf_tune_report CONTRACT verb set (champion_select + import_variant_ab
-    joined in v1.66.0)."""
+    """The perf_tune_report CONTRACT verb set, including champion_select and
+    import_variant_ab."""
     assert set(CONTRACT) == {
         "campaign_init", "cell_run", "atlas_aggregate",
         "report_render", "report_smoke", "publish_to_lake",
@@ -369,13 +370,20 @@ def test_contract_cell_run_is_ack_gated():
 
 
 def test_contract_report_smoke_is_read_only():
-    assert CONTRACT["report_smoke"]["safety"] == "read_only"
+    assert CONTRACT["report_smoke"]["safety"] == "writes_artifacts"
     assert CONTRACT["report_smoke"]["ack"] is None
+
+
+def test_contract_publish_to_lake_is_external_and_ack_gated():
+    entry = CONTRACT["publish_to_lake"]
+    assert entry["safety"] == "publishes_external"
+    assert entry["ack"] == "--i-understand-this-publishes-externally"
+    assert entry["ack_exempt_when"] == ("--dry-run",)
 
 
 def test_contract_writes_artifacts_verbs():
     for verb in (
-        "campaign_init", "atlas_aggregate", "report_render", "publish_to_lake",
+        "campaign_init", "atlas_aggregate", "report_render",
         "import_perf_bench", "graph_diff",
     ):
         assert CONTRACT[verb]["safety"] == "writes_artifacts"
@@ -406,6 +414,139 @@ def _make_campaign(tmp_path: Path, monkeypatch) -> Path:
     return next(tmp_path.glob("*-test"))
 
 
+def test_campaigns_default_is_repo_local_when_env_is_absent(monkeypatch) -> None:
+    monkeypatch.delenv("PERFREPORT_CAMPAIGNS_DIR", raising=False)
+    resolved = resolve_campaigns_dir()
+    assert resolved == DEFAULT_CAMPAIGNS_DIR.resolve()
+    assert resolved.is_relative_to(REPO_ROOT)
+    assert "dev/inference" not in resolved.as_posix()
+
+
+@pytest.mark.parametrize(
+    ("flag", "value"),
+    [
+        ("--slug", "../outside"),
+        ("--slug", "nested/campaign"),
+        ("--experiment-id", "../outside-20260101T000000Z"),
+        ("--experiment-id", "/tmp/outside-20260101T000000Z"),
+        ("--experiment-id", r"..\outside-20260101T000000Z"),
+    ],
+)
+def test_campaign_init_rejects_unsafe_directory_segments(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+    flag: str,
+    value: str,
+) -> None:
+    import yaml
+
+    campaigns = tmp_path / "campaigns"
+    monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(campaigns))
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({"name": "safe", "cells": []}))
+
+    rc = main(["campaign_init", "--config", str(config), flag, value])
+
+    assert rc == 2
+    assert "safe path segment" in capsys.readouterr().err
+    assert not campaigns.exists()
+
+
+def test_campaign_init_rejects_symlink_escape(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    import yaml
+
+    campaigns = tmp_path / "campaigns"
+    campaigns.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    experiment_id = "escape-20260101T000000Z"
+    (campaigns / experiment_id).symlink_to(outside, target_is_directory=True)
+    monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(campaigns))
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({"name": "safe", "cells": []}))
+
+    rc = main(
+        [
+            "campaign_init",
+            "--config",
+            str(config),
+            "--experiment-id",
+            experiment_id,
+        ]
+    )
+
+    assert rc == 2
+    assert "escapes the campaigns root" in capsys.readouterr().err
+    assert list(outside.iterdir()) == []
+
+
+@pytest.mark.parametrize("verb", ["import_ncu", "import_nsys"])
+@pytest.mark.parametrize("cell_id", ["../outside", "nested/cell", r"..\outside"])
+def test_kernel_importers_reject_unsafe_cell_ids(
+    tmp_path: Path,
+    capsys,
+    verb: str,
+    cell_id: str,
+) -> None:
+    campaign = tmp_path / "campaign"
+    (campaign / "cells").mkdir(parents=True)
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+
+    rc = main(
+        [
+            verb,
+            "--campaign",
+            str(campaign),
+            "--cell-id",
+            cell_id,
+            "--bundle",
+            str(bundle),
+        ]
+    )
+
+    assert rc == 2
+    assert "cell-id must be one safe path segment" in capsys.readouterr().err
+    assert list((campaign / "cells").iterdir()) == []
+
+
+@pytest.mark.parametrize("verb", ["import_ncu", "import_nsys"])
+def test_kernel_importers_reject_cell_symlink_escape(
+    tmp_path: Path,
+    capsys,
+    verb: str,
+) -> None:
+    campaign = tmp_path / "campaign"
+    cells = campaign / "cells"
+    cells.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (cells / "escaped").symlink_to(outside, target_is_directory=True)
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+
+    rc = main(
+        [
+            verb,
+            "--campaign",
+            str(campaign),
+            "--cell-id",
+            "escaped",
+            "--bundle",
+            str(bundle),
+        ]
+    )
+
+    assert rc == 2
+    assert "escapes the campaign cells root" in capsys.readouterr().err
+    assert list(outside.iterdir()) == []
+
+
 def test_cli_cell_run_refuses_without_ack(tmp_path, monkeypatch, capsys):
     _make_campaign(tmp_path, monkeypatch)
     rc = main([
@@ -424,6 +565,98 @@ def test_cli_cell_run_dry_run_does_not_require_ack(tmp_path, monkeypatch):
         "--backend", "vllm-sweep", "--dry-run", "--json",
     ])
     assert rc == 0
+
+
+def test_campaign_run_dry_run_accepts_campaign_init_config(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    campaign = _make_campaign(tmp_path, monkeypatch)
+    capsys.readouterr()
+
+    rc = main([
+        "campaign_run",
+        "--config", str(tmp_path / "test.yaml"),
+        "--campaign", str(campaign),
+        "--dry-run",
+        "--json",
+    ])
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ack_field"] == "i_understand_this_mutates_cluster"
+    assert payload["cells_count"] == 1
+    assert payload["plan"][0]["cell_id"] == "cell1"
+    assert payload["plan"][0]["backend"] == "vllm-sweep"
+
+
+def test_campaign_run_endpoint_only_needs_no_fake_helm_config(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    import yaml
+
+    from tools.perf_tune_report.orchestrator.campaign_run import StepFns
+
+    monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(tmp_path))
+    config = {
+        "name": "endpoint-only",
+        "focus": "latency",
+        "cells": [{
+            "cell_id": "endpoint-cell",
+            "backend": "aa",
+            "model": "example/model",
+            "hardware": "B200",
+            "quant": "FP8",
+            "tensor_parallel": 4,
+            "parallel_strategy": "TP",
+            "mtp": False,
+            "max_num_batched_tokens": 2048,
+            "concurrencies": [1],
+            "aa": {"model": "example/model", "url": "http://example", "shape": "aa-1k"},
+        }],
+    }
+    config_path = tmp_path / "endpoint.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+    assert main([
+        "campaign_init", "--config", str(config_path),
+        "--slug", "endpoint", "--json",
+    ]) == 0
+    campaign = next(tmp_path.glob("*-endpoint"))
+    capsys.readouterr()
+    helm_calls: list[object] = []
+    step_fns = StepFns(
+        drain=lambda nodes, cell_id: True,
+        helm_upgrade=lambda *args: (helm_calls.append(args), True)[1],
+        warmup=lambda *args: True,
+        bench=lambda campaign_dir, cell: True,
+        zymtrace=lambda campaign_dir, cell_id: True,
+        import_bundle=lambda source, destination, cell_id: True,
+        aggregate=lambda campaign_dir: True,
+        render=lambda campaign_dir, output: True,
+        baseline_record=lambda campaign_dir, cell_id: True,
+        baseline_diff=lambda campaign_dir, cell_id, comparator: "GREEN",
+        resume=lambda nodes, cell_id: True,
+    )
+    monkeypatch.setattr(
+        "tools.perf_tune_report.orchestrator.production_step_fns",
+        lambda: step_fns,
+    )
+
+    rc = main([
+        "campaign_run",
+        "--config", str(config_path),
+        "--campaign", str(campaign),
+        "--i-understand-this-mutates-cluster",
+        "--json",
+    ])
+
+    assert rc == 0
+    assert helm_calls == []
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["overall_verdict"] == "GREEN"
 
 
 def test_cli_report_smoke_renders_pdf(tmp_path, monkeypatch):

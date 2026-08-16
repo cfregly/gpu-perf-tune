@@ -11,8 +11,9 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from mlperf_rules import (  # noqa: E402
-    DEFAULT_RULES_PATH,
+    EXAMPLE_RULES_PATH,
     load_rules,
+    parse_args,
     validate_candidate,
 )
 from mlperf_rules import (
@@ -23,7 +24,7 @@ from mlperf_rules import (
 class TestValidateCandidate(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.rules = load_rules(DEFAULT_RULES_PATH)
+        cls.rules = load_rules(EXAMPLE_RULES_PATH)
 
     def test_lr_above_max_blocks_405b(self) -> None:
         violations = validate_candidate(
@@ -116,6 +117,18 @@ class TestValidateCandidate(unittest.TestCase):
 
 
 class TestCli(unittest.TestCase):
+    def test_rules_file_is_required(self) -> None:
+        with self.assertRaises(SystemExit):
+            parse_args(
+                [
+                    "validate",
+                    "--proposal",
+                    "proposal.json",
+                    "--benchmark",
+                    "llama31_405b",
+                ]
+            )
+
     def test_validate_proposal_returns_nonzero_on_violation(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
@@ -138,6 +151,8 @@ class TestCli(unittest.TestCase):
                     str(proposal),
                     "--benchmark",
                     "llama31_405b",
+                    "--rules",
+                    str(EXAMPLE_RULES_PATH),
                     "--out",
                     str(out),
                 ]
@@ -146,6 +161,9 @@ class TestCli(unittest.TestCase):
             payload = json.loads(out.read_text())
             self.assertEqual(payload["valid_count"], 1)
             self.assertEqual(payload["invalid_count"], 1)
+            self.assertEqual(payload["scope"], "candidate_constraints_only")
+            self.assertEqual(payload["submission_compliance"], "not_evaluated")
+            self.assertEqual(payload["rules_status"], "example")
 
 
 if __name__ == "__main__":

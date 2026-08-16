@@ -1,7 +1,7 @@
 """Zymtrace per-kernel breakdown importer for ``inference-perf-bench`` bundles.
 
-Reads the 5 TSVs that ``perf-tune-glm51/03f-variant-runner.sh`` (and any
-sibling capture script) emits under ``<bundle>/zymtrace/`` and normalizes
+Reads the 5 TSVs that a compatible capture script emits under
+``<bundle>/zymtrace/`` and normalizes
 them into a single ``<cell-dir>/kernels.json`` for the renderer to pick up.
 
 Declared-coverage contract
@@ -27,8 +27,9 @@ An empty / header-only TSV is often ClickHouse INGEST LAG at capture time, not
 true absence: zymtrace flushes to ClickHouse asynchronously, so the capture
 query can have run before the frames landed. This importer reads a STATIC TSV
 snapshot and cannot requery, so it stays loud (fail-fast) -- but the fix is to
-RE-CAPTURE after the flush (``capture-sol-window.sh`` now polls + requeries via
-``zymtrace-ingest-wait.sh``), NOT to weaken this check. See
+RE-CAPTURE after the flush. Capture producers should source the checked-in
+``scripts/zymtrace-ingest-wait.sh`` helper to poll and requery. Do not weaken
+this check. See
 ``server/docs/zymtrace-query-hygiene.md``.
 
 This deliberately splits "tolerance" from "bug detection". Generic
@@ -67,8 +68,7 @@ from pathlib import Path
 from typing import Any
 
 
-# Expected TSV filenames. Order matches the 5 SQL queries in
-# perf-tune-glm51/03f-variant-runner.sh phase 5.
+# Expected TSV filenames. Order matches the five capture queries.
 _TSV_FILES = [
     "kernel-class.tsv",
     "top-gpu-frames.tsv",
@@ -87,9 +87,9 @@ _KERNELS_OUTPUT = "kernels.json"
 _INGEST_LAG_HINT = (
     "An empty / header-only zymtrace TSV is often ClickHouse INGEST LAG at capture "
     "time (zymtrace flushes asynchronously), not absence. This importer reads a "
-    "static TSV and cannot requery -- RE-CAPTURE after the flush "
-    "(capture-sol-window.sh polls + requeries via zymtrace-ingest-wait.sh); do NOT "
-    "weaken this loud check. See server/docs/zymtrace-query-hygiene.md."
+    "static TSV and cannot requery -- RE-CAPTURE after the flush. Capture producers "
+    "should source scripts/zymtrace-ingest-wait.sh to poll and requery. Do NOT weaken "
+    "this loud check. See server/docs/zymtrace-query-hygiene.md."
 )
 
 
@@ -204,7 +204,7 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
 
 
 # CSV-friendly regex categorizer for top_kernels emission. Mirror of the
-# multiIf bucketing in perf-tune-glm51/03f-variant-runner.sh query 5d so
+# capture-query multiIf bucketing so
 # that JSON consumers can re-derive a kernel's category from its name
 # without re-querying the per-category TSV.
 import re as _re

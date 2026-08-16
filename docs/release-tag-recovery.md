@@ -6,9 +6,10 @@ unrelated commit on `origin/main`, here is the recovery procedure.
 ## How this happens
 
 Two workstreams target the same next version. While one is still in flight,
-an unrelated PR merges first, bumps `plugin.json` to that version, and tags
-the merge commit. By the time the in-flight work is ready to commit, the
-tag is already taken and `main` has diverged.
+an unrelated PR merges first, bumps the root `VERSION` to that value, aligns
+the public version surfaces, and tags the merge commit. By the time the
+in-flight work is ready to commit, the tag is already taken and `main` has
+diverged.
 
 The recovery: cherry-pick the in-flight work onto `origin/main`, resolve the
 version / banner conflicts, and ship as the next PATCH.
@@ -33,16 +34,22 @@ If the existing `vX.Y.Z` tag is on the remote AND was authored by someone
 else, **DO NOT force-push the tag**. Bump to `vX.Y.(Z+1)` PATCH or
 `vX.(Y+1).0` MINOR instead.
 
-### 2. Reset to origin/main + cherry-pick your commits
+### 2. Preserve local work and create a recovery worktree
 
 ```bash
-# Your local commits are preserved in the reflog (git reflog | head),
-# so reset --hard is safe.
-git reset --hard origin/main
+# Stop if tracked or untracked work is present.
+git status --short
+
+# Give every local commit a named backup before recovery.
+git branch backup/release-recovery
+
+# Build the recovery on origin/main without rewriting the current worktree.
+git worktree add ../gpu-perf-tune-release-recovery origin/main
+cd ../gpu-perf-tune-release-recovery
+git switch -c codex/release-recovery
 
 # Cherry-pick each in-flight commit. If both commits modify overlapping
-# files (typically plugin.json + README banners), the cherry-pick will
-# conflict; resolve manually (see step 3).
+# files, the cherry-pick will conflict. Resolve it as described in step 3.
 git cherry-pick <commit-1-sha>
 # resolve conflicts ...
 git cherry-pick --continue
@@ -51,6 +58,10 @@ git cherry-pick <commit-2-sha>
 git cherry-pick --continue
 ```
 
+If `git status --short` prints anything, stop. Commit the work on a temporary
+branch or run `git stash push --include-untracked` before creating the recovery
+worktree. A reflog does not preserve uncommitted or untracked files.
+
 ### 3. Resolve the typical version / banner conflicts
 
 Three conflict patterns recur:
@@ -58,13 +69,12 @@ Three conflict patterns recur:
 1. **Release-notes section header**: Both your cherry-pick and the existing
    tag claim the same version. Resolution: **rename your section to
    `X.Y.(Z+1)`**, keep the existing `X.Y.Z` notes unchanged.
-2. **README.md "Status:" banner**: Both versions update the same banner line
-   with different content. Resolution: **merge both summaries into one
-   banner**, mentioning the new version's headline first and the previous
-   version's contribution second ("vX.Y.(Z+1) ships A + B. VX.Y.Z shipped C").
-3. **plugin.json `"version"`**: The merged commit set it to the old version
-   (X.Y.Z). Your cherry-pick was prepared for the same version. Resolution:
-   bump to the new patch version (X.Y.Z+1).
+2. **Package README version banner**: Both versions update the same banner.
+   Resolution: set it to the new patch version.
+3. **Root `VERSION` and mirrored surfaces**: The merged commit set them to the
+   old version (X.Y.Z). Your cherry-pick was prepared for the same version.
+   Resolution: set `VERSION` to X.Y.(Z+1), update each mirrored surface, and
+   run `make lint-versions`.
 
 ### 4. Re-run gates BEFORE tagging
 
@@ -80,21 +90,19 @@ the merge composed two unrelated changes (e.g., one removes servers from
 *from* `.mcp.json`). Fix the composed bug as part of the recovery commit,
 do NOT defer.
 
-### 5. Tag the new version + push
+### 5. Merge and publish the new version
 
-```bash
-git tag -a vX.Y.(Z+1) -m "profile-and-optimize vX.Y.(Z+1): <summary>"
-git push origin main
-git push origin vX.Y.(Z+1)
-gh release create vX.Y.(Z+1) --title "..." --notes "$(cat <<'EOF'
-...
-EOF
-)"
-```
+Open a pull request from the recovery branch and squash merge it. The successful
+main push CI run triggers the automatic release workflow.
+
+If automatic publication fails after CI is green, a maintainer can run
+`make release` from a clean local `main` that exactly matches `origin/main`.
+That command is a recovery tool. It verifies the version transition, exact CI
+run, remote tag, and stable GitHub Release.
 
 ## Prevention: pre-tag checks
 
-Before bumping `plugin.json` + tagging, always run:
+Before bumping `VERSION` and its mirrored surfaces, always run:
 
 ```bash
 git fetch origin
@@ -118,4 +126,5 @@ coordinate with the other workstream owner on how to merge.
 
 ## Cross-references
 
-- [`CONTRIBUTING.md`](/CONTRIBUTING.md#release-ritual) "Release ritual" -- standard release flow that this recovery wraps when the pre-tag check fails.
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md#versions-and-changelog) describes the
+  standard release flow that this recovery wraps when the pre-tag check fails.

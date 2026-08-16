@@ -1,8 +1,7 @@
 """Fleet-wide NCCL collective hang detector.
 
-This module implements v6.1 carry-forward item 3 Piece (b) from
-``docs/v6.1-carryforward.md`` and the design appendix at
-``docs/profiling-and-perf-discovery.md`` section
+This module implements the fleet-wide hang detector described in
+``docs/profiling-and-perf-discovery.md``, section
 ``## v6.1 carry-forward: fleet-wide profiling and hang-detection
 stack``.
 

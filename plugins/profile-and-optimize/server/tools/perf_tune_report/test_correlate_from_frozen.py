@@ -1,4 +1,4 @@
-"""Tests for ``correlate_from_frozen()`` (v1.23.1).
+"""Tests for ``correlate_from_frozen()``.
 
 Validates the frozen-YAML -> ``DcgmCorrelationResult`` path used when
 DCGM measurements are captured interactively (e.g. via the

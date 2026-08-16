@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/cfregly/claude-gpu-perf-tune/schemas/workload-proof-packet-v1.json",
+  "$id": "https://raw.githubusercontent.com/cfregly/gpu-perf-tune/main/schemas/workload-proof-packet-v1.json",
   "title": "Neocloud workload proof packet",
   "type": "object",
   "additionalProperties": false,

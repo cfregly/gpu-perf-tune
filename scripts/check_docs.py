@@ -59,7 +59,7 @@ STALE_PHRASES = ("once this repo has a remote", "coming soon")
 MARKER_RE = re.compile(r"\b(TODO|FIXME|TBD)\b")
 DASH_RE = re.compile("[–—]")  # en dash (U+2013), em dash (U+2014)
 VALUE_BAR = "adversarially-confirmed to add value"
-VALUE_BAR_DOCS = ("CLAUDE.md", "CLAUDE.md", "README.md")
+VALUE_BAR_DOCS = ("AGENTS.md", "CLAUDE.md", "README.md")
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__",
              ".pytest_cache", ".mypy_cache", "dist", "build", "site-packages"}
 # Spans where a semicolon is legitimate (code, inline code, links, entities).
@@ -80,7 +80,10 @@ def load_config() -> dict:
 
 
 def check_doc(path: Path, cfg: dict) -> list[str]:
-    rel = path.name
+    try:
+        rel = path.relative_to(ROOT).as_posix()
+    except ValueError:
+        rel = path.name
     if not path.is_file():
         return [f"{rel}: listed in .doccheck.json but not found"]
     text = path.read_text(encoding="utf-8")
@@ -118,7 +121,13 @@ def check_doc(path: Path, cfg: dict) -> list[str]:
         bare = url.split("#", 1)[0].split("?", 1)[0]
         if not bare:
             continue
-        target = (ROOT / bare.lstrip("/")) if bare.startswith("/") else (path.parent / bare)
+        if bare.startswith("/"):
+            out.append(
+                f"{rel}:{_line(nocode, m.start())}: leading-slash link resolves "
+                f"from the website root, not the repository -> {url}"
+            )
+            continue
+        target = path.parent / bare
         if not target.exists():
             out.append(f"{rel}:{_line(nocode, m.start())}: broken relative link -> {url}")
     return out

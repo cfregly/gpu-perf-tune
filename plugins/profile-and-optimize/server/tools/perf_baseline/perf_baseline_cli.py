@@ -8,25 +8,28 @@ Workload-agnostic. Two verbs:
 - ``diff`` compares a current measurement against a registered baseline,
   returning per-dimension deltas + a GREEN / YELLOW / RED verdict.
 
-See the skills [``perf-baseline-record``](../../skills/perf-baseline-record/SKILL.md)
-and [``perf-baseline-diff``](../../skills/perf-baseline-diff/SKILL.md) for
+See the skills [``perf-baseline-record``](../../../skills/perf-baseline-record/SKILL.md)
+and [``perf-baseline-diff``](../../../skills/perf-baseline-diff/SKILL.md) for
 the operator-facing workflow.
-
-Added in profile-and-optimize v0.4.0.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import sys
 from pathlib import Path
 from typing import Any
 
+from jsonschema import SchemaError, ValidationError
+from jsonschema import validate as validate_json
+
 from tools.perf_baseline.helpers import (
     append_index,
+    diff_entry_dir,
     discover_profile_and_optimize_sha,
     gather_workstation_facts,
     registry_dir_for,
@@ -38,11 +41,10 @@ from tools.perf_baseline.helpers import (
     write_source_md,
 )
 
-
 CONTRACT: dict[str, dict[str, Any]] = {
     "record": {
         "safety": "writes_artifacts",
-        "required": ("--family", "--measurement", "--source"),
+        "required": ("--family", "--measurement", "--source", "--direction"),
         "optional": ("--value", "--unit", "--schema", "--notes", "--repo-root", "--json"),
         "json": True,
         "ack": None,
@@ -58,6 +60,8 @@ CONTRACT: dict[str, dict[str, Any]] = {
     },
 }
 
+DIRECTIONS = {"two-sided", "higher-is-better", "lower-is-better"}
+
 
 def _resolve_repo_root(arg: str | None) -> Path:
     if arg:
@@ -65,15 +69,17 @@ def _resolve_repo_root(arg: str | None) -> Path:
     env = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
     if env:
         return Path(env).expanduser().resolve()
-    # Fall back to walking up from cwd looking for CLAUDE.md + tools/.
+    # Fall back to walking up from cwd using product files as markers.
     current = Path.cwd().resolve()
     while current != current.parent:
-        if (current / "CLAUDE.md").is_file() and (current / "tools").is_dir():
+        if (
+            (current / "pyproject.toml").is_file()
+            and (current / "mcp_surface.py").is_file()
+            and (current / "tools").is_dir()
+        ):
             return current
         current = current.parent
-    raise SystemExit(
-        "FATAL: cannot resolve repo root; pass --repo-root or set PROFILE_AND_OPTIMIZE_REPO_ROOT"
-    )
+    raise SystemExit("FATAL: cannot resolve repo root; pass --repo-root or set PROFILE_AND_OPTIMIZE_REPO_ROOT")
 
 
 def _emit(payload: dict[str, Any], *, as_json: bool) -> None:
@@ -84,21 +90,53 @@ def _emit(payload: dict[str, Any], *, as_json: bool) -> None:
             print(f"{k}: {v}")
 
 
+def _validate_source_against_schema(source: Path, schema_path: Path) -> None:
+    if not source.is_file():
+        raise ValueError("--schema requires --source to be a JSON file")
+    try:
+        source_payload = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"--source is not valid JSON: {error}") from error
+    try:
+        schema_payload = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"--schema is not valid JSON: {error}") from error
+    try:
+        validate_json(instance=source_payload, schema=schema_payload)
+    except SchemaError as error:
+        raise ValueError(f"--schema is not a valid JSON Schema: {error.message}") from error
+    except ValidationError as error:
+        location = ".".join(str(part) for part in error.absolute_path) or "<root>"
+        raise ValueError(f"--source fails JSON Schema at {location}: {error.message}") from error
+
+
 def cmd_record(args: argparse.Namespace) -> int:
     repo_root = _resolve_repo_root(args.repo_root)
     source = Path(args.source).expanduser().resolve()
     if not source.exists():
         print(f"FATAL: --source does not exist: {source}", file=sys.stderr)
         return 2
+    if args.value is not None and not math.isfinite(args.value):
+        print("FATAL: --value must be a finite number", file=sys.stderr)
+        return 2
+    direction = getattr(args, "direction", None)
+    if direction not in DIRECTIONS:
+        print(
+            "FATAL: --direction must be two-sided, higher-is-better, or lower-is-better",
+            file=sys.stderr,
+        )
+        return 2
 
-    # Optional JSON-schema validation (lightweight - we only check it's
-    # parseable JSON and the schema file exists; full JSON Schema validation
-    # requires an optional dependency).
     schema_path: Path | None = None
     if args.schema:
         schema_path = Path(args.schema).expanduser().resolve()
-        if not schema_path.exists():
-            print(f"FATAL: --schema does not exist: {schema_path}", file=sys.stderr)
+        if not schema_path.is_file():
+            print(f"FATAL: --schema must be a file: {schema_path}", file=sys.stderr)
+            return 2
+        try:
+            _validate_source_against_schema(source, schema_path)
+        except ValueError as error:
+            print(f"FATAL: {error}", file=sys.stderr)
             return 2
 
     source_sha256 = sha256_of_path(source)
@@ -107,7 +145,11 @@ def cmd_record(args: argparse.Namespace) -> int:
     hostname, uname, operator_user = gather_workstation_facts()
     profile_and_optimize_sha = discover_profile_and_optimize_sha(repo_root)
 
-    entry_dir = registry_entry_dir(repo_root, args.family, args.measurement, slug)
+    try:
+        entry_dir = registry_entry_dir(repo_root, args.family, args.measurement, slug)
+    except ValueError as error:
+        print(f"FATAL: {error}", file=sys.stderr)
+        return 2
     if entry_dir.exists():
         # Pathologically unlikely (same-second collision) but be defensive.
         print(f"FATAL: registry entry already exists: {entry_dir}", file=sys.stderr)
@@ -127,6 +169,7 @@ def cmd_record(args: argparse.Namespace) -> int:
         family=args.family,
         measurement=args.measurement,
         value=args.value,
+        direction=direction,
         unit=args.unit,
         source_path=source,
         source_sha256=source_sha256,
@@ -169,6 +212,7 @@ def cmd_record(args: argparse.Namespace) -> int:
         "slug": slug,
         "source_sha256": source_sha256,
         "registered_at_utc": registered_at_utc,
+        "direction": direction,
     }
     _emit(payload, as_json=args.json)
     return 0
@@ -181,13 +225,97 @@ def _read_baseline(baseline_dir: Path) -> dict[str, Any]:
     return json.loads(p.read_text())
 
 
-def _classify(deltas: list[dict[str, Any]], tolerance_pct: float) -> str:
-    over = [d for d in deltas if abs(d.get("delta_pct", 0.0)) > tolerance_pct]
+def _delta_percent(baseline: float, current: float) -> float | None:
+    if baseline == 0.0:
+        return 0.0 if current == 0.0 else None
+    return 100.0 * (current - baseline) / baseline
+
+
+def _exceeds_tolerance(
+    delta: dict[str, Any],
+    tolerance_pct: float,
+    tolerance_absolute: float | None,
+    direction: str,
+) -> bool:
+    if tolerance_absolute is not None:
+        magnitude_exceeds = abs(float(delta["delta"])) > tolerance_absolute
+    else:
+        delta_pct = delta["delta_pct"]
+        magnitude_exceeds = delta_pct is None or abs(float(delta_pct)) > tolerance_pct
+    if not magnitude_exceeds:
+        return False
+    numeric_delta = float(delta["delta"])
+    if direction == "higher-is-better":
+        return numeric_delta < 0
+    if direction == "lower-is-better":
+        return numeric_delta > 0
+    return True
+
+
+def _classify(
+    deltas: list[dict[str, Any]],
+    tolerance_pct: float,
+    tolerance_absolute: float | None,
+    direction: str,
+) -> str:
+    over = [delta for delta in deltas if _exceeds_tolerance(delta, tolerance_pct, tolerance_absolute, direction)]
     if not over:
         return "GREEN"
+    if any(delta.get("headline") is True for delta in over):
+        return "RED"
     if len(over) <= 2:
         return "YELLOW"
     return "RED"
+
+
+def _render_diff_markdown(
+    *,
+    family: str,
+    measurement: str,
+    direction: str,
+    tolerance_pct: float,
+    tolerance_absolute: float | None,
+    verdict: str,
+    deltas: list[dict[str, Any]],
+) -> str:
+    """Render the promised human-readable diff artifact."""
+    tolerance = f"absolute {tolerance_absolute:g}" if tolerance_absolute is not None else f"{tolerance_pct:g}%"
+    lines = [
+        f"# Performance baseline diff: {family} / {measurement}",
+        "",
+        f"- Direction: `{direction}`",
+        f"- Tolerance: `{tolerance}`",
+        f"- Verdict: **{verdict}**",
+        "",
+        "| Key | Baseline | Current | Delta | Delta % | Adverse beyond tolerance |",
+        "|---|---:|---:|---:|---:|---|",
+    ]
+    for delta in deltas[:20]:
+        delta_pct = delta.get("delta_pct")
+        delta_pct_text = "n/a" if delta_pct is None else f"{float(delta_pct):.6g}%"
+        adverse = _exceeds_tolerance(
+            delta,
+            tolerance_pct,
+            tolerance_absolute,
+            direction,
+        )
+        lines.append(
+            f"| {delta['key']} | {float(delta['baseline']):.6g} | "
+            f"{float(delta['current']):.6g} | {float(delta['delta']):.6g} | "
+            f"{delta_pct_text} | {'yes' if adverse else 'no'} |"
+        )
+    lines.extend(
+        [
+            "",
+            (
+                "GREEN means no adverse change exceeded tolerance."
+                if direction != "two-sided"
+                else "GREEN means no two-sided deviation exceeded tolerance."
+            ),
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def cmd_diff(args: argparse.Namespace) -> int:
@@ -203,15 +331,37 @@ def cmd_diff(args: argparse.Namespace) -> int:
         return 2
 
     baseline = _read_baseline(baseline_dir)
-    family = baseline["family"]
-    measurement = baseline["measurement"]
+    family = baseline.get("family")
+    measurement = baseline.get("measurement")
+    if not isinstance(family, str) or not isinstance(measurement, str):
+        print("FATAL: baseline family and measurement must be strings", file=sys.stderr)
+        return 2
+    direction = baseline.get("direction", "two-sided")
+    if direction not in DIRECTIONS:
+        print(f"FATAL: baseline direction is invalid: {direction!r}", file=sys.stderr)
+        return 2
     tolerance_pct = float(args.tolerance_percent)
+    tolerance_absolute = args.tolerance_absolute
+    if not math.isfinite(tolerance_pct) or tolerance_pct < 0:
+        print("FATAL: --tolerance-percent must be a finite nonnegative number", file=sys.stderr)
+        return 2
+    if tolerance_absolute is not None and (not math.isfinite(tolerance_absolute) or tolerance_absolute < 0):
+        print("FATAL: --tolerance-absolute must be a finite nonnegative number", file=sys.stderr)
+        return 2
     current_sha = sha256_of_path(current)
 
     # Determine shape.
     baseline_value = baseline.get("value")
     if baseline_value is not None:
         # Scalar shape.
+        try:
+            baseline_value = float(baseline_value)
+        except (TypeError, ValueError):
+            print("FATAL: scalar baseline value must be numeric", file=sys.stderr)
+            return 2
+        if not math.isfinite(baseline_value):
+            print("FATAL: scalar baseline value must be finite", file=sys.stderr)
+            return 2
         try:
             current_value = float(current.read_text().strip()) if current.is_file() else None
         except ValueError:
@@ -226,20 +376,32 @@ def cmd_diff(args: argparse.Namespace) -> int:
                 current_value = None
         if current_value is None:
             print(
-                "FATAL: baseline is scalar but --current did not parse as a number or {\"value\": ...} JSON",
+                'FATAL: baseline is scalar but --current did not parse as a number or {"value": ...} JSON',
                 file=sys.stderr,
             )
             return 2
+        if not math.isfinite(current_value):
+            print("FATAL: current scalar value must be finite", file=sys.stderr)
+            return 2
         delta = current_value - baseline_value
-        delta_pct = (100.0 * delta / baseline_value) if baseline_value else 0.0
-        deltas = [{"key": measurement, "baseline": baseline_value, "current": current_value,
-                   "delta": delta, "delta_pct": delta_pct}]
+        delta_pct = _delta_percent(baseline_value, current_value)
+        deltas = [
+            {
+                "key": measurement,
+                "baseline": baseline_value,
+                "current": current_value,
+                "delta": delta,
+                "delta_pct": delta_pct,
+                "headline": True,
+            }
+        ]
     else:
         # Structured dict shape: baseline source-snapshot is JSON; current is JSON.
         snap = next(baseline_dir.glob("source-snapshot*"), None)
         if snap is None or not snap.is_file():
             print(
-                "FATAL: baseline is structured but source-snapshot is missing or a directory; structured-dir diff not supported in v0.4.0",
+                "FATAL: baseline is structured but source-snapshot is missing or a "
+                "directory. Structured directory diff is not supported.",
                 file=sys.stderr,
             )
             return 2
@@ -252,25 +414,43 @@ def cmd_diff(args: argparse.Namespace) -> int:
         if not isinstance(baseline_dict, dict) or not isinstance(current_dict, dict):
             print("FATAL: structured diff requires both inputs to be JSON objects (key->value)", file=sys.stderr)
             return 2
-        keys = sorted(set(baseline_dict) & set(current_dict), key=lambda k: -abs(
-            (float(current_dict[k]) - float(baseline_dict[k])) / max(abs(float(baseline_dict[k])), 1e-12)
-        ))
         deltas = []
-        for k in keys[:50]:
+        for k in set(baseline_dict) & set(current_dict):
             try:
                 b = float(baseline_dict[k])
                 c = float(current_dict[k])
             except (TypeError, ValueError):
                 continue
+            if not math.isfinite(b) or not math.isfinite(c):
+                continue
             d = c - b
-            dp = (100.0 * d / b) if b else 0.0
+            dp = _delta_percent(b, c)
             deltas.append({"key": k, "baseline": b, "current": c, "delta": d, "delta_pct": dp})
+        if not deltas:
+            print("FATAL: structured diff found no shared finite numeric values", file=sys.stderr)
+            return 2
+        deltas.sort(
+            key=lambda delta: (
+                -abs(float(delta["delta"]))
+                if tolerance_absolute is not None
+                else -(math.inf if delta["delta_pct"] is None else abs(float(delta["delta_pct"]))),
+                str(delta["key"]),
+            )
+        )
 
-    verdict = _classify(deltas, tolerance_pct)
+    verdict = _classify(deltas, tolerance_pct, tolerance_absolute, direction)
 
     # Write the diff bundle.
-    diff_root = (repo_root / "experiments" / "artifacts" / "perf-baseline-diffs"
-                 / family / measurement / utc_now_slug())
+    try:
+        diff_root = diff_entry_dir(
+            repo_root,
+            family,
+            measurement,
+            utc_now_slug(),
+        )
+    except ValueError as error:
+        print(f"FATAL: invalid baseline metadata: {error}", file=sys.stderr)
+        return 2
     diff_root.mkdir(parents=True, exist_ok=False)
     diff_json = {
         "tool": "perf_baseline_diff",
@@ -283,12 +463,29 @@ def cmd_diff(args: argparse.Namespace) -> int:
         "baseline_source_sha256": baseline.get("source_sha256"),
         "current_source_sha256": current_sha,
         "tolerance_percent": tolerance_pct,
+        "tolerance_absolute": tolerance_absolute,
+        "direction": direction,
         "verdict": verdict,
         "deltas_top20": deltas[:20],
         "deltas_count": len(deltas),
     }
     (diff_root / "diff.json").write_text(json.dumps(diff_json, indent=2, sort_keys=True) + "\n")
     (diff_root / "baseline-ref.txt").write_text(str(baseline_dir) + "\n")
+    if current.is_file():
+        shutil.copy2(current, diff_root / f"current-snapshot{current.suffix}")
+    else:
+        shutil.copytree(current, diff_root / "current-snapshot")
+    (diff_root / "diff.md").write_text(
+        _render_diff_markdown(
+            family=family,
+            measurement=measurement,
+            direction=direction,
+            tolerance_pct=tolerance_pct,
+            tolerance_absolute=tolerance_absolute,
+            verdict=verdict,
+            deltas=deltas,
+        )
+    )
 
     payload = {
         "tool": "perf_baseline_diff",
@@ -299,21 +496,33 @@ def cmd_diff(args: argparse.Namespace) -> int:
         "verdict": verdict,
         "deltas_count": len(deltas),
         "tolerance_percent": tolerance_pct,
+        "tolerance_absolute": tolerance_absolute,
+        "direction": direction,
     }
     _emit(payload, as_json=args.json)
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Record and diff perf baselines under experiments/artifacts/perf-baselines/.")
+    parser = argparse.ArgumentParser(
+        description="Record and diff perf baselines under experiments/artifacts/perf-baselines/."
+    )
     sub = parser.add_subparsers(dest="verb", required=True)
 
     record = sub.add_parser("record", description=CONTRACT["record"]["description"])
     record.add_argument("--family", required=True, help="e.g. llama31_8b, gb300-cluster, deepseek-v3-inference")
     record.add_argument("--measurement", required=True, help="e.g. nccl_busbw, step_time, nvlink_pairwise_bw")
     record.add_argument("--source", required=True, help="Path to the source data file or directory")
-    record.add_argument("--value", type=float, default=None, help="Scalar value (for scalar baselines); omit for structured")
+    record.add_argument(
+        "--value", type=float, default=None, help="Scalar value (for scalar baselines); omit for structured"
+    )
     record.add_argument("--unit", default=None, help="Unit string (e.g. GB/s, ms, tokens/s, mfu)")
+    record.add_argument(
+        "--direction",
+        choices=tuple(sorted(DIRECTIONS)),
+        required=True,
+        help="Comparison direction. Choose two-sided only when either deviation is adverse.",
+    )
     record.add_argument("--schema", default=None, help="Optional path to a JSON schema for the source")
     record.add_argument("--notes", default=None, help="Free-text notes captured in baseline.json + SOURCE.md")
     record.add_argument("--repo-root", default=None, help="Override PROFILE_AND_OPTIMIZE_REPO_ROOT")
@@ -324,7 +533,12 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("--baseline", required=True, help="Path to a registered baseline entry directory")
     diff.add_argument("--current", required=True, help="Path to the current measurement (file)")
     diff.add_argument("--tolerance-percent", type=float, default=5.0, help="Per-dimension tolerance %% (default: 5)")
-    diff.add_argument("--tolerance-absolute", type=float, default=None, help="Absolute tolerance (not yet used; reserved)")
+    diff.add_argument(
+        "--tolerance-absolute",
+        type=float,
+        default=None,
+        help="Absolute tolerance. When set, it replaces percent tolerance for classification.",
+    )
     diff.add_argument("--repo-root", default=None, help="Override PROFILE_AND_OPTIMIZE_REPO_ROOT")
     diff.add_argument("--json", action="store_true", help="Emit JSON envelope")
     diff.set_defaults(func=cmd_diff)

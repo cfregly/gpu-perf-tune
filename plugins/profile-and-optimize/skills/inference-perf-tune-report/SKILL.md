@@ -1,6 +1,9 @@
 ---
 name: inference-perf-tune-report
-last_validated: 2026-05-24
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-08-16"
 description: >-
   Build a multi-page benchmark report PDF (scatter panels + per-concurrency
   heatmap tables) from `vllm bench sweep serve_workload` and/or AIPerf outputs,
@@ -15,25 +18,7 @@ description: >-
   champion", "baseline vs top variants", or any combination of "perf / atlas /
   report / champion" with "inference / vllm / sglang / aiperf / b200 / gb300 /
   nvfp4 / fp8".
-allowed-tools:
-  - mcp__profile_and_optimize__perf_tune_report_campaign_init
-  - mcp__profile_and_optimize__perf_tune_report_cell_run
-  - mcp__profile_and_optimize__perf_tune_report_import_variant_ab
-  - mcp__profile_and_optimize__perf_tune_report_atlas_aggregate
-  - mcp__profile_and_optimize__perf_tune_report_dcgm_correlate
-  - mcp__profile_and_optimize__perf_tune_report_import_roofline_sweep
-  - mcp__profile_and_optimize__perf_tune_report_champion_select
-  - mcp__profile_and_optimize__perf_tune_report_report_render
-  - mcp__profile_and_optimize__perf_tune_report_report_smoke
-  - mcp__profile_and_optimize__perf_tune_report_publish_to_lake
-  - mcp__profile_and_optimize__search_runbooks
-  - mcp__profile_and_optimize__search_evidence
-  - Bash(perftunereport:*)
-  - Bash(kubectl:*)
-  - Bash(vllm:*)
-  - Bash(open:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__perf_tune_report_campaign_init mcp__profile_and_optimize__perf_tune_report_cell_run mcp__profile_and_optimize__perf_tune_report_import_variant_ab mcp__profile_and_optimize__perf_tune_report_atlas_aggregate mcp__profile_and_optimize__perf_tune_report_dcgm_correlate mcp__profile_and_optimize__perf_tune_report_import_roofline_sweep mcp__profile_and_optimize__perf_tune_report_champion_select mcp__profile_and_optimize__perf_tune_report_report_render mcp__profile_and_optimize__perf_tune_report_report_smoke mcp__profile_and_optimize__perf_tune_report_publish_to_lake mcp__profile_and_optimize__search_runbooks mcp__profile_and_optimize__search_evidence Bash(perftunereport:*) Bash(kubectl:*) Bash(vllm:*) Bash(open:*) Read Write"
 ---
 
 # inference-perf-tune-report
@@ -60,7 +45,7 @@ GLM-5.1 reference layout:
   combo, with gray cells for missing / failed / partial measurements.
 
 The renderer is workload-agnostic. It ingests any
-[`AtlasCell`](/plugins/profile-and-optimize/server/tools/perf_tune_report/schema.py)-shaped JSONL.
+[`AtlasCell`](../../server/tools/perf_tune_report/schema.py)-shaped JSONL.
 Backends (vllm-sweep + AIPerf) normalize into the same schema.
 
 ## When to use
@@ -77,13 +62,13 @@ Backends (vllm-sweep + AIPerf) normalize into the same schema.
 Do **not** use this skill for:
 
 - Single-deployment, single-concurrency snapshot benchmarks -- the
-  upstream [`perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) skill is the
+  upstream [`perf-bench`](../inference-perf-bench/SKILL.md) skill is the
   right tool. Use this skill once you have multiple atlas cells to
   compare side-by-side.
 - Training-benchmark reports (step-time / MFU) -- out of scope for this
   plugin.
 - Quality / accuracy evaluation -- use
-  [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md).
+  [`inference-model-eval`](../inference-model-eval/SKILL.md).
 
 ## Example prompts
 
@@ -98,16 +83,16 @@ Do **not** use this skill for:
 
 ## Prerequisites
 
-1. **profile-and-optimize bundled MCP server installed** (the standard `bash
-   ~/.claude/plugins/cache/profile-and-optimize-plugins/profile-and-optimize/<ver>/server/install.sh`
-   or, from a repo checkout, `bash plugins/profile-and-optimize/server/install.sh`).
+1. **profile-and-optimize bundled MCP server installed**. From a repository
+   checkout, run `bash plugins/profile-and-optimize/server/install.sh`. Client
+   adapter installs can use the server installer in their package cache.
    The `perftunereport` console script is installed into the same venv as
    `profile-and-optimize-mcp`.
 2. **`matplotlib>=3.8` + `pandas>=2.0`** in the profile-and-optimize venv. Install
    the optional extra: `.venv/bin/pip install -e '.[perf_tune_report]'`.
 3. **For `cell_run` only**: live cluster access (`kubectl` context +
    namespace + bench pod) AND the same prerequisites as the upstream
-   [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) skill
+   [`inference-perf-bench`](../inference-perf-bench/SKILL.md) skill
    (HF_TOKEN, replay-playback dataset access).
 4. **No cluster needed** for `campaign_init`, `atlas_aggregate`,
    `report_render`, or `report_smoke` -- those operate on already-captured
@@ -148,7 +133,8 @@ extras under `vllm_sweep:` and / or `aiperf:`.
 perf_tune_report_campaign_init --config configs/campaigns/<slug>.yaml
 ```
 
-This scaffolds `./campaigns/<UTC-ts>-<slug>/`
+This scaffolds
+`<server-root>/experiments/artifacts/perf-tune-report/campaigns/<UTC-ts>-<slug>/`
 with `SOURCE.md`, `summary.md`, frozen `config.yaml`, and empty
 `cells/` + `commands/` subdirs. Returns the campaign dir in the JSON
 envelope.
@@ -156,8 +142,8 @@ envelope.
 ### Phase C: run each cell
 
 For each cell in the campaign config, drive `cell_run` with the
-operator-chosen backend. **This verb is ack-gated (`safety=submits_jobs`)**
--- the cockpit requires the explicit
+operator-chosen backend. **This verb is ack-gated (`safety=submits_jobs`)**.
+The workflow requires the explicit
 `i_understand_this_submits_jobs=true` parameter (or the CLI flag
 `--i-understand-this-submits-jobs`) before any actual benchmark runs.
 `--dry-run` lets you see the generated shell commands without
@@ -231,7 +217,7 @@ line. `report_render` also draws a peak-only "TPM supported across hardware
 types" PDF page, and `publish_to_lake` lands a `tpm_v1` table.
 
 Report every TPM number with the warm/cold + ISL/OSL caveat the summary header
-carries (per `server/CLAUDE.md` "Benchmark methodology hygiene"): peak is a
+carries (per `server/AGENTS.md` "Benchmark methodology hygiene"): peak is a
 warm best-case, the SLA point is the customer-commitment number.
 
 **Defaults:** the SLA point + cost columns populate for EVERY
@@ -264,11 +250,11 @@ from the bench `Total input/generated tokens` lines -> `tpm_v1.mean_isl/mean_osl
 ### Phase D2: byte-ground every cell to raise sol_rigor (recommended, not a gate)
 
 DCGM byte-grounding raises a campaign's `sol_rigor` from `L1` (zymtrace proxy)
-to `L3` (byte-grounded) - it is **recorded, not gated** (the
-always-publish policy: a `dcgm_grounded=false` campaign still publishes, with
-the gap visible on the `campaign_v1` row). For each plot-ready cell, produce a
+to `L3` (byte-grounded). The publish CLI is strict by default, so a
+`dcgm_grounded=false` campaign refuses unless the operator explicitly uses
+`--no-strict`. That opt-out records the gap on the `campaign_v1` row. For each plot-ready cell, produce a
 `dcgm_correlation.json` (renderer pages 6 + 6b) via the
-[`inference-dcgm-correlate`](/plugins/profile-and-optimize/skills/inference-dcgm-correlate/SKILL.md)
+[`inference-dcgm-correlate`](../inference-dcgm-correlate/SKILL.md)
 skill (the live Prometheus MCP path) OR the offline CLI verb against a frozen
 DCGM snapshot:
 
@@ -279,20 +265,18 @@ perf_tune_report_dcgm_correlate --campaign <slug> --cell-id <cell> \
 
 Capture DCGM (SM/DRAM/tensor/GR + NVLINK bytes) concurrently with each cell's
 bench window so the means are real (see the experiment-isolation rule). A run
-that skips it publishes at `sol_rigor=L1` (`dcgm_grounded=false`) - valid and
-comparable, just less tight. Prefer L3/L4 when DCGM/ncu are available.
+that skips it can publish at `sol_rigor=L1` only with `--no-strict`. Prefer
+L3/L4 when DCGM/ncu are available.
 
 ### Phase D3: prefill/decode roofline (page 7) - always-on
 
-The phase-separated roofline + per-(c,ISL) DCGM utilization (the "what
-concurrency maxes the TFLOPs" + "is decode >=75% HBM bandwidth" questions, always
-wanted). Capture with the gated `*-deploy/profiling/roofline-sweep.sh` (a
-decode-concurrency sweep + a prefill-ISL sweep, each with per-cell in-pod
-`dcgmi dmon` PROF - SM/tensor/DRAM/NVLINK), then ingest:
+The phase-separated roofline and per-(c,ISL) DCGM utilization answer which
+concurrency maximizes compute and whether decode approaches the measured HBM
+ceiling. Supply an operator-captured compatible bundle with a decode
+concurrency sweep, a prefill ISL sweep, and per-cell DCGM SM, tensor, DRAM, and
+NVLINK measurements. Then ingest it:
 
 ```text
-roofline-sweep.sh <ns> <pod> <out> <model> <tokenizer> \
-  "1 2 4 8 16 32 64 128 192" "512 1024 2048 4096 8192" <container>
 perf_tune_report_import_roofline_sweep --campaign <slug> --bundle <out> \
   --hardware GB300 --tensor-parallel <tp> --quant NVFP4 --cache-mode cold
 ```
@@ -313,8 +297,8 @@ n_gpus` against PER-GPU ceilings, so a decode point's vertical gap below the
 memory diagonal IS its HBM utilization. Panel B (Q2) plots BOTH the DCGM
 `DRAM_ACTIVE` duty-cycle proxy AND the byte-grounded delivered-HBM-BW % (honestly
 labeled) + the 75% line. For a model not in the built-in registry, pass
-`--model-config <config.json>` (or let `roofline-sweep.sh` capture the in-pod
-`model_config.json`) so the analytical axis engages instead of the DCGM-proxy
+`--model-config <config.json>` and include the model config in the captured
+bundle so the analytical axis engages instead of the DCGM-proxy
 fallback. **Page 7 is now a strict-publish gate:** a throughput/mixed serving
 campaign with plot-ready points but no page 7 is REFUSED under `publish_to_lake
 --strict` (the default, `--no-strict` records the gap). The rendered PDF also
@@ -327,8 +311,9 @@ from this campaign may be cited as evidence only for THAT delivery, never cross-
 ### Phase D4: champion selection (page 8) - the production pick
 
 The "what do we ship" synthesis. When the campaign holds a baseline + variant
-arms (e.g. a cross-engine A/B imported via `perf_tune_report_import_variant_ab` from a
-`run-variant-ab.sh` bundle: one engine-tagged `vllm-sweep` / `sglang-sweep` cell
+arms (for example, a cross-engine A/B imported via
+`perf_tune_report_import_variant_ab` from the documented variant bundle
+layout, with one engine-tagged `vllm-sweep` or `sglang-sweep` cell
 per arm), `champion_select` ranks the baseline + top-X CROSS-ENGINE under the
 focus metric + a TPOT SLO, summarizes each across the 4-layer SoL ladder, overlays
 their rooflines, and emits the production recommendation:
@@ -359,8 +344,9 @@ perf_tune_report_report_render \
 ```
 
 `report_render` always renders + records `sol_complete` / `focus` / `sol_rigor`
-(it never refuses), `publish_to_lake --strict` is the opt-in gate if you want
-publish to refuse a `dcgm_grounded=false` or otherwise incomplete campaign.
+(it never refuses). `publish_to_lake` is strict by default and refuses a
+`dcgm_grounded=false` or otherwise incomplete campaign. Use `--no-strict` only
+for an intentional-gap publish.
 
 Default output path is `<campaign>/report.pdf`. Override with `--out`.
 
@@ -382,25 +368,31 @@ installed.
 
 ## Ack-gating behavior
 
-`cell_run` is the only ack-gated verb (`safety=submits_jobs`). The
-cockpit will:
+`cell_run` is ack-gated with `safety=submits_jobs`. The command will:
 
 1. Refuse the call if `i_understand_this_submits_jobs` is not set to
    `true`.
 2. Print a FATAL message naming the missing ack field and suggesting
    `--dry-run` as the safe alternative.
-3. Exit with code 2 (non-zero) so the cockpit treats it as a refusal,
+3. Exit with code 2 so the caller treats it as a refusal,
    not a silent skip.
 
-All other verbs (`campaign_init`, `atlas_aggregate`, `report_render`,
+`campaign_run` has the broader `safety=mutates_cluster` contract because its
+production path can cordon nodes, change a Helm release, and execute benchmark
+work. It requires `i_understand_this_mutates_cluster=true` for the current
+call. Raw acknowledgement flags in `args` are rejected.
+
+The external `publish_to_lake` verb requires
+`i_understand_this_publishes_externally=true` unless `--dry-run` is present.
+All local verbs (`campaign_init`, `atlas_aggregate`, `report_render`,
 `report_smoke`) write only to local disk under
-`./campaigns/<slug>/` (operator-relocatable via
+`<server-root>/experiments/artifacts/perf-tune-report/campaigns/<slug>/` (operator-relocatable via
 `PERFREPORT_CAMPAIGNS_DIR`) and are not ack-gated.
 
 ## Campaign-storage location
 
 The default campaigns root is
-`./campaigns/` -- a local-only directory that holds campaign
+`<server-root>/experiments/artifacts/perf-tune-report/campaigns/`. This local-only directory holds campaign
 artifacts. It is
 gitignored so per-campaign output never accidentally
 escapes the workstation. Source code for the renderer / runners /
@@ -435,7 +427,7 @@ Speed-of-Light Roofline page. It draws automatically when:
    precondition. Zymtrace per-category data). A zymtrace L1 empty-now right after
    the window is ClickHouse ingest lag, not absence - poll and requery
    after the flush (see
-   [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md)).
+   [`server/docs/zymtrace-query-hygiene.md`](../../server/docs/zymtrace-query-hygiene.md)).
 2. The renderer finds `configs/sol-ceilings.yaml` on the
    ancestor path (or `SOL_CEILINGS_YAML=/path` env var override).
 3. The atlas's `hardware` field maps to a key in the YAML (`B200` →
@@ -448,13 +440,13 @@ populate it), printed as a `WARNING:` on stderr, and returned in the
 `report_render` JSON `render_status` block (`sol_complete`, `focus`,
 `sol_rigor`, `omitted_pages`). `sol_complete=true` when ANY SoL page (4 zymtrace
 / 5 ncu / 6 DCGM) renders, `sol_rigor` records the highest level present.
-Publish lands the row regardless (always-publish policy). Pass
-`publish_to_lake --strict` only when you want a missing roofline or 0
-throughput-scatter points (non-`latency` focus) to be a hard refusal. When the
+Publish is strict by default. A missing roofline or zero throughput-scatter
+points for a non-`latency` focus is a hard refusal. Pass `--no-strict` only to
+publish an intentional gap and record it on the lake row. When the
 YAML is found but malformed the renderer still raises `SoLCeilingsMalformed`
 and aborts - same no-silent-degradation contract as `KernelsJsonMalformed`.
 
-Per `server/CLAUDE.md` "Speed-of-light framing", every campaign
+Per `server/AGENTS.md` "Speed-of-light framing", every campaign
 SHOULD also carry a `<campaign>/sol-summary.md` doc with the
 workload-level HBM-roofline calc and a link to the relevant grounding
 doc. The SoL summary
@@ -464,7 +456,7 @@ companion.
 ## Asset validation (review + FAIL LOUD)
 
 The report PDF this skill renders (`report_render` -> report.pdf: scatter / heatmap / roofline /
-champion pages) is a DELIVERABLE held to `server/CLAUDE.md` "Validate every generated asset"
+champion pages) is a DELIVERABLE held to `server/AGENTS.md` "Validate every generated asset"
 (`docs/METHODOLOGY.md`): the renderer **FAILS LOUDLY** on missing/bad
 data (`SoLCeilingsMalformed` / `KernelsJsonMalformed` raises, the degenerate-PDF guard that raises on
 a <10KB report, and the `methodology_problems` `--strict` gate that refuses an incomplete/`unknown`
@@ -477,7 +469,7 @@ broken/confusing report with a caveat.
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
@@ -489,20 +481,19 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Verdict rigor (DRAFT vs VERDICT)
 
-Per `server/CLAUDE.md` "Verdict rigor: DRAFT vs VERDICT", set the campaign's
+Per `server/AGENTS.md` "Verdict rigor: DRAFT vs VERDICT", set the campaign's
 `verdict_tier` honestly. Default **draft**. Set **verdict** only for a decision-grade
 campaign that is variance-controlled (same-node, >=3 trials, mean +/- std),
 metric-isolated (median TPOT/ITL for decode-latency claims), against a
 production-representative baseline, and (for which-kernel claims) backed by nsys/ncu
-per-kernel data. Under the always-publish policy a `verdict`-tier campaign
-missing this provenance is **auto-downgraded to `draft` and still lands** (the
-honest tier is recorded on `campaign_v1`). Pass `publish_to_lake --strict` if you
-want the unsupported verdict claim to refuse instead.
+per-kernel data. Strict publish refuses a `verdict`-tier campaign that lacks
+this provenance. With the explicit `--no-strict` override, the claim is
+auto-downgraded to `draft` and the honest tier is recorded on `campaign_v1`.
 
 ## Experiment isolation & traceability (mandatory)
 
 This pipeline is the canonical "results -> rooflines -> perf-lake" path the
-`server/CLAUDE.md` "Experiment Isolation & Traceability" rule
+`server/AGENTS.md` "Experiment Isolation & Traceability" rule
 (and `docs/METHODOLOGY.md`) requires every measurement
 experiment to use:
 
@@ -511,22 +502,20 @@ experiment to use:
   cluster objects (label `experiment=<id-slug>`) and the evidence bundle.
 - **`cell_run` cells that submit cluster workloads MUST use experiment-unique
   serve names + the `experiment=<id-slug>` label** and MUST NOT reuse
-  standing/platform/migration names (forbidden list in the `server/CLAUDE.md` rule).
+  standing/platform/migration names (forbidden list in the `server/AGENTS.md` rule).
   Cluster-scoped PV names are global. A collision silently breaks another
   owner's PVC binding.
 - **`publish_to_lake` is mandatory**, not optional - a campaign is "done"
   once the atlas + campaign rows are written AND `report.pdf` contains a
   Speed-of-Light roofline page. Capturing DCGM + zymtrace during the cells
   raises the roofline rigor (see the Speed-of-light reporting section + Phase D2).
-- **Always-publish with focus + sol_rigor.** EVERY run publishes a
+- **Publish with focus + sol_rigor.** Every complete run publishes a
   `sol_complete` roofline with a recorded `focus` (latency|throughput|mixed) +
   `sol_rigor` (`L4` ncu | `L3` DCGM | `L1` zymtrace-proxy | `none`).
-  `publish_to_lake` **never refuses** by default - a `dcgm_grounded=false` /
-  latency-bound / proxy / no-SoL / 0-plot-ready run lands with the gap RECORDED
-  on `campaign_v1` + warned. An unsupported `verdict_tier=verdict`
-  auto-downgrades to `draft`. The one hard requirement is that `report_render`
-  ran first. Pass `--strict` only when you want publish to refuse an incomplete
-  campaign. Run `perf_tune_report_dcgm_correlate` (or the `inference-dcgm-correlate`
+  `publish_to_lake` is strict by default. It refuses a `dcgm_grounded=false`,
+  proxy, no-SoL, or zero-plot-ready run. `report_render` must run first. Use
+  `--no-strict` only for an intentional-gap publish, which records the gap and
+  downgrades an unsupported verdict to `draft`. Run `perf_tune_report_dcgm_correlate` (or the `inference-dcgm-correlate`
   skill) per cell (Phase D2) to raise `sol_rigor` to L3 - it raises rigor, it is
   not a gate.
 - Tear down cell workloads by label and verify standing/migration objects are
@@ -535,14 +524,14 @@ experiment to use:
 
 ## Cross-references
 
-- [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) -- the
+- [`inference-perf-bench`](../inference-perf-bench/SKILL.md) -- the
   per-deployment AIPerf runbook the `aiperf` backend wraps. Use it when
   you only need to benchmark one deployment with one config. Come here
   when you have an atlas to compare.
-- [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) /
-  [`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-baseline-diff/SKILL.md) -- record a
+- [`perf-baseline-record`](../perf-baseline-record/SKILL.md) /
+  [`perf-baseline-diff`](../perf-baseline-diff/SKILL.md) -- record a
   campaign's atlas.jsonl as a baseline to regression-check future
   campaigns against.
-- [`evidence-bundle-init`](/plugins/profile-and-optimize/skills/evidence-bundle-init/SKILL.md) -- scaffold
+- [`evidence-bundle-init`](../evidence-bundle-init/SKILL.md) -- scaffold
   a parent evidence bundle if this report is part of a wider
   investigation (e.g. a deploy-regression post-mortem).

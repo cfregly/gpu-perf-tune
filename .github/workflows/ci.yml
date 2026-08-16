@@ -1,22 +1,89 @@
 name: ci
-on: [push, pull_request]
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  queue: max
+
 jobs:
-  checks:
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Install dependencies
-        run: pip install --quiet pyyaml
-      - name: Skill-count consistency
-        run: python3 scripts/lint-skill-counts.py
-      - name: Tool-count consistency
-        run: python3 scripts/lint-tool-counts.py
-      - name: Version banners match plugin.json
-        run: python3 scripts/lint-versions.py
-      - name: Workload proof packet completeness
-        run: python3 scripts/check_workload_proof_packets.py --self-test --require-workflow-handoff
-      - name: Doc-correctness gate
-        run: python3 scripts/check_docs.py
+          cache: pip
+          cache-dependency-path: |
+            requirements/check.txt
+            plugins/profile-and-optimize/server/pyproject.toml
+            plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/pyproject.toml
+      - name: Install static-check dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements/check.txt
+      - name: Run public static gates
+        run: make check
+      - name: Check Python syntax
+        run: python -m compileall -q plugins/profile-and-optimize/server scripts
+      - name: Check repository whitespace
+        run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
+
+  runtime:
+    name: Runtime Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            plugins/profile-and-optimize/server/pyproject.toml
+            plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/pyproject.toml
+      - name: Install the server and development tools
+        run: bash plugins/profile-and-optimize/server/install.sh --with-dev
+      - name: Run skill and surface smoke checks
+        run: make smoke-test
+      - name: Run tool tests
+        run: make pytest
+      - name: Run the MCP protocol smoke test
+        run: make smoke-mcp-runtime
+
+  external-links:
+    name: External links
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check public links
+        run: bash scripts/check-doc-links.sh --quiet

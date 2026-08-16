@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Pattern
+from re import Pattern
 
 
 @dataclass(frozen=True)
@@ -48,8 +48,8 @@ SIGNATURES: tuple[Signature, ...] = (
     # DSv3 671B 11-job NODE_FAIL incident root-caused to leftover /dev/shm
     # filling RAM and OOM-killing the dataloader worker (NVIDIA's worker
     # consumes ~50 GiB). The generic `oom` next_probe ("bump --mem") is
-    # WRONG for this root cause -- the fix is to clear /dev/shm. See
-    # docs/learnings/slack/<team-channel>/2026-05-15-9-consecutive-node-failures.md.
+    # wrong for this root cause. The fix is to inspect and clear stale
+    # shared-memory files under the operator's recovery policy.
     Signature(
         klass="shm_bloat_oom",
         regex=_re_dotall(
@@ -68,10 +68,9 @@ SIGNATURES: tuple[Signature, ...] = (
             "kernel-cache files filling tmpfs and pushing RAM out)"
         ),
         next_probe=(
-            "run `mcp__profile_and_optimize__shm_health_probe` on the cohort; if RED, run "
-            "`mcp__profile_and_optimize__shm_health_clear_apply --i-understand-this-clears-dev-shm`. "
-            "Do NOT bump --mem. See learnings doc "
-            "2026-05-15-9-consecutive-node-failures.md."
+            "Inspect /dev/shm occupancy and file ownership on the suspect nodes. "
+            "Use k8s-troubleshooting for cluster evidence and slurm_drain before any "
+            "operator-approved cleanup. Do not increase --mem until stale shared memory is ruled out."
         ),
     ),
     Signature(
@@ -84,25 +83,25 @@ SIGNATURES: tuple[Signature, ...] = (
         klass="nccl_hang",
         regex=_re(r"NCCL\s+WARN.*timeout|all[-_]?reduce.*timed out|NCCL INFO.*hang"),
         description="NCCL collective timeout / hang",
-        next_probe="check fabric on the suspect node (support:ib-bw-check --nodelist <node>); rerun excluding it",
+        next_probe="Use k8s-troubleshooting to inspect fabric evidence. Drain an unhealthy node with slurm_drain before retrying",
     ),
     Signature(
         klass="nccl_setup",
         regex=_re(r"ECONNREFUSED|connection refused.*NCCL|NCCL.*setup.*failed|failed to setup.*rdma"),
         description="NCCL setup failure (refused connection / RDMA QP setup error)",
-        next_probe="run support:node-net-test --src <suspect> --dst <peer> to verify reachability",
+        next_probe="Use k8s-troubleshooting to verify network reachability between the suspect node and its peers",
     ),
     Signature(
         klass="dataset_missing",
         regex=_re(r"no such file or directory.*dataset|cannot stat.*data|file not found.*\.bin"),
         description="Dataset path missing or unreadable",
-        next_probe="fix the dataset path; this is an operator-side issue, not a cluster issue",
+        next_probe="Fix the dataset path. This is an operator-side issue, not a cluster issue",
     ),
     Signature(
         klass="image_missing",
         regex=_re(r"not found.*sqsh|cannot open.*image|pyxis.*image|enroot.*not found"),
         description="Pyxis / Enroot image missing or unreadable",
-        next_probe="fix the --container-image path; check the image is on /mnt/data/images/",
+        next_probe="Fix the --container-image path and verify the image is readable from every target node",
     ),
     Signature(
         klass="walltime",
@@ -114,19 +113,19 @@ SIGNATURES: tuple[Signature, ...] = (
         klass="node_failure",
         regex=_re(r"NODE[_ ]FAIL|node failure detected|srun.*epilog.*failed|slurmctld.*node.*down"),
         description="Slurm reported a node failure mid-job",
-        next_probe="scontrol update nodename=<node> state=drain reason=NODE_FAIL; hand off to PE's <node-diagnosis-tool>-node-diagnosis",
+        next_probe="Use k8s-troubleshooting to inspect node evidence. Drain the node with slurm_drain if it remains unhealthy",
     ),
     Signature(
         klass="gpu_xid",
         regex=_re(r"NVRM.*Xid|Xid\s+\d+|dcgm.*xid.*error"),
         description="GPU XID error fired during the run",
-        next_probe="drain the failing node; file hardware ticket; XID 79 specifically = NVLink failure",
+        next_probe="Use k8s-troubleshooting to capture GPU evidence. Drain the failing node with slurm_drain and follow the operator hardware process",
     ),
     Signature(
         klass="fabric",
         regex=_re(r"couldn't find any working interface for libibverbs|IB.*HCA.*error|infiniband.*link.*down"),
         description="IB / libibverbs interface error",
-        next_probe="run support:ib-bw-check on the suspect node + peers; if down, drain",
+        next_probe="Use k8s-troubleshooting to inspect the suspect node and peers. Drain the node with slurm_drain if the link is down",
     ),
 )
 

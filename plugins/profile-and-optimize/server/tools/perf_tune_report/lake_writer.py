@@ -1,54 +1,21 @@
-"""Publish a perf-report campaign as Parquet to S3 (the perf lake BYOB lane).
+"""Publish a perf-report campaign as Parquet to operator-configured S3.
 
-This is the data-lake side of the inference-perf-tune-report skill. Where the
-existing 5 verbs (``campaign_init``/``cell_run``/``atlas_aggregate``/
-``report_render``/``report_smoke``) own the local-evidence pipeline, the
-``publish_to_lake`` verb (added in profile-and-optimize v1.16.0) takes a green
-campaign and writes two parquet files to the perf lake's S3 BYOB bucket
-``s3://perf-lake/perflake/perf-report/``. A downstream (operator-side) Spark
-job reads the raw parquet and registers it in the warehouse -- e.g. Iceberg
-intake tables promoted via dbt staging/model layers and served to consumers
-through an external catalog (Trino / StarRocks / Spark SQL) -- the standard
-raw -> staging -> model medallion pattern. This module owns only the raw
-parquet contract; the warehouse side is whatever pipeline your data platform
-already runs.
+The module builds the raw campaign tables locally, then optionally uploads
+them under the configured S3 prefix. Warehouse registration stays outside this
+repository.
 
-Authentication: S3 endpoint / bucket / access-key / secret-key are
-resolved in priority order
+Endpoint, bucket, and credentials come from CLI file options or the documented
+environment variables. A dry run writes local Parquet without reading secrets
+or contacting S3.
 
-1. CLI flags ``--s3-endpoint``, ``--s3-bucket``,
-   ``--s3-access-key-file``, ``--s3-secret-key-file``.
-2. Env vars ``PERFLAKE_LAKE_S3_ENDPOINT`` (default
-   ``https://object-store.example.com``), ``PERFLAKE_LAKE_S3_BUCKET`` (default
-   ``perf-lake``), ``PERFLAKE_LAKE_S3_ACCESS_KEY``,
-   ``PERFLAKE_LAKE_S3_SECRET_KEY``. Matches the existing perflake
-   ``.env`` convention so one env file works for both tools.
+Objects are keyed by campaign ID and capture date. The default
+``--if-exists=fail`` mode uses a conditional create so concurrent publishers
+cannot silently replace an object. ``overwrite`` and ``skip`` require an
+explicit operator choice.
 
-S3 layout (Hive-style so a downstream Spark job can register it later):
-
-- ``s3://<bucket>/perflake/perf-report/atlas_v1/dt=<YYYY-MM-DD>/campaign=<campaign_id>/part-0.parquet``
-- ``s3://<bucket>/perflake/perf-report/campaign_v1/dt=<YYYY-MM-DD>/campaign=<campaign_id>/part-0.parquet``
-- ``s3://<bucket>/perflake/perf-report/sol_v1/dt=<YYYY-MM-DD>/campaign=<campaign_id>/part-0.parquet``
-- ``s3://<bucket>/perflake/perf-report/tpm_v1/dt=<YYYY-MM-DD>/campaign=<campaign_id>/part-0.parquet``
-- ``s3://<bucket>/perflake/perf-report/cost_v1/dt=<YYYY-MM-DD>/campaign=<campaign_id>/part-0.parquet``
-
-Idempotency: writes are keyed by ``campaign_id`` so re-runs overwrite the
-same object. Default ``--if-exists=fail`` to avoid silent clobber;
-``--if-exists=overwrite`` for explicit re-publish; ``--if-exists=skip``
-for backfill loops.
-
-Completeness gate (v1.26.0): ``publish`` refuses to land a campaign that
-was never rendered, has no Speed-of-Light rooflines, or has 0 plot-ready
-points, unless ``--allow-incomplete`` is passed. The ``campaign_v1`` table
-gained three columns -- ``sol_complete`` (bool), ``plot_ready_points``
-(int64), ``omitted_pages`` (string, comma-joined) -- sourced from the
-renderer's ``report_status.json``, plus ``dcgm_grounded`` (bool, v1.29.0)
-recording whether DCGM workload-level byte/FLOP grounding (page 6) is
-present, plus ``partial_pages`` (string, comma-joined, v1.30.0) recording
-pages that rendered but carry less than a full measurement (e.g. a page-5
-%SoL-only scatter with arithmetic intensity unmeasured) so consumers can
-filter partial roofline data. Downstream intake tables should append these
-columns (all NOT NULL; older rows predate them).
+The public CLI enables strict completeness checks by default. ``--no-strict``
+is the explicit intentional-gap path. It records missing evidence in the
+campaign table and prints warnings.
 """
 
 from __future__ import annotations
@@ -98,40 +65,40 @@ S3_PREFIX = "perflake/perf-report"
 # the belt-and-suspenders cross-campaign variant guard.
 ATLAS_TABLE_NAME = "atlas_v1"
 CAMPAIGN_TABLE_NAME = "campaign_v1"
-# sol_v1 (added v1.36.0): per-category L1-L4 Speed-of-Light rows, one row per
+# sol_v1: per-category L1-L4 Speed-of-Light rows, one row per
 # (campaign_id, cell_id, category, sol_level[, kernel_name]). L1 = zymtrace
 # sample-share + ceiling (no %SoL), L2 = zymtrace x DCGM cross-attribution,
 # L3 = DCGM workload resources, L4 = ncu per-kernel. Empty when a campaign has
 # no cells/*/ SoL artifacts (still published, 0 rows).
 SOL_TABLE_NAME = "sol_v1"
-# tpm_v1 (added v1.35.0): per-hardware tokens-per-minute capacity rows for
+# tpm_v1: per-hardware tokens-per-minute capacity rows for
 # pricing / capacity discussions, one row per (campaign_id, model, hardware,
 # quant, tensor_parallel, parallel_strategy, mtp, operating_point[peak|sla],
 # basis[per_gpu|per_replica|per_node]). Empty when a campaign has no
 # throughput-bearing atlas rows (still published, 0 rows).
 TPM_TABLE_NAME = "tpm_v1"
-# cost_v1 (added v1.42.0): per-(group, operating_point) economics/TCO rows --
+# cost_v1: per-(group, operating_point) economics/TCO rows --
 # $/1M tokens (when a cost: config block supplies $/GPU-hour) + tokens-per-watt
 # (when DCGM power was captured). One row per (campaign_id, model, hardware,
 # quant, tensor_parallel, parallel_strategy, mtp, operating_point[peak|sla]).
 # Empty when no throughput-bearing atlas rows; cost / energy columns null when
 # the respective inputs are absent (recorded, not blocking).
 COST_TABLE_NAME = "cost_v1"
-# quality_v1 (added v1.63.0): training-accuracy / draft-acceptance rows in LONG
+# quality_v1: training-accuracy / draft-acceptance rows in LONG
 # format -- one row per (campaign_id, cell_id, metric_kind, metric_name) for every
 # cell that declares extra["metric_kind"] (e.g. train_accuracy_proxy, acceptance).
 # metric_name/value come from the canonical extra["quality_metrics"]={name: value}
 # sub-dict, falling back to flat accuracy/loss/delta keys for campaigns predating
 # the convention. Empty (0 rows) for pure serving campaigns (no metric_kind).
 QUALITY_TABLE_NAME = "quality_v1"
-# champion_v1 (added v1.66.0): the production-choice synthesis -- one row per
+# champion_v1: the production-choice synthesis -- one row per
 # SELECTED variant (baseline + top-X) from a campaign's champion_select.json,
 # carrying the focus metric, %win vs baseline, SLO verdict, the 4-layer SoL
 # summary (sol_rigor + HBM/tensor/SM %), and is_recommended / champion_tier so
 # "which X variants did we pick + which one ships + its proof" is one query.
 # Empty (0 rows) when a campaign has no champion_select.json (still published).
 CHAMPION_TABLE_NAME = "champion_v1"
-# roofline_v1 (added v1.67.0): per-(c, ISL) prefill/decode roofline operating
+# roofline_v1: per-(c, ISL) prefill/decode roofline operating
 # points -- one row per cells/*/roofline_sweep.json point. Carries the analytical
 # arithmetic intensity + achieved-compute/GPU + delivered-HBM-BW (the roofline
 # x/y), the DCGM SM/tensor/DRAM active fractions (the utilization-vs-concurrency
@@ -214,10 +181,10 @@ class PublishResult:
     bucket: str
     endpoint: str
     published_at_utc: datetime
-    # champion_v1 (added v1.66.0): the production-choice synthesis table. None on
+    # champion_v1: the production-choice synthesis table. None on
     # older callers that predate the field; publish() always populates it.
     champion: ObjectWriteResult | None = None
-    # roofline_v1 (added v1.67.0): per-(c, ISL) prefill/decode roofline points.
+    # roofline_v1: per-(c, ISL) prefill/decode roofline points.
     # None on older callers that predate the field; publish() always populates it.
     roofline: ObjectWriteResult | None = None
 
@@ -296,14 +263,14 @@ class RenderStatusSummary:
     # measurement (e.g. page-5 %SoL-only / AI-unmeasured). Empty string when
     # none. Recorded (not gated) so the lake row flags the limitation.
     partial_pages: str = ""
-    # focus (added v1.33.0): "latency" | "throughput" | "mixed". Recorded so
+    # focus: "latency" | "throughput" | "mixed". Recorded so
     # latency-focused runs are first-class published results.
     focus: str = "mixed"
-    # sol_rigor (added v1.33.0): highest SoL evidence level present --
+    # sol_rigor: highest SoL evidence level present --
     # "L4" (ncu) | "L3" (DCGM) | "L1" (zymtrace proxy) | "none". The
     # proxy-vs-tight distinction is a recorded field, not a publish blocker.
     sol_rigor: str = "none"
-    # PER-ARM SoL coverage (added v1.68.0): mirrors the renderer's RenderStatus
+    # PER-ARM SoL coverage mirrors the renderer's RenderStatus
     # per-arm fields. ``sol_complete`` above is CAMPAIGN-level ("any SoL page
     # rendered"); these say whether baseline AND every variant carries a
     # roofline. The defaults make a pre-field report_status.json (rendered by an
@@ -354,7 +321,7 @@ class VerdictSummary:
 
     Defaults to a **DRAFT** (ungated) when verdict.json is absent. A campaign that
     declares ``tier == "verdict"`` is held to the controlled+metric+baseline
-    provenance by the publish gate (CLAUDE.md "Verdict rigor: DRAFT vs VERDICT").
+    provenance by the publish gate (AGENTS.md "Verdict rigor: DRAFT vs VERDICT").
     """
 
     tier: str = "draft"
@@ -422,7 +389,7 @@ def _effective_verdict_tier(campaign_dir: Path) -> str:
     """Verdict tier to record in the lake. An author-declared
     ``verdict_tier=verdict`` that fails the rigor checks is downgraded to
     ``draft`` (so the campaign still publishes, with an honest tier) rather
-    than blocking publish (always-publish policy v1.33.0)."""
+    than blocking publish (always-publish policy)."""
     v = read_verdict(campaign_dir)
     if v.tier == "verdict" and verdict_problems(v):
         return "draft"
@@ -431,7 +398,7 @@ def _effective_verdict_tier(campaign_dir: Path) -> str:
 
 def read_next_lever(campaign_dir: Path) -> str:
     """Author-declared ``next_lever`` for the campaign -- the "Always ship an
-    actionable path-forward" / performance-ratchet mandate (CLAUDE.md). The
+    next candidate lever from the AGENTS.md "The Grind Mandate". The
     specific next change expected to move a metric further, OR an explicit
     ``frontier-exhausted: <evidence>`` when a dimension is grounded at its
     Speed-of-Light ceiling. Read from the campaign ``config.yaml`` ``next_lever:``
@@ -453,8 +420,8 @@ def read_next_lever(campaign_dir: Path) -> str:
 
 
 def next_lever_problems(campaign_dir: Path) -> list[str]:
-    """Performance-ratchet publish gate (CLAUDE.md "Always ship an actionable
-    path-forward" / "Always be grinding"). A campaign MUST declare a ``next_lever``
+    """Performance-ratchet publish gate from AGENTS.md "The Grind Mandate".
+    A campaign MUST declare a ``next_lever``
     so the lake row answers "what is the next lever for X" and the grind never
     silently stalls. The allowed escape for a genuinely-maxed dimension is
     ``frontier-exhausted: <evidence>`` (still a non-empty value). Empty/absent ->
@@ -473,8 +440,8 @@ VALID_CLOSE_REASONS = ("beat-target", "measured-plateau", "infra-wall")
 
 
 def read_close_reason(campaign_dir: Path) -> str:
-    """Author-declared ``close_reason`` for the campaign (CLAUDE.md "Always be grinding",
-    principle i). A perf investigation may CLOSE only on a MEASURED outcome: ``beat-target``,
+    """Author-declared ``close_reason`` for the campaign (AGENTS.md "The Grind Mandate").
+    A perf investigation may CLOSE only on a MEASURED outcome: ``beat-target``,
     ``measured-plateau`` (variance-controlled), or ``infra-wall`` (documented blocker). Empty =
     still open (no close claimed). Read from config.yaml ``close_reason:`` then SOURCE.md."""
     config_path = campaign_dir / "config.yaml"
@@ -492,7 +459,7 @@ def read_close_reason(campaign_dir: Path) -> str:
 
 
 def close_reason_problems(campaign_dir: Path) -> list[str]:
-    """Grind-discipline publish gate (CLAUDE.md "Always be grinding", principle i). A campaign that
+    """Grind-discipline publish gate from AGENTS.md "The Grind Mandate". A campaign that
     CLOSES an investigation must record a MEASURED close_reason in {beat-target, measured-plateau,
     infra-wall}; closing on a first-principles / cost / temporary-plateau argument is forbidden. An
     empty close_reason = open campaign (fine -- next_lever is still required by next_lever_problems). A
@@ -525,7 +492,7 @@ def _row_is_measured(row: AtlasCell) -> bool:
 
 
 def methodology_problems(rows: list[AtlasCell]) -> list[str]:
-    """Benchmark-methodology hygiene gate (CLAUDE.md "Benchmark methodology
+    """Benchmark-methodology hygiene gate (AGENTS.md "Benchmark methodology
     hygiene"). Every MEASURED atlas row must carry a warm-vs-cold label
     (``cache_mode`` in {warm, cold}) and shape provenance
     (``max_num_batched_tokens`` > 0). A throughput/latency number left at
@@ -551,7 +518,7 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
             + ", ".join(unlabeled)
             + " -- label every throughput/latency number warm (cache-primed / "
             "sweep-tail) or cold (fresh / single-shot) via the importer "
-            "--cache-mode (CLAUDE.md 'Benchmark methodology hygiene')"
+            "--cache-mode (AGENTS.md 'Benchmark methodology hygiene')"
         )
     no_shape = sorted(
         {
@@ -567,7 +534,7 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
             + " -- the bench shape must be recorded, not inferred from a label"
         )
     # ISL/OSL shape precision -- the PER-ROW half of "per-number exact shape (no smoothing)"
-    # (added 2026-06-08; docs/METHODOLOGY.md "no bare numbers" / CLAUDE.md "Per-number exact
+    # (added 2026-06-08, docs/METHODOLOGY.md "Full-context reporting" and AGENTS.md exact
     # shape"). Each measured cell carries its OWN ISL/OSL; a number is NEVER smoothed to one
     # campaign-level shape. (The CROSS-CELL half -- one shared shape label rendered over
     # heterogeneous-shape cells -- is handled at RENDER time by the render-layer
@@ -599,11 +566,11 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
         p.append(
             "shape provenance missing (mean_input_tokens/mean_output_tokens<=0 on a "
             "vllm-bench dataset) on measured cell(s): " + ", ".join(no_isl_osl)
-            + " -- record the workload ISL/OSL the number was measured at (CLAUDE.md "
-            "'Every performance number carries its full context'); aiperf/drive_load/aa-* "
+            + " -- record the workload ISL/OSL the number was measured at (AGENTS.md "
+            "'Benchmark methodology hygiene'). aiperf/drive_load/aa-* "
             "are exempt (shape defined by the dataset name)"
         )
-    # Full-context descriptor gate (CLAUDE.md "Every performance number carries its full
+    # Full-context descriptor gate (AGENTS.md "Benchmark methodology hygiene" and
     # context (no bare numbers)" / rule docs/METHODOLOGY.md): a measured number is a
     # defect without its descriptor. Flag any measured row whose str descriptor field is
     # still "unknown", or whose gpu_memory_utilization is unset.
@@ -620,7 +587,7 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
                 f"full-context descriptor missing ({fld}=unknown) on measured cell(s): "
                 + ", ".join(missing)
                 + f" -- set {fld} via the importer/runner override or bundle metadata "
-                "(CLAUDE.md 'Every performance number carries its full context')"
+                "(AGENTS.md 'Benchmark methodology hygiene')"
             )
     no_gmu = sorted(
         {
@@ -672,8 +639,8 @@ def _read_krhpa_exempt_reason(campaign_dir: Path) -> str:
 
 
 def krhpa_problems(campaign_dir: Path, render_status: RenderStatusSummary) -> list[str]:
-    """Kernel-rubric gate (CLAUDE.md "Custom-kernel work: classify before you
-    climb"). A kernel-comparison campaign -- identified by an L4 ncu roofline
+    """Kernel-rubric gate (AGENTS.md "Kernel rubric"). A kernel-comparison
+    campaign identified by an L4 ncu roofline
     having rendered (``sol_rigor == "L4"``, i.e. page 5 from a
     ``cells/*/ncu_kernels.json``) -- MUST carry a ``krhpa:`` block in
     ``config.yaml`` classifying BOTH the candidate AND the named baseline on
@@ -690,8 +657,8 @@ def krhpa_problems(campaign_dir: Path, render_status: RenderStatusSummary) -> li
         return [
             "L4 kernel-comparison campaign (sol_rigor=L4) is missing a krhpa: "
             "block in config.yaml -- classify the candidate AND the named "
-            "baseline on (K,R,H,P,A) per CLAUDE.md 'Custom-kernel work: classify "
-            "before you climb' (a win over a lower-H/R baseline is a DRAFT, not a "
+            "baseline on (K,R,H,P,A) per AGENTS.md 'Kernel rubric' "
+            "(a win over a lower-H/R baseline is a DRAFT, not a "
             "VERDICT)"
         ]
     p: list[str] = []
@@ -753,7 +720,7 @@ def source_problems(campaign_dir: Path) -> list[str]:
 
 
 def roofline_problems(render_status: RenderStatusSummary) -> list[str]:
-    """Page-7 (prefill/decode roofline) gate (added v1.67.0). The phase-separated
+    """Page-7 (prefill/decode roofline) gate. The phase-separated
     roofline is MANDATORY for a serving THROUGHPUT/MIXED campaign (one with
     plot-ready throughput points) -- the "what C maxes the TFLOPs / is decode
     >=75% HBM / which sharding degree" questions are always wanted. Latency-only,
@@ -767,8 +734,9 @@ def roofline_problems(render_status: RenderStatusSummary) -> list[str]:
     if "page 7" in (render_status.omitted_pages or "").lower():
         return [
             "no prefill/decode roofline (page 7) on a throughput/mixed serving "
-            "campaign -- run *-deploy/profiling/roofline-sweep.sh + "
-            "perftunereport import_roofline_sweep, then re-render (ROOFLINE-METHODOLOGY.md)"
+            "campaign -- capture the serving-side roofline bundle, run "
+            "perftunereport import_roofline_sweep, then re-render "
+            "(ROOFLINE-METHODOLOGY.md)"
         ]
     return []
 
@@ -802,7 +770,7 @@ def read_roofline_gap_arms(campaign_dir: Path) -> dict[str, str]:
 def per_arm_roofline_problems(
     render_status: RenderStatusSummary, campaign_dir: Path
 ) -> list[str]:
-    """Per-arm roofline gate (added v1.68.0). ``roofline_problems`` above refuses
+    """Per-arm roofline gate. ``roofline_problems`` above refuses
     only when page 7 is ENTIRELY absent (campaign-level "no arm has a roofline").
     This refuses when SOME arm lacks a roofline -- the "baseline + EACH variant
     must carry a roofline" rule that the campaign-level ``sol_complete`` /
@@ -833,8 +801,9 @@ def per_arm_roofline_problems(
         f"per-arm roofline gap: {len(missing)} of {render_status.arms_total} arm(s) "
         "carry no roofline (baseline + EACH variant must): "
         + ", ".join(missing)
-        + " -- run *-deploy/profiling/roofline-sweep.sh + perftunereport "
-        "import_roofline_sweep for each arm, then re-render; or declare a "
+        + " -- capture each arm's serving-side roofline bundle, run "
+        "perftunereport import_roofline_sweep for each arm, then re-render; "
+        "or declare a "
         "genuinely un-capturable arm in config.yaml roofline_gap_arms: "
         "{<arm>: <reason>} (B200 / MTP-engine-blocked / overlay-gone)"
     ]
@@ -935,24 +904,24 @@ def build_atlas_table(rows: list[AtlasCell], campaign_id: str) -> Any:
             pa.field("request_throughput_avg", pa.float64(), nullable=True),
             pa.field("output_tps_per_user", pa.float64(), nullable=True),
             pa.field("output_tps_per_gpu", pa.float64(), nullable=True),
-            # total_tps_per_gpu (added v1.35.0): total (input+output) token
+            # total_tps_per_gpu: total (input+output) token
             # throughput per GPU -- the input to total-TPM in tpm_v1. Null for
             # backends that emit no total-token line. Downstream: append (default
             # null older partitions).
             pa.field("total_tps_per_gpu", pa.float64(), nullable=True),
-            # tpot_median_ms + itl_avg_ms (added v1.33.0): decode-latency
+            # tpot_median_ms + itl_avg_ms: decode-latency
             # metrics so the atlas carries a consistent schema every run
             # regardless of focus. Downstream: append (default null older partitions).
             pa.field("tpot_median_ms", pa.float64(), nullable=True),
             pa.field("itl_avg_ms", pa.float64(), nullable=True),
-            # Analysis-carry-through (added v1.42.0). Downstream: append these
+            # Analysis-carry-through. Downstream: append these
             # columns (defaults null / 'unknown' for older partitions).
             pa.field("mean_input_tokens", pa.float64(), nullable=True),
             pa.field("mean_output_tokens", pa.float64(), nullable=True),
             pa.field("prefix_cache_hit_rate", pa.float64(), nullable=True),
             pa.field("cache_mode", pa.string(), nullable=False),
-            # Full-context descriptor (added 2026-06-07; CLAUDE.md "Every performance
-            # number carries its full context"). Downstream: append these columns (defaults
+            # Full-context descriptor follows AGENTS.md "Benchmark methodology hygiene".
+            # Downstream: append these columns (defaults
             # 'unknown' / null / 1 for older partitions).
             pa.field("dataset", pa.string(), nullable=False),
             pa.field("cudagraph_mode", pa.string(), nullable=False),
@@ -975,9 +944,8 @@ def build_atlas_table(rows: list[AtlasCell], campaign_id: str) -> Any:
             # Serving engine normalized from backend (vllm/sglang/trtllm; "" for
             # aiperf). Downstream: append (default '' for older partitions).
             pa.field("serving_engine", pa.string(), nullable=False),
-            # Ledger-to-atlas data-capture gaps (added 2026-06-07; see perf-report
-            # UPSTREAM-REQUEST-atlas-ledger-datacapture-gaps.md). Downstream: append these
-            # columns (defaults '' / null for older partitions).
+            # Ledger-to-atlas fields. Downstream readers append these columns,
+            # with '' / null defaults for older partitions.
             pa.field("router_policy", pa.string(), nullable=False),
             pa.field("prefix_reuse", pa.float64(), nullable=True),
             pa.field("per_replica_cache_hit", pa.float64(), nullable=True),
@@ -1140,7 +1108,7 @@ def build_campaign_row(
             pa.field("cell_count", pa.int64(), nullable=False),
             pa.field("backends", pa.string(), nullable=False),
             pa.field("atlas_row_count", pa.int64(), nullable=False),
-            # Completeness provenance (added v1.26.0). Downstream Iceberg
+            # Completeness provenance. Downstream Iceberg
             # registration: append these three columns to the campaign_v1
             # intake table. ``sol_complete``
             # is the consumer-facing flag for "this campaign carries
@@ -1150,33 +1118,33 @@ def build_campaign_row(
             pa.field("sol_complete", pa.bool_(), nullable=False),
             pa.field("plot_ready_points", pa.int64(), nullable=False),
             pa.field("omitted_pages", pa.string(), nullable=False),
-            # dcgm_grounded (added v1.29.0): True when the campaign carries
+            # dcgm_grounded: True when the campaign carries
             # DCGM workload-level byte/FLOP grounding (page 6). The L2/L3
             # analog of sol_complete (L1 roofline) -- a campaign can be
             # sol_complete=True off zymtrace alone yet dcgm_grounded=False.
             # Downstream: append this column (default False for older partitions).
             pa.field("dcgm_grounded", pa.bool_(), nullable=False),
-            # sol_per_arm_complete (added v1.71.0): True when baseline AND every
+            # sol_per_arm_complete: True when baseline AND every
             # variant arm carries a roofline (PER-ARM coverage), vs the
             # CAMPAIGN-level sol_complete above ("any SoL page rendered"). Lets
             # lake consumers find multi-arm campaigns with an uncovered variant
             # (the gap the per-arm publish gate closes). Downstream: append this
             # column (default True for older partitions).
             pa.field("sol_per_arm_complete", pa.bool_(), nullable=False),
-            # partial_pages (added v1.30.0): comma-joined names of pages that
+            # partial_pages: comma-joined names of pages that
             # rendered but carry less than a full measurement (e.g. page-5
             # %SoL-only / arithmetic-intensity-unmeasured). Empty string when
             # none. Recorded, not gated -- lets lake consumers filter partial
             # roofline data. Downstream: append this column (default '' for older
             # partitions).
             pa.field("partial_pages", pa.string(), nullable=False),
-            # verdict_tier (added v1.32.0): "draft" (default) or "verdict". A
+            # verdict_tier: "draft" (default) or "verdict". A
             # campaign published as "verdict" passed the verdict-rigor gate
             # (controlled + metric-isolated + fair-baseline provenance); "draft"
             # is exploratory/provisional. Downstream: append this column (default
             # 'draft' for older partitions).
             pa.field("verdict_tier", pa.string(), nullable=False),
-            # focus + sol_rigor (added v1.33.0): EVERY measurement run now
+            # focus + sol_rigor: EVERY measurement run now
             # publishes (no latency-bound/proxy refusal). `focus` is the run's
             # intent ("latency"|"throughput"|"mixed"); `sol_rigor` is the highest
             # SoL evidence level present ("L4" ncu | "L3" DCGM | "L1" zymtrace
@@ -1193,8 +1161,8 @@ def build_campaign_row(
             ),
             pa.field("publisher_operator", pa.string(), nullable=False),
             pa.field("publisher_host", pa.string(), nullable=False),
-            # experiment_id / experiment_family / evidence_bundle_path (added
-            # v1.34.0): the cross-experiment join + grouping keys. ``experiment_id``
+            # experiment_id / experiment_family / evidence_bundle_path: the
+            # cross-experiment join + grouping keys. ``experiment_id``
             # is the evidence-bundle run-id = cluster ``experiment=<id-slug>`` label
             # value; when campaign_init was run with --experiment-id it equals
             # ``campaign_id`` (so a single key joins lake row <-> cluster objects
@@ -1238,7 +1206,7 @@ def build_campaign_row(
             pa.field("overlay_mode", pa.string(), nullable=False),
             pa.field("code_repo", pa.string(), nullable=False),
             pa.field("code_sha", pa.string(), nullable=False),
-            # Champion synthesis (added v1.66.0): the production pick from the
+            # Champion synthesis: the production pick from the
             # campaign's champion_select.json. ``champion_tier`` is the headline
             # DRAFT/VERDICT decision; ``recommended_cell`` / ``recommended_engine``
             # name the variant to ship; ``champion_baseline_cell`` is the
@@ -1249,14 +1217,14 @@ def build_campaign_row(
             pa.field("recommended_engine", pa.string(), nullable=False),
             pa.field("champion_tier", pa.string(), nullable=False),
             pa.field("champion_baseline_cell", pa.string(), nullable=False),
-            # next_lever (added: CLAUDE.md "Always ship an actionable path-forward" /
+            # next_lever follows AGENTS.md "The Grind Mandate" and the
             # performance-ratchet mandate). The campaign-level path-forward: the next
             # change to move a metric further, or "frontier-exhausted: <evidence>".
             # Empty is REFUSED under publish_to_lake --strict (next_lever_problems), so
             # the lake itself answers "what is the next lever for X". Downstream: append
             # this column (default '' for older partitions).
             pa.field("next_lever", pa.string(), nullable=False),
-            # close_reason (added: CLAUDE.md "Always be grinding" / grind discipline, principle i).
+            # close_reason follows AGENTS.md "The Grind Mandate".
             # When a campaign CLOSES an investigation it must record a MEASURED reason -- one of
             # {beat-target, measured-plateau, infra-wall}; '' = still open (no close claimed). An
             # invalid/absent-but-claimed-close reason is REFUSED under --strict, recorded+warned
@@ -1286,7 +1254,7 @@ def build_campaign_row(
         "dcgm_grounded": [render_status.dcgm_grounded],
         "sol_per_arm_complete": [render_status.sol_per_arm_complete],
         # Auto-downgrade an unsupported verdict claim to "draft" instead of
-        # refusing to publish (always-publish policy v1.33.0): a verdict_tier=
+        # refusing to publish (always-publish policy): a verdict_tier=
         # verdict without the controlled/metric/baseline provenance lands as
         # draft (visible in the lake) rather than blocking the run.
         "verdict_tier": [_effective_verdict_tier(campaign_dir)],
@@ -1297,7 +1265,7 @@ def build_campaign_row(
         "publisher_operator": [publisher_op],
         "publisher_host": [publisher_h],
         # Join + grouping keys; experiment_id defaults to campaign_id so the row
-        # always carries a non-empty join key even for pre-v1.34.0 campaigns.
+        # always carries a non-empty join key even for legacy campaigns.
         "experiment_id": [metadata.get("experiment_id") or campaign_id],
         "experiment_family": [metadata.get("family", "")],
         "evidence_bundle_path": [metadata.get("evidence_bundle_path", "")],
@@ -1627,7 +1595,7 @@ def build_tpm_table(
             pa.field("ttft_avg_ms", pa.float64(), nullable=True),
             pa.field("tpot_median_ms", pa.float64(), nullable=True),
             pa.field("itl_avg_ms", pa.float64(), nullable=True),
-            # Shape + warm/cold carry-through (added v1.42.0) so pricing can
+            # Shape + warm/cold carry-through so pricing can
             # filter capacity by ISL/OSL + cache mode.
             pa.field("mean_isl", pa.float64(), nullable=True),
             pa.field("mean_osl", pa.float64(), nullable=True),
@@ -1782,7 +1750,7 @@ _QUALITY_KEY_HINTS = ("acc", "accept", "eval", "loss", "delta")
 def _quality_metrics(extra: dict[str, Any]) -> dict[str, float]:
     """Extract numeric quality metrics from a cell's ``extra`` dict.
 
-    Canonical (profile-and-optimize v1.63.0+): a ``quality_metrics: {name: value}`` sub-dict
+    Canonical format: a ``quality_metrics: {name: value}`` sub-dict
     that accuracy/acceptance campaigns emit (distinct from hyperparameters). For
     campaigns predating that convention, fall back to flat numeric keys whose name
     looks like an accuracy / acceptance / eval / loss / delta metric (which
@@ -2166,6 +2134,40 @@ def _make_s3_client(cfg: S3Config) -> Any:
     )
 
 
+def _is_s3_not_found(error: Exception) -> bool:
+    """Return true only for an explicit missing-object response."""
+    if isinstance(error, FileNotFoundError):
+        return True
+    response = getattr(error, "response", None)
+    if not isinstance(response, dict):
+        return False
+    error_detail = response.get("Error")
+    metadata = response.get("ResponseMetadata")
+    code = error_detail.get("Code") if isinstance(error_detail, dict) else None
+    status = metadata.get("HTTPStatusCode") if isinstance(metadata, dict) else None
+    return str(code) in {"404", "NoSuchKey", "NotFound"} or status == 404
+
+
+def _is_s3_precondition_failed(error: Exception) -> bool:
+    """Return true for a failed conditional create."""
+    response = getattr(error, "response", None)
+    if not isinstance(response, dict):
+        return False
+    error_detail = response.get("Error")
+    metadata = response.get("ResponseMetadata")
+    code = error_detail.get("Code") if isinstance(error_detail, dict) else None
+    status = metadata.get("HTTPStatusCode") if isinstance(metadata, dict) else None
+    return str(code) in {"412", "PreconditionFailed"} or status == 412
+
+
+def _object_exists_error(bucket: str, key: str) -> FileExistsError:
+    return FileExistsError(
+        f"s3://{bucket}/{key} already exists and --if-exists={IF_EXISTS_FAIL}. "
+        f"Pass --if-exists={IF_EXISTS_OVERWRITE} to clobber or "
+        f"--if-exists={IF_EXISTS_SKIP} to no-op."
+    )
+
+
 def upload_to_s3(
     local_path: Path,
     *,
@@ -2180,7 +2182,8 @@ def upload_to_s3(
     Returns a dict ``{key, size_bytes, skipped}``. Respects
     ``if_exists`` semantics (fail / skip / overwrite). Idempotency is
     keyed on the S3 object key (not ETag), matching the downstream loader's
-    expectation that each campaign re-publish overwrites in place.
+    expectation that a caller must opt in before an existing campaign object is
+    overwritten.
     """
     factory = s3_client_factory or _make_s3_client
     client = factory(cfg)
@@ -2189,21 +2192,26 @@ def upload_to_s3(
     try:
         client.head_object(Bucket=bucket, Key=key)
         exists = True
-    except Exception:  # noqa: BLE001 - boto3 raises ClientError; we want any "not found" to fall through
-        exists = False
+    except Exception as error:  # noqa: BLE001 - boto3 exposes service errors at runtime
+        if not _is_s3_not_found(error):
+            raise
 
     if exists:
         if if_exists == IF_EXISTS_FAIL:
-            raise FileExistsError(
-                f"s3://{bucket}/{key} already exists and --if-exists={IF_EXISTS_FAIL}; "
-                f"pass --if-exists={IF_EXISTS_OVERWRITE} to clobber or "
-                f"--if-exists={IF_EXISTS_SKIP} to no-op."
-            )
+            raise _object_exists_error(bucket, key)
         if if_exists == IF_EXISTS_SKIP:
             return {"key": key, "size_bytes": local_path.stat().st_size, "skipped": True}
 
-    with local_path.open("rb") as body:
-        client.put_object(Bucket=bucket, Key=key, Body=body)
+    put_kwargs: dict[str, Any] = {"Bucket": bucket, "Key": key}
+    if if_exists == IF_EXISTS_FAIL:
+        put_kwargs["IfNoneMatch"] = "*"
+    try:
+        with local_path.open("rb") as body:
+            client.put_object(Body=body, **put_kwargs)
+    except Exception as error:  # noqa: BLE001 - boto3 exposes service errors at runtime
+        if if_exists == IF_EXISTS_FAIL and _is_s3_precondition_failed(error):
+            raise _object_exists_error(bucket, key) from error
+        raise
     return {"key": key, "size_bytes": local_path.stat().st_size, "skipped": False}
 
 
@@ -2218,6 +2226,7 @@ def resolve_s3_config(
     bucket: str | None,
     access_key_file: str | None,
     secret_key_file: str | None,
+    require_credentials: bool = True,
 ) -> S3Config:
     """Resolve the four S3 fields with CLI > env > default precedence.
 
@@ -2227,15 +2236,19 @@ def resolve_s3_config(
     """
     resolved_endpoint = endpoint or os.environ.get(S3_ENV_ENDPOINT, S3_DEFAULT_ENDPOINT)
     resolved_bucket = bucket or os.environ.get(S3_ENV_BUCKET, S3_DEFAULT_BUCKET)
-    if access_key_file:
-        ak = Path(access_key_file).expanduser().read_text().strip()
+    if require_credentials:
+        if access_key_file:
+            ak = Path(access_key_file).expanduser().read_text().strip()
+        else:
+            ak = os.environ.get(S3_ENV_ACCESS_KEY, "").strip()
+        if secret_key_file:
+            sk = Path(secret_key_file).expanduser().read_text().strip()
+        else:
+            sk = os.environ.get(S3_ENV_SECRET_KEY, "").strip()
     else:
-        ak = os.environ.get(S3_ENV_ACCESS_KEY, "").strip()
-    if secret_key_file:
-        sk = Path(secret_key_file).expanduser().read_text().strip()
-    else:
-        sk = os.environ.get(S3_ENV_SECRET_KEY, "").strip()
-    if not ak or not sk:
+        ak = ""
+        sk = ""
+    if require_credentials and (not ak or not sk):
         raise SystemExit(
             "FATAL: S3 access/secret key missing. Set "
             f"{S3_ENV_ACCESS_KEY} + {S3_ENV_SECRET_KEY} in the "
@@ -2269,20 +2282,15 @@ def publish(
     write them locally to ``<campaign>/lake-cache/``, and (unless
     ``dry_run``) upload to S3.
 
-    Publish policy (v1.33.0): EVERY measurement run publishes -- a
-    latency-bound / ncu-only / zymtrace-proxy campaign is a first-class result,
-    not a refusal. Incompleteness (no SoL evidence, 0 throughput-scatter points,
-    an unsupported verdict claim) is recorded on the lake row (``sol_complete``,
-    ``focus``, ``sol_rigor``, ``plot_ready_points``, ``omitted_pages``,
-    ``verdict_tier``) + warned loudly, never hidden. The ONLY hard requirement
-    is that ``report_render`` ran first (a campaign with no report_status.json
-    cannot be published -- run render first). An unsupported ``verdict_tier=
-    verdict`` claim is downgraded to ``draft`` (it still publishes).
+    Library callers choose the completeness policy with ``strict``. When false,
+    incomplete evidence is recorded on the lake row and warned. When true,
+    completeness and verdict problems raise ``CampaignIncompleteError``. The
+    public CLI passes ``strict=True`` by default. Operators must pass
+    ``--no-strict`` for an intentional-gap publish. Every mode requires
+    ``report_render`` to have produced ``report_status.json`` first.
 
-    ``strict=True`` restores the old fail-loud behavior (raise
-    ``CampaignIncompleteError`` on any completeness/verdict problem) for callers
-    that want a gate. ``allow_incomplete`` is retained for back-compat (no-op
-    now that landing is the default).
+    ``allow_incomplete`` is retained as a deprecated compatibility alias for the
+    permissive library behavior.
 
     Returns a ``PublishResult`` with per-table outcomes.
     """
@@ -2358,7 +2366,7 @@ def publish(
             file=sys.stderr,
         )
 
-    # DCGM byte-grounding gate (v1.33.0): byte-grounding is MANDATORY by
+    # DCGM byte-grounding gate: byte-grounding is MANDATORY by
     # default for any campaign that HAS Speed-of-Light evidence. A campaign
     # that is sol_complete=True (L1 zymtrace roofline) but dcgm_grounded=False
     # (no DCGM workload-level byte/FLOP grounding, pages 6/6b) is FAIL-CLOSED:
@@ -2369,7 +2377,7 @@ def publish(
     # sol_complete=False campaign has no SoL evidence at all, so DCGM grounding
     # is moot -- that case is governed by the completeness policy above.)
     # DCGM byte-grounding is RECORDED (dcgm_grounded column), not a refusal
-    # (always-publish policy v1.33.0): a zymtrace-only or ncu-only campaign is a
+    # (always-publish policy): a zymtrace-only or ncu-only campaign is a
     # first-class published result; its lack of DCGM byte-grounding is visible in
     # the lake row + warned, never hidden. `strict=True` (or the legacy
     # `allow_ungrounded=False` under strict) restores the fail-closed gate.

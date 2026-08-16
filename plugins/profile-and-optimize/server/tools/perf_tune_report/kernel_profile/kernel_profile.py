@@ -82,7 +82,7 @@ from pathlib import Path
 from typing import Any
 
 
-_DEFAULT_SIDECAR_IMAGE = "ghcr.io/cfregly/nsys-sidecar:0.1.0"
+_DEFAULT_SIDECAR_IMAGE = "ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d"
 _DEFAULT_DURATION_S = 120
 _DEFAULT_VLLM_PID_PATTERN = "vllm serve"
 _DEFAULT_SAMPLE = "cpu"

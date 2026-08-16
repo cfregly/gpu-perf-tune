@@ -3,21 +3,20 @@ Audience: operators and contributors using the fleet-wide profiling tooling.
 
 # profiling
 
-Fleet-wide profiling tools for MLPerf Training cohorts.
+Fleet-wide profiling tools for GPU clusters.
 
 This package implements the fleet-wide profiling and hang-detection
 stack designed in
-[`../../docs/profiling-and-perf-discovery.md`](/plugins/profile-and-optimize/server/docs/profiling-and-perf-discovery.md)
+[`../../docs/profiling-and-perf-discovery.md`](../../docs/profiling-and-perf-discovery.md)
 section `## v6.1 carry-forward: fleet-wide profiling and hang-detection stack`.
 
 ## Subpackages
 
-- [`hang_detector/`](/plugins/profile-and-optimize/server/tools/profiling/hang_detector) - fleet-wide NCCL collective hang
+- [`hang_detector/`](hang_detector) - fleet-wide NCCL collective hang
   detector. Consumes GPUSD-published per-rank `(rank, seq_num,
   timestamp)` metadata, buckets ranks by `rank % stride`, and emits
   structured alerts when a bucket's median seq_num lags the leader
-  bucket. The default `stride=32` matches the MOD-32 hang signature
-  (see [`../../docs/learnings/healthverification-mod32-probe-spec.md`](/plugins/profile-and-optimize/server/docs/learnings/healthverification-mod32-probe-spec.md)).
+  bucket. The default `stride=32` matches the bundled MOD-32 synthetic fixture.
 
 ## Quickstart
 
@@ -63,7 +62,7 @@ All tests use synthetic JSON fixtures. No live cluster dependency.
 
 ## Cross-references
 
-- Design appendix: [`../../docs/profiling-and-perf-discovery.md`](/plugins/profile-and-optimize/server/docs/profiling-and-perf-discovery.md)
+- Design appendix: [`../../docs/profiling-and-perf-discovery.md`](../../docs/profiling-and-perf-discovery.md)
   "fleet-wide profiling and hang-detection stack".
 - Failure mode worth knowing: fleet-wide polling can exhaust file
   descriptors on the collector host. That finding drives the per-rack

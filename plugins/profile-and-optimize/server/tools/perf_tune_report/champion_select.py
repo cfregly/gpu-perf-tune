@@ -25,7 +25,6 @@ This is a PURE post-processing verb (no cluster runs): the gates are measured by
 the bench/eval skills and passed in; this module is the synthesis + the
 explainable, data-backed decision. Sibling of ``tpm_summary`` / ``value_view``.
 
-Added in profile-and-optimize v1.66.0.
 """
 
 from __future__ import annotations

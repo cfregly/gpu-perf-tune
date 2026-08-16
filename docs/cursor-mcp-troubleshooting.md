@@ -2,44 +2,53 @@
 
 This document covers the common failure modes for the `profile_and_optimize` MCP server (and optional sibling servers) when used inside Cursor's MCP panel, and the one-liner that resolves each:
 
-1. **`profile_and_optimize` plugin: `spawn .../v1.0.1/server/.venv/bin/python ENOENT`** - stale plugin path after a marketplace version bump.
+1. **`profile_and_optimize`: `spawn .../bin/python ENOENT`** - missing installer venv or stale local config.
 2. **Env-var-gated optional servers: `Connection closed`** - expected behavior when the gating env var is unset.
 3. **OAuth-backed MCPs (e.g., `github`): "Logout" badge** - OAuth token / session cookie expiry.
 
 If you are arriving here from a screenshot of red badges in the Cursor MCP panel, walk down this list in order.
 
-## 1. `profile_and_optimize` plugin: `spawn ... ENOENT` after a version bump
+## 1. `profile_and_optimize`: `spawn ... ENOENT`
 
 ### Symptom
 
 The MCP panel shows the `profile_and_optimize` server with a red badge and an error like
 
 ```
-spawn /Users/<you>/.../plugins/profile-and-optimize/v1.0.1/server/.venv/bin/python ENOENT
+spawn /Users/<you>/.local/share/profile-and-optimize-mcp-venv/bin/python ENOENT
 ```
 
-where the path includes an older marketplace version (e.g., `v1.0.1`) that no longer exists on disk.
+The configured Python path may also point to an old checkout or another venv
+that no longer exists.
 
 ### Root cause
 
-Cursor's MCP server registry caches the absolute path to the previous plugin version's Python venv. When `claude plugin update` (or `make refresh-symlinks`) replaces that venv with the new version's, Cursor still tries to spawn the old one.
+The Cursor entry was created by an older install, the installer venv was
+removed, or the repository moved. Skill links under `~/.cursor/skills` are
+separate from the MCP runtime and do not replace its venv.
 
 ### Fix
 
 ```bash
 cd /path/to/profile-and-optimize-checkout
-git pull origin main
-claude plugin update profile-and-optimize@profile-and-optimize-plugins
-make refresh-symlinks
+git pull --ff-only origin main
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client cursor
 ```
 
-then, **inside Cursor**, open the MCP panel (`Settings -> MCP` or the gear icon next to the chat input), find the `profile_and_optimize` server, and toggle the green slider off and then on. That forces Cursor to re-read the new server descriptor from disk.
+The installer creates or updates the persistent venv under
+`~/.local/share/profile-and-optimize-mcp-venv` and atomically updates
+`~/.cursor/mcp.json`. Inside Cursor, open the MCP panel, find
+`profile_and_optimize`, and reload or toggle the server so Cursor reads the new
+entry.
 
 If the badge is still red after the toggle, fully restart Cursor (`Cmd-Q` on macOS) - the in-memory cache is cleared on cold start.
 
-### Why this isn't a `make` target
+### Skills are installed separately
 
-`make refresh-symlinks` already refreshes the on-disk plugin layout. The Cursor-side toggle is workstation state (per-operator, per-Cursor-window) and is not something the marketplace can drive from a shell script. The toggle step is documented as part of the release ritual in [`../CONTRIBUTING.md`](/CONTRIBUTING.md#release-ritual).
+Run `make refresh-symlinks` only when you also need to install or refresh the
+32 skills under `~/.cursor/skills`. The Cursor reload is application state and
+cannot be driven by the repository installer.
 
 ## 2. Env-var-gated optional servers: `Connection closed`
 
@@ -100,17 +109,23 @@ If the auth flow fails or hangs, the fallback is to remove and re-add the server
 
 ### Note on optional servers
 
-Only `profile_and_optimize`, `grafana`, and `github` ship in the plugin's [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json). Optional servers (e.g. `prometheus_mcp`, `zymtrace`) do not ship in the plugin install - if you want them, add their entries to your own `~/.cursor/mcp.json` (Cursor) or `~/.claude/settings.json` (Claude Code).
+Only `profile_and_optimize` ships in the plugin's [`.mcp.json`](../plugins/profile-and-optimize/.mcp.json).
+Grafana, GitHub, Prometheus, Zymtrace, and other external servers are optional
+entries owned by the user. Add them to your local client configuration when
+needed.
 
-## 4. `.mcp.json` env-var-placeholder entries park as red `Connection closed`
+## 4. User-owned env placeholders can show red `Connection closed`
 
 ### Symptom
 
-A server declared in [`../plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json) (e.g. `grafana`, `github`) shows a red `Connection closed` badge in the MCP panel, with no helpful error message, immediately after Cursor starts.
+An optional server in your local `~/.cursor/mcp.json` shows a red
+`Connection closed` badge immediately after Cursor starts.
 
 ### Root cause
 
-The manifest entry references an env var via `${VAR}` (no `:-default` fallback). When you haven't exported `VAR` before launching Cursor, Cursor expands the placeholder to the literal string `${VAR}` and passes it to Docker / npx / the binary, which fails before any MCP handshake. Cursor reports this as `Connection closed`. (Claude Code skips servers whose env vars are unset. Cursor does not - hence the asymmetry.)
+The local entry references an unset environment variable such as `${VAR}`.
+The command then fails before the MCP handshake, and Cursor reports
+`Connection closed`.
 
 ### Fix (option 1: export the env vars)
 
@@ -123,27 +138,32 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...
 open -a Cursor
 ```
 
-Persist these in your shell profile and source it before launching Cursor for a permanent fix.
+Persist the variables in your shell profile and source it before launching
+Cursor if you want the optional server available in every session.
 
 ### Fix (option 2: comment out the server locally)
 
-If you don't intend to use `grafana` or `github` via the plugin manifest, comment out the corresponding block in your local `~/.cursor/mcp.json` (NOT the in-repo `.mcp.json`). The repo manifest is the marketplace artifact. Your local file is operator state.
+If you do not intend to use the optional server, remove its block from your
+local `~/.cursor/mcp.json`. Do not edit the repository manifest for local
+operator state.
 
-### Why `grafana` and `github` are in `.mcp.json`
+### Why external servers are not in the plugin manifest
 
-The manifest keeps `profile_and_optimize` (bundled, mandatory), `grafana`, and `github`. `grafana` ships as a straightforward Docker image and `github` has a `:-default` fallback on the command (`${GITHUB_MCP_COMMAND:-docker}`). These are the two external servers most operators have credentials for. Servers whose every dimension would be placeholder-gated stay operator-side optional instead.
+The plugin owns and tests `profile_and_optimize`. External servers have their
+own credentials, release cycles, and local policies, so users configure them
+separately.
 
 ## Quick troubleshooting matrix
 
 | Badge / error | Failure mode | One-liner fix |
 | --- | --- | --- |
-| `spawn .../v<old-version>/.../python ENOENT` | Stale path after version bump | `claude plugin update profile-and-optimize@profile-and-optimize-plugins && make refresh-symlinks` + toggle the server in Cursor MCP panel |
+| `spawn .../bin/python ENOENT` | Missing installer venv or stale local config | Rerun the installer with `--client cursor`, then reload the server in Cursor |
 | `Connection closed` on an env-var-gated optional server | Optional server, gating env var unset | Either ignore (expected), or export the `*_COMMAND` env var and restart Cursor |
-| `Connection closed` on `grafana`, `github` | Unguarded `${VAR}` placeholder, env var unset | Either export the env var and restart, or comment out the block in `~/.cursor/mcp.json` |
+| `Connection closed` on a user-owned optional server | Required environment variable is unset | Export the variable and restart, or remove the local entry |
 | "Logout" on `github` | OAuth / session expiry | Click "Sign in" in the MCP panel and complete the auth flow |
 | Looking for an optional server (`prometheus_mcp`, `zymtrace`, ...) in the plugin section | Optional servers are operator-configured, not shipped | Add the entry to your own `~/.cursor/mcp.json` |
 
 ## Related
 
-- [`../CONTRIBUTING.md`](/CONTRIBUTING.md#release-ritual) - release ritual including `make refresh-symlinks`
-- [`../plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json) - server declarations
+- [`../plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/INSTALL.md`](../plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/INSTALL.md) - client installation details
+- [`../plugins/profile-and-optimize/.mcp.json`](../plugins/profile-and-optimize/.mcp.json) - Claude Code plugin server declaration

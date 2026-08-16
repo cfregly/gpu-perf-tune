@@ -1,6 +1,9 @@
 ---
 name: inference-aa-workload
-last_validated: 2026-05-29
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-29"
 description: >-
   Reproduce the Artificial Analysis (AA) language-model performance workload
   shapes against an OpenAI-compatible chat endpoint using NVIDIA AIPerf.
@@ -15,21 +18,7 @@ description: >-
   "AA benchmark", "AA 1k/10k/100k shapes", "reproduce artificialanalysis.ai",
   "AA methodology", "aa-10k", "compare to AA leaderboard", or any combination
   of "artificial analysis / AA" with "workload / shape / benchmark / dataset".
-allowed-tools:
-  - mcp__profile_and_optimize__search_runbooks
-  - mcp__profile_and_optimize__search_evidence
-  - mcp__profile_and_optimize__perf_tune_report_campaign_init
-  - mcp__profile_and_optimize__perf_tune_report_cell_run
-  - mcp__profile_and_optimize__perf_tune_report_atlas_aggregate
-  - mcp__profile_and_optimize__perf_tune_report_import_roofline_sweep
-  - mcp__profile_and_optimize__perf_tune_report_report_render
-  - mcp__profile_and_optimize__perf_tune_report_publish_to_lake
-  - Bash(python3:*)
-  - Bash(uv:*)
-  - Bash(aiperf:*)
-  - Bash(date:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__search_runbooks mcp__profile_and_optimize__search_evidence mcp__profile_and_optimize__perf_tune_report_campaign_init mcp__profile_and_optimize__perf_tune_report_cell_run mcp__profile_and_optimize__perf_tune_report_atlas_aggregate mcp__profile_and_optimize__perf_tune_report_import_roofline_sweep mcp__profile_and_optimize__perf_tune_report_report_render mcp__profile_and_optimize__perf_tune_report_publish_to_lake Bash(python3:*) Bash(uv:*) Bash(aiperf:*) Bash(date:*) Read Write"
 ---
 
 # inference-aa-workload
@@ -46,7 +35,7 @@ and an "at least N answer tokens" guarantee. This skill drives NVIDIA
 captures TTFT / output-speed / throughput.
 
 The AA shapes (the single source of truth lives in
-[`aa_workload.py`](/plugins/profile-and-optimize/server/tools/perf_tune_report/runners/aa_workload.py)
+[`aa_workload.py`](../../server/tools/perf_tune_report/runners/aa_workload.py)
 `AA_SHAPES` and the bundled script's `AA_SHAPES`, kept in lock-step by a
 drift-guard test):
 
@@ -137,10 +126,10 @@ Do **not** use this skill for:
 
 - An agentic-coding replay dataset against an **in-cluster** vLLM endpoint -
   that is
-  [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
+  [`inference-perf-bench`](../inference-perf-bench/SKILL.md)
   (mooncake-trace multi-turn replay, not AA synthetic shapes).
 - Quality / accuracy evaluation (GPQA, MMLU-Pro, Terminal-Bench) - use
-  [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md).
+  [`inference-model-eval`](../inference-model-eval/SKILL.md).
 - Training performance benchmarking - out of scope for this plugin.
 
 This skill is distinct from `inference-perf-bench` precisely because AA's
@@ -176,7 +165,8 @@ The skill **fails closed** if any of these are not satisfied.
    `o200k_base` token-budget sizing. Without it the generator falls back to
    a ~0.75 tokens/word heuristic and warns loudly.
 4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** (perf_tune_report integration only) - set by the
-   bundled MCP server. Campaigns land under `./campaigns/` by default.
+   bundled MCP server. Campaigns land under
+   `<server-root>/experiments/artifacts/perf-tune-report/campaigns/` by default.
 
 ## Interaction style
 
@@ -259,15 +249,21 @@ mcp__profile_and_optimize__perf_tune_report_campaign_init with:
 mcp__profile_and_optimize__perf_tune_report_cell_run with:
   args: ["--campaign", "<id>", "--cell", "aa-10k", "--backend", "aa",
          "--aa-shape", "aa-10k", "--aa-mode", "synthetic",
-         "--i-understand-this-submits-jobs", "--json"]
+         "--json"]
+  i_understand_this_submits_jobs: true
 
 mcp__profile_and_optimize__perf_tune_report_atlas_aggregate with: args: ["--campaign", "<id>", "--json"]
 mcp__profile_and_optimize__perf_tune_report_report_render   with: args: ["--campaign", "<id>", "--json"]
-mcp__profile_and_optimize__perf_tune_report_publish_to_lake with: args: ["--campaign", "<id>", "--json"]
+mcp__profile_and_optimize__perf_tune_report_publish_to_lake with:
+  args: ["--campaign", "<id>", "--json"]
+  i_understand_this_publishes_externally: true
 ```
 
-`cell_run --backend aa` is **ack-gated** (`safety=submits_jobs`). Use
-`--dry-run` to print the per-concurrency aiperf commands without executing.
+`cell_run --backend aa` is **ack-gated** (`safety=submits_jobs`). The final
+external publish has its own structured acknowledgement. Use `--dry-run` to
+print the per-concurrency aiperf commands without executing.
+Publish is strict by default. Use `--no-strict` only for an intentional-gap
+publish that should be recorded with warnings.
 AA cells flow through `atlas_aggregate -> report_render -> publish_to_lake`
 unchanged because the runner records `backend=aiperf` provenance and stashes
 the AA shape/mode in each row's `extra`.
@@ -276,14 +272,13 @@ the AA shape/mode in each row's `extra`.
 
 AA campaigns are serving-throughput campaigns, so they MUST carry the
 prefill/decode roofline (the "what C maxes the TFLOPs / is decode >=75% HBM /
-which sharding degree" answers - `publish_to_lake --strict` refuses a
-throughput/mixed serving campaign that omits page 7). Against the same AA pod,
-before teardown, capture + import the sweep with your deploy's roofline-sweep
-script (same step as `inference-perf-tune-report` Phase D3):
+which sharding degree" answers. Strict publish refuses a throughput or mixed
+serving campaign that omits page 7). Against the same AA pod, before teardown,
+capture a compatible decode-concurrency and prefill-ISL bundle with the
+operator's profiling workflow. Then import it as described in
+`inference-perf-tune-report` Phase D3:
 
 ```text
-roofline-sweep.sh <ns> <pod> <out> <model> <tokenizer> \
-  "1 2 4 8 16 32 64 128 192" "512 1024 2048 4096 8192" <container>
 mcp__profile_and_optimize__perf_tune_report_import_roofline_sweep with:
   args: ["--campaign", "<id>", "--bundle", "<out>", "--hardware", "GB300",
          "--tensor-parallel", "<tp>", "--quant", "<NVFP4|FP8|BF16>", "--cache-mode", "cold"]
@@ -295,7 +290,7 @@ Then re-render (`report_render`) so page 7 + `roofline_v1` land. See
 ## Safety
 
 - **`cell_run --backend aa` is ack-gated** (`safety=submits_jobs`) per
-  [`server/docs/mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md).
+  [`server/docs/mcp-tool-io-contract.md`](../../server/docs/mcp-tool-io-contract.md).
   Pass `--i-understand-this-submits-jobs` to execute, `--dry-run` to preview.
 - **No credentials in artifacts.** The API key is read from the env var
   named by `cell.aa.api_key_env` (default `WANDB_INFERENCE_API_KEY`). It is
@@ -303,7 +298,7 @@ Then re-render (`report_render`) so page 7 + `roofline_v1` land. See
 - **Public-gateway caveat.** AA's methodology benchmarks a provider's public
   endpoint, so the standalone script defaults to the W&B public gateway. The
   documented dev-vs-prod ~3x throughput skew (per
-  [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) Safety) means an
+  [`inference-perf-bench`](../inference-perf-bench/SKILL.md) Safety) means an
   in-cluster service URL and the public gateway are NOT interchangeable -
   report which one was measured.
 - **Provider field rejection.** If the endpoint rejects `min_tokens` /
@@ -352,11 +347,11 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 - AA methodology: <https://artificialanalysis.ai/methodology/performance-benchmarking>.
 - Shared command builder + dataset generator + normalizer:
-  [`server/tools/perf_tune_report/runners/aa_workload.py`](/plugins/profile-and-optimize/server/tools/perf_tune_report/runners/aa_workload.py).
-- perf_tune_report runner: [`server/tools/perf_tune_report/runners/aa_bench.py`](/plugins/profile-and-optimize/server/tools/perf_tune_report/runners/aa_bench.py).
-- Self-contained script: [`assets/repro_artificialanalysis.py`](/plugins/profile-and-optimize/skills/inference-aa-workload/assets/repro_artificialanalysis.py).
-- Pair: [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
+  [`server/tools/perf_tune_report/runners/aa_workload.py`](../../server/tools/perf_tune_report/runners/aa_workload.py).
+- perf_tune_report runner: [`server/tools/perf_tune_report/runners/aa_bench.py`](../../server/tools/perf_tune_report/runners/aa_bench.py).
+- Self-contained script: [`assets/repro_artificialanalysis.py`](assets/repro_artificialanalysis.py).
+- Pair: [`inference-perf-bench`](../inference-perf-bench/SKILL.md)
   (in-cluster multi-turn replay counterpart),
-  [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md)
+  [`inference-perf-tune-report`](../inference-perf-tune-report/SKILL.md)
   (renders the campaign PDF).
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - full-context reporting + Speed-of-light framing.
+- [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) - full-context reporting + Speed-of-light framing.

@@ -6,12 +6,11 @@
 # run_and_time.sh already consumes (mirrored in
 # tests/fixtures/ai_tuning/hyp/scaled_run.tp-comm-overlap-true.hyp:435-444),
 # injects the Megatron --profile / --nvtx_ranges flags through
-# TRAINING_EXTRA_ARGS (mirrored in
-# tools/benchmarks/llama31_405b/megatron_overlay_run.sh:203), routes LOGDIR
-# under the artifact anchor (per CLAUDE.md "Artifact Anchor"), and forwards
+# TRAINING_EXTRA_ARGS, routes LOGDIR
+# under the artifact anchor, and forwards
 # the operator-gate to the underlying launcher.
 #
-# Per CLAUDE.md "Fail Fast, No Silent Fallbacks":
+# Per AGENTS.md safety guidance:
 #   - every required input must be set; the wrapper aborts on the first
 #     failing assertion.
 #   - --ack-cluster-cost is mandatory; --dry-run is the only opt-out for
@@ -19,15 +18,17 @@
 #   - missing nsys in the container is a fatal error; we do not fall back
 #     to a "run without nsys" mode silently.
 #
-# Per CLAUDE.md "Self-Contained Repository Boundary":
-#   - shells out only to checked-in tools (the existing 405B launcher.sh
-#     and the unified common/launcher.py).
+# The operator supplies the launcher executable and each launcher argument.
+# This repository does not bundle workload launchers.
 #
 # Usage:
 #   tools/pipeline/submission/profile/profile_run.sh \
 #       --bench llama31_8b \
 #       --run-id <slug> \
 #       --nodes 8 \
+#       --launcher /path/to/workload-launcher \
+#       --launcher-arg=--nodes \
+#       --launcher-arg=8 \
 #       --ack-cluster-cost
 #
 # Arguments:
@@ -35,7 +36,9 @@
 #   --run-id SLUG            short kebab-case slug; the profiling artifact
 #                            family is derived from --bench (campaign/<bench>/
 #                            <run-id>/profiling/).
-#   --nodes N                node count to forward to the underlying launcher.
+#   --nodes N                node count recorded and exported as NODES.
+#   --launcher PATH          operator-supplied launcher executable.
+#   --launcher-arg X         argument forwarded to the launcher. Repeatable.
 #   --profile-step-start N   first iteration profiled (default 10).
 #   --profile-step-end N     last iteration profiled, exclusive (default 12).
 #   --profile-ranks LIST     comma-separated ranks; defaults per-bench:
@@ -47,8 +50,7 @@
 #                            with the default nsys path.
 #   --extra-args "..."       additional Megatron args appended to
 #                            TRAINING_EXTRA_ARGS verbatim.
-#   --extra-launcher-arg X   additional argument forwarded to the underlying
-#                            launcher (repeatable, e.g. for SLURM_NODELIST).
+#   --extra-launcher-arg X   compatibility alias for --launcher-arg.
 #   --reservation NAME       forwarded to the 405B launcher's --reservation.
 #   --ack-cluster-cost       mandatory; acknowledges this is an expensive
 #                            cluster run that produces a profile.
@@ -61,11 +63,10 @@
 #   NSYS_EXTRA_ARGS          extra `nsys profile` args appended after the
 #                            default flags. Default: empty.
 #   ART_ROOT                 artifact root. Default:
-#                            mlperf-6.0-training/experiments/artifacts.
+#                            experiments/artifacts.
 #
 # The artifact dir is created up front so the operator can place
-# SOURCE.md + summary.md + commands/ alongside the profile per the CLAUDE.md
-# "Reproducibility-Grade Evidence" rule.
+# SOURCE.md + summary.md + commands/ alongside the profile.
 
 set -euo pipefail
 
@@ -87,6 +88,7 @@ PROFILE_RANKS=""
 USE_PYTORCH_PROFILER=0
 EXTRA_ARGS=""
 RESERVATION=""
+LAUNCHER=""
 ACK_CLUSTER_COST=0
 DRY_RUN=0
 declare -a EXTRA_LAUNCHER_ARGS=()
@@ -96,12 +98,14 @@ while [[ $# -gt 0 ]]; do
         --bench) BENCH="${2:-}"; shift 2 ;;
         --run-id) RUN_ID="${2:-}"; shift 2 ;;
         --nodes) NODES="${2:-}"; shift 2 ;;
+        --launcher) LAUNCHER="${2:-}"; shift 2 ;;
+        --launcher-arg|--extra-launcher-arg) EXTRA_LAUNCHER_ARGS+=("${2:-}"); shift 2 ;;
+        --launcher-arg=*|--extra-launcher-arg=*) EXTRA_LAUNCHER_ARGS+=("${1#*=}"); shift ;;
         --profile-step-start) PROFILE_STEP_START="${2:-}"; shift 2 ;;
         --profile-step-end) PROFILE_STEP_END="${2:-}"; shift 2 ;;
         --profile-ranks) PROFILE_RANKS="${2:-}"; shift 2 ;;
         --use-pytorch-profiler) USE_PYTORCH_PROFILER=1; shift ;;
         --extra-args) EXTRA_ARGS="${2:-}"; shift 2 ;;
-        --extra-launcher-arg) EXTRA_LAUNCHER_ARGS+=("${2:-}"); shift 2 ;;
         --reservation) RESERVATION="${2:-}"; shift 2 ;;
         --ack-cluster-cost) ACK_CLUSTER_COST=1; shift ;;
         --dry-run) DRY_RUN=1; shift ;;
@@ -113,6 +117,7 @@ done
 [[ -n "${BENCH}" ]] || abort "--bench is required (llama31_8b | llama31_405b | deepseekv3_671b)"
 [[ -n "${RUN_ID}" ]] || abort "--run-id is required (short kebab-case slug)"
 [[ -n "${NODES}" ]] || abort "--nodes is required"
+[[ -n "${LAUNCHER}" ]] || abort "--launcher is required"
 [[ "${RUN_ID}" =~ ^[a-z0-9][a-z0-9-]*$ ]] || abort "--run-id must be kebab-case (got '${RUN_ID}')"
 [[ "${NODES}" =~ ^[0-9]+$ ]] || abort "--nodes must be an integer (got '${NODES}')"
 [[ "${PROFILE_STEP_START}" =~ ^[0-9]+$ ]] || abort "--profile-step-start must be int"
@@ -141,9 +146,10 @@ case "${BENCH}" in
 esac
 
 [[ "${PROFILE_RANKS}" =~ ^[0-9]+(,[0-9]+)*$ ]] || abort "--profile-ranks must be a comma-separated rank list (got '${PROFILE_RANKS}')"
+[[ -x "${LAUNCHER}" ]] || abort "launcher is not executable: ${LAUNCHER}"
 
 if (( ACK_CLUSTER_COST == 0 && DRY_RUN == 0 )); then
-    abort "--ack-cluster-cost is required (per CLAUDE.md operator gate). Use --dry-run to print without submitting."
+    abort "--ack-cluster-cost is required by the AGENTS.md safety policy. Use --dry-run to print without submitting."
 fi
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -162,8 +168,7 @@ profile_run: 'nsys' not found on the operator path. The wrapper does not
 require nsys on the login node (the in-image run_and_time.sh runs it
 inside the container), but the operator typically runs 'nsys stats'
 locally on the artifact afterwards. Install via the in-image recipe at
-[Megatron-Bridge/docker/common/install_nsys.sh](../../../../../Megatron-Bridge/docker/common/install_nsys.sh)
-or via 'apt-get install nsight-systems-cli'. Continuing.
+your deployment or via the platform's Nsight Systems CLI package. Continuing.
 EOF
     fi
 fi
@@ -187,33 +192,18 @@ if [[ -n "${PROFILER_FLAG}" ]]; then
 fi
 TRAINING_EXTRA_ARGS_FULL="${PROFILE_ARGS}${EXTRA_ARGS:+ ${EXTRA_ARGS}}"
 
-case "${BENCH}" in
-    llama31_405b)
-        LAUNCHER="${REPO_ROOT}/tools/benchmarks/llama31_405b/launcher.sh"
-        [[ -x "${LAUNCHER}" ]] || abort "launcher not executable: ${LAUNCHER}"
-        declare -a LAUNCHER_CMD=("${LAUNCHER}")
-        if (( DRY_RUN == 1 )); then
-            LAUNCHER_CMD+=(--dry-run)
-        fi
-        if [[ -n "${RESERVATION}" ]]; then
-            LAUNCHER_CMD+=("--reservation=${RESERVATION}")
-        fi
-        ;;
-    llama31_8b|deepseekv3_671b)
-        LAUNCHER="${REPO_ROOT}/tools/benchmarks/common/launcher.py"
-        [[ -f "${LAUNCHER}" ]] || abort "launcher not found: ${LAUNCHER}"
-        declare -a LAUNCHER_CMD=(python3 "${LAUNCHER}" --benchmark "${BENCH}" --nodes "${NODES}")
-        if (( DRY_RUN == 1 )); then
-            LAUNCHER_CMD+=(--dry-run)
-        else
-            LAUNCHER_CMD+=(--i-understand-this-submits-jobs)
-        fi
-        ;;
-esac
+declare -a LAUNCHER_CMD=("${LAUNCHER}")
+
+if [[ -n "${RESERVATION}" ]]; then
+    LAUNCHER_CMD+=("--reservation=${RESERVATION}")
+fi
 
 if (( ${#EXTRA_LAUNCHER_ARGS[@]} > 0 )); then
     LAUNCHER_CMD+=("${EXTRA_LAUNCHER_ARGS[@]}")
 fi
+
+printf -v LAUNCHER_DISPLAY '%q ' "${LAUNCHER_CMD[@]}"
+LAUNCHER_DISPLAY="${LAUNCHER_DISPLAY% }"
 
 CAPTURE_LOG="${ART_DIR}/capture.log"
 {
@@ -230,7 +220,7 @@ CAPTURE_LOG="${ART_DIR}/capture.log"
     printf 'training_extra_args=%s\n' "${TRAINING_EXTRA_ARGS_FULL}"
     printf 'logdir=%s\n' "${LOGDIR}"
     printf 'art_dir=%s\n' "${ART_DIR}"
-    printf 'launcher=%s\n' "${LAUNCHER_CMD[*]}"
+    printf 'launcher=%s\n' "${LAUNCHER_DISPLAY}"
     printf 'dry_run=%s\n' "${DRY_RUN}"
     printf 'started_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 } > "${CAPTURE_LOG}"
@@ -245,7 +235,7 @@ profile_run: bench=${BENCH} run_id=${RUN_ID} nodes=${NODES}
   TRAINING_EXTRA_ARGS=${TRAINING_EXTRA_ARGS_FULL}
   NSYSCMD=${NSYSCMD}
   NVTX_FLAG=${NVTX_FLAG}
-  launcher: ${LAUNCHER_CMD[*]}
+  launcher: ${LAUNCHER_DISPLAY}
 EOF
 
 if (( DRY_RUN == 1 )); then
@@ -258,5 +248,6 @@ export NSYSCMD
 export NVTX_FLAG
 export LOGDIR
 export PROFILE_RANKS
+export NODES
 
 "${LAUNCHER_CMD[@]}"

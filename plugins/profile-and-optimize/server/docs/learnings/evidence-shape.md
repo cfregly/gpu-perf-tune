@@ -22,7 +22,6 @@ without replaying the chat that produced it.
 
 ## Active Surfaces
 
-- `tools/shared/audit/audit_artifact_paths.py`
-- `tools/shared/audit/audit_evidence_bundle.py`
+- `tools/shared/artifact_bundle.py`
+- `tools/shared/capture_cmd.sh`
 - the `evidence` CLI (`python -m evidence`)
-

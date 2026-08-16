@@ -18,7 +18,6 @@ This page is conditional on ``champion_select.json`` being present; the renderer
 records the omission loudly (``OMISSION_REASONS['champion_select']``) when it is
 absent, never silently drops it.
 
-Added in profile-and-optimize v1.66.0.
 """
 
 from __future__ import annotations
@@ -72,7 +71,7 @@ def _draw_roofline(axR, payload: dict[str, Any], ceilings: dict[str, Any] | None
         axR.text(0.5, 0.5,
                  "Roofline overlay unavailable\n(no roofline_sweep.json for the "
                  "selected variants,\nor no sol-ceilings.yaml for this hardware).\n"
-                 "Run roofline-sweep.sh + import_roofline_sweep on each variant.",
+                 "Capture and import a roofline bundle for each variant.",
                  ha="center", va="center", fontsize=8, color="#a33",
                  transform=axR.transAxes)
         return

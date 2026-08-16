@@ -8,7 +8,8 @@ fabric-derived evidence. Agents and tools should consume it when it materially
 improves node selection, launch gating, contention diagnosis, reliability
 rollups, or performance attribution.
 
-For Grafana-scoped ClickHouse evidence in Cursor, prefer the observability
+For Grafana-scoped ClickHouse evidence in an MCP client, prefer the
+observability
 MCP tools: call `list_clickhouse_tables` first, then `query_clickhouse`
 against your canonical Grafana ClickHouse datasource UID.
 The generic ClickHouse plugin remains an operator-side read-only path when a

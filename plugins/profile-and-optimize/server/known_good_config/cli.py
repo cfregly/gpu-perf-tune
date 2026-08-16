@@ -4,8 +4,8 @@ Re-exports `CONTRACT`, `build_parser`, `main`, and `parse_args` from the
 canonical implementation at
 [`tools/known_good_config/known_good_config_cli.py`](../tools/known_good_config/known_good_config_cli.py).
 
-Added in profile-and-optimize v1.68.0. Backs the
-[`inference-known-good-config`](../skills/inference-known-good-config/SKILL.md) skill.
+Backs the
+[`inference-known-good-config`](../../skills/inference-known-good-config/SKILL.md) skill.
 """
 
 from __future__ import annotations

@@ -9,9 +9,7 @@ intercept). The per-kernel WEIGHT is **Total GPU time (ns)** (nsys is a true
 GPU-time measurement, not a sample proxy), used in the ``samples`` field so the
 downstream share math is identical.
 
-Generalizes the one-off
-``perf-tune-glm51/experiments/artifacts/gqa-nvfp4kv/qwen3a3b-gqanvfp4kv-20260601T010321Z/commands/nsys_to_kernels_json.py``
-(2026-06-01 GQA NVFP4-KV per-kernel finding) into a first-class verb.
+This replaces one-off bundle conversion scripts with a first-class importer.
 
 Declared-coverage contract (mirrors zymtrace_kernels / ncu_kernels):
 

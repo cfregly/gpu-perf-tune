@@ -5,8 +5,8 @@ following the schema documented in `docs/findings-schema.md`.
 
 Verbs:
   record: append a finding to a bundle's findings.yaml (writes_artifacts).
-  render: read findings.yaml + emit a presentable findings.md (read_only).
-  diff:   compare two findings.yaml files + emit a markdown drift report (read_only).
+  render: read findings.yaml + emit a presentable findings.md (writes_artifacts).
+  diff:   compare two findings.yaml files + emit a markdown drift report (writes_artifacts).
 """
 
 from __future__ import annotations
@@ -172,7 +172,7 @@ def _render(args: argparse.Namespace) -> int:
     result = {
         "library": "findings",
         "verb": "render",
-        "safety": "read_only",
+        "safety": "writes_artifacts",
         "findings_yaml": args.findings_yaml,
         "rendered_to": args.out or "(stdout)",
         "counts": counters,
@@ -225,7 +225,7 @@ def _diff(args: argparse.Namespace) -> int:
     result = {
         "library": "findings",
         "verb": "diff",
-        "safety": "read_only",
+        "safety": "writes_artifacts",
         "baseline": args.baseline,
         "current": args.current,
         "new_count": len(new_ids),
@@ -288,7 +288,7 @@ CONTRACT: dict[str, dict] = {
         "description": "Append a structured finding (one row in findings.yaml) to a bundle.",
     },
     "render": {
-        "safety": "read_only",
+        "safety": "writes_artifacts",
         "required": ("--findings-yaml",),
         "optional": ("--out", "--json"),
         "json": True,
@@ -296,7 +296,7 @@ CONTRACT: dict[str, dict] = {
         "description": "Convert findings.yaml to a presentable findings.md table grouped by severity.",
     },
     "diff": {
-        "safety": "read_only",
+        "safety": "writes_artifacts",
         "required": ("--baseline", "--current"),
         "optional": ("--out", "--json"),
         "json": True,

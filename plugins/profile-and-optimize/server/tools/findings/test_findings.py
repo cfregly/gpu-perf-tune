@@ -106,5 +106,5 @@ def test_diff_detects_new_resolved_and_status_changes(tmp_path: Path) -> None:
 def test_contract_has_3_verbs() -> None:
     assert set(f.CONTRACT.keys()) == {"record", "render", "diff"}
     assert f.CONTRACT["record"]["safety"] == "writes_artifacts"
-    assert f.CONTRACT["render"]["safety"] == "read_only"
-    assert f.CONTRACT["diff"]["safety"] == "read_only"
+    assert f.CONTRACT["render"]["safety"] == "writes_artifacts"
+    assert f.CONTRACT["diff"]["safety"] == "writes_artifacts"

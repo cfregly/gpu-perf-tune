@@ -1,11 +1,8 @@
-"""GPUSD endpoint scraper for the fleet-wide hang detector.
+"""GPUSD-compatible endpoint scraper for the fleet-wide hang detector.
 
-a colleague's GPUSD plugin publishes per-rank NCCL collective
-metadata (``rank``, ``seq_num``, ``op_type``, ``timestamp``) on each
-node's ``mhd`` endpoint in a Prometheus-parseable format. The
-canonical install path on the cluster is
-``/opt/gpusd/libnccl-profiler-gpusd.so`` per the 2026-05-13 thread at
-``docs/learnings/slack/<team-channel>/2026-05-13-2048n-optimized-node-list-rerun.md``.
+The expected endpoint publishes per-rank NCCL collective metadata
+(``rank``, ``seq_num``, ``op_type``, ``timestamp``) in a
+Prometheus-compatible format.
 
 This module reads GPUSD-shaped snapshots from one of two sources:
 
@@ -16,11 +13,9 @@ This module reads GPUSD-shaped snapshots from one of two sources:
 
 2. **Live cluster endpoints** (operator opt-in via the CLI's
    ``--live-cluster`` flag). The scraper issues HTTP GETs against each
-   node's ``http://${node}:${port}/metrics`` endpoint. **Connection
-   pooling**: ONE persistent HTTP connection per rack (not per node)
-   to cap file descriptors at 8192-GPU scale per a colleague's
-   2026-05-15 9-failures FD-exhaustion finding at
-   ``docs/learnings/slack/<team-channel>/2026-05-15-9-consecutive-node-failures.md``.
+   node's ``http://${node}:${port}/metrics`` endpoint. The live path is
+   explicit because endpoint fan-out consumes network and file-descriptor
+   capacity.
 
 The fixture-file path is the default because (a) it makes the
 detector unit-testable without live infrastructure, and (b) operators

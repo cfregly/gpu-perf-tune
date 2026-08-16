@@ -154,7 +154,7 @@ def _plot_dcgm_fallback(
 ) -> bool:
     """Plot one point per dcgm per_category_attribution entry.
 
-    v1.23.2 fallback for when ncu_kernels.json has all-null AI/tflops
+    Fallback for when ncu_kernels.json has all-null AI/tflops
     (e.g. capture used ``--set=basic``). Each per-category attribution
     row carries ``attributed_bytes_total`` + ``attributed_flops_total``
     so we can compute arithmetic intensity directly:
@@ -265,7 +265,7 @@ def render_page(
             ``per_category_attribution`` entry derived from DCGM
             workload-level totals. This makes page 5 useful even when
             ncu was captured with ``--set=basic`` (no FLOPS / DRAM-bytes
-            counters). Added in v1.23.2.
+            counters).
     """
     if not cell_ncu:
         raise ValueError("sol_roofline_scatter.render_page: cell_ncu is empty")
@@ -509,9 +509,9 @@ def render_page(
             "counters), so only %SoL (SM throughput) is measured; the hollow "
             "dotted markers are parked at the ridge AI as a PLACEHOLDER x-position "
             "(not a measurement).\n"
-            "HOW TO FIX: re-capture with --roofline-min (or --set full) per "
-            "perf-tune-glm51/ncu-sister/REPLAY-MODE-APPLICATION-RUNBOOK.md, then "
-            "re-import + re-render for a true arithmetic-intensity roofline.",
+            "HOW TO FIX: re-capture the same kernel with ncu --set full (or "
+            "--roofline-min), then re-import and re-render for a true "
+            "arithmetic-intensity roofline.",
             transform=ax.transAxes,
             ha="center",
             va="top",
@@ -526,7 +526,7 @@ def render_page(
             },
         )
 
-    # Added in v1.23.2: when no ncu kernels are plottable (all AI / TFLOPS
+    # When no ncu kernels are plottable (all AI / TFLOPS
     # are null because ncu was captured with --set=basic) AND no %SoL-only
     # point could be drawn, fall back to workload-level DCGM-derived points
     # from per_category_attribution.
@@ -536,7 +536,7 @@ def render_page(
             ax, cell_dcgm, ridge_ai=ridge_ai, peak_tflops=peak_tflops, peak_tbps=peak_tbps,
         )
 
-    # Added in v1.23.2: when STILL no points (no ncu kernels + no %SoL-only +
+    # When STILL no points (no ncu kernels + no %SoL-only +
     # no DCGM per_category_attribution), draw a centered annotation explaining
     # why so the operator doesn't read the empty scatter as "broken".
     if plotted_count == 0 and sol_only_count == 0 and not used_dcgm_fallback:
@@ -547,7 +547,8 @@ def render_page(
             "ncu_kernels.json has all-null arithmetic_intensity_flops_per_byte / achieved_tflops\n"
             "(captured with --set=basic; FLOPS + DRAM-bytes counters require --set=full)\n"
             "AND no dcgm_correlation.json with per_category_attribution found.\n\n"
-            "See OPERATOR-TODO.md TODO-NCU-FULL-SET-RECAPTURE.",
+            "Re-capture the same kernel with ncu --set full, then re-import "
+            "and re-render.",
             transform=ax.transAxes,
             ha="center",
             va="center",
@@ -601,7 +602,7 @@ def render_page(
     ax_cv.text(
         0.5,
         0.12,
-        "See CLAUDE.md 'Speed-of-light framing' for the three-level rigor "
+        "See AGENTS.md 'Speed-of-light framing' for the three-level rigor "
         "hierarchy (sample-share -> ncu per-kernel -> DCGM workload-level).",
         ha="center",
         va="center",

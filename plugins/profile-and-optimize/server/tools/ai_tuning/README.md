@@ -8,26 +8,26 @@ path, and manages a JSONL experiment ledger. **It is not on the
 submission gate.** It is the operator-side helper for selecting the
 next set of fabric-knob, NCCL-knob, and config-shape A/Bs to run.
 
-The full operator contract lives in
-[`docs/ai-assisted-tuning.md`](/plugins/profile-and-optimize/server/docs/ai-assisted-tuning.md). The
-current promoted candidate lineup lives in
-[`tuning/best-known/`](/plugins/profile-and-optimize/server/tuning/best-known).
+The operator-facing verb and safety contract lives in
+[`docs/cli-contract.md`](../../docs/cli-contract.md). The
+local promoted candidate ledger lives in
+[`tuning/best-known/`](../../tuning/best-known).
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| [`ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) | the CLI entry point (single-file front end). |
-| [`optimizer/`](/plugins/profile-and-optimize/server/tools/ai_tuning/optimizer) | optimizer engines: TPE (`tpe.py`), GP-Bayesian (`gp.py`), Hyperband (`hyperband.py`), shared types (`types.py`), tuning-space schema (`space.py`), `.hyp` format I/O (`hyp_format.py`), durable session state (`hyp_session.py`). |
-| [`test_ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/test_ai_tuning.py) | end-to-end CLI tests (subprocess-based). |
-| [`test_optimizer.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/test_optimizer.py) | engine unit tests. |
+| [`ai_tuning.py`](ai_tuning.py) | the CLI entry point (single-file front end). |
+| [`optimizer/`](optimizer) | optimizer engines: TPE (`tpe.py`), GP-Bayesian (`gp.py`), Hyperband (`hyperband.py`), shared types (`types.py`), tuning-space schema (`space.py`), `.hyp` format I/O (`hyp_format.py`), durable session state (`hyp_session.py`). |
+| [`test_ai_tuning.py`](test_ai_tuning.py) | end-to-end CLI tests (subprocess-based). |
+| [`test_optimizer.py`](test_optimizer.py) | engine unit tests. |
 
-Tuning spaces are checked in under [`tuning/`](/plugins/profile-and-optimize/server/tuning):
-
-- [`tuning/tuning-space.b200-llama31-8b.json`](/plugins/profile-and-optimize/server/tuning/tuning-space.b200-llama31-8b.json) - B200 LLaMA 3.1 8B operational sweep space.
-- [`tuning/tuning-space.gb300-ops.json`](/plugins/profile-and-optimize/server/tuning/tuning-space.gb300-ops.json) - GB300 fabric / NCCL / config knobs sweep space.
-- [`tuning/best-known/`](/plugins/profile-and-optimize/server/tuning/best-known) - promoted candidates with A/B evidence. Refreshed after every successful tuning campaign.
-- [`tuning/schemas/`](/plugins/profile-and-optimize/server/tuning/schemas) - JSON Schemas for the tuning-space and proposal shapes.
+Pass a tuning-space JSON file with `--space`. The repository does not ship a
+production tuning space because valid ranges depend on the workload and
+cluster. Bundled example spaces support inspection and offline tests only.
+Proposal generation, proposal validation, reports, optimizer proposals, and
+experiment creation require an explicit `--space`. Promoted local candidates
+can be recorded under [`tuning/best-known/`](../../tuning/best-known).
 
 ## CLI surface
 
@@ -70,14 +70,11 @@ python3 -m unittest \
 ```
 
 Both modules are part of the broader `unittest` battery in the
-top-level [`README.md`](/plugins/profile-and-optimize/server/README.md) "Local dev / verification".
+top-level [`README.md`](../../README.md) "Local dev / verification".
 
 ## Cross-references
 
-- [`docs/ai-assisted-tuning.md`](/plugins/profile-and-optimize/server/docs/ai-assisted-tuning.md) -
-  the operator contract: parameter audit policy, durable optimizer
-  state, MLPerf legality gates, `.hyp` import semantics.
-- [`tuning/best-known/`](/plugins/profile-and-optimize/server/tuning/best-known) -
+- [`docs/cli-contract.md`](../../docs/cli-contract.md) -
+  the operator contract for arguments, output, and safety labels.
+- [`tuning/best-known/`](../../tuning/best-known) -
   the current promoted candidates and their A/B evidence.
-- [`docs/private-testing.md`](/plugins/profile-and-optimize/server/docs/private-testing.md) - the
-  live 8-node sweep workflow this CLI feeds into.

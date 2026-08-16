@@ -1,6 +1,6 @@
-"""Perf-report CLI: 17 verbs that build a campaign atlas + render the PDF + publish to the data lake.
+"""Perf-report CLI for campaign ingestion, analysis, rendering, and publication.
 
-Verbs (mirrored as MCP tools ``perf_tune_report_<verb>`` via
+Key verbs are mirrored as MCP tools ``perf_tune_report_<verb>`` via
 [`mcp_surface.py`](../../mcp_surface.py)):
 
 - ``campaign_init``    -- scaffold ``campaigns/<UTC>-<slug>/`` from a config
@@ -9,7 +9,7 @@ Verbs (mirrored as MCP tools ``perf_tune_report_<verb>`` via
 - ``report_render``    -- render the multi-page PDF via PdfPages
 - ``report_smoke``     -- render PDF from the bundled synthetic fixture (no cluster)
 - ``publish_to_lake``  -- write atlas + campaign + SoL + TPM as Parquet to S3 (the perf lake BYOB lane)
-- ``tpm_summary``      -- per-hardware tokens-per-minute capacity rollup for pricing (v1.35.0)
+- ``tpm_summary``      -- per-hardware tokens-per-minute capacity rollup for pricing
 - ``import_perf_bench``-- import an inference-perf-bench bundle into a campaign cell
 - ``campaign_run``     -- matrix orchestrator (drain -> helm -> bench -> aggregate -> render) (ack-gated)
 - ``graph_diff``       -- diff two torch.compile dynamo/inductor log dumps
@@ -22,13 +22,12 @@ Verbs (mirrored as MCP tools ``perf_tune_report_<verb>`` via
 - ``value_view``       -- leadership value-prop ledger (curated registry x live campaigns)
 
 See the skill at
-[`skills/inference-perf-tune-report/SKILL.md`](../../skills/inference-perf-tune-report/SKILL.md)
+[`skills/inference-perf-tune-report/SKILL.md`](../../../skills/inference-perf-tune-report/SKILL.md)
 for the operator workflow.
 
 Default campaigns dir: ``./campaigns/`` (operator-
 relocatable via the ``PERFREPORT_CAMPAIGNS_DIR`` env var).
 
-Added in profile-and-optimize v1.10.0. ``publish_to_lake`` verb added in v1.16.0.
 """
 
 from __future__ import annotations
@@ -48,6 +47,8 @@ from tools.perf_tune_report.helpers import (
     load_yaml,
     resolve_campaign_dir,
     resolve_campaigns_dir,
+    resolve_cell_dir,
+    safe_path_segment,
     slugify,
     synthetic_fixture_path,
     utc_timestamp_slug,
@@ -167,11 +168,10 @@ CONTRACT: dict[str, dict[str, Any]] = {
                      "--campaigns-dir", "--json"),
         "json": True,
         "ack": None,
-        "description": "Import a bench-all-workloads.sh output dir (one <tag>-c<c>.txt per "
-        "workload x concurrency + bench-workloads.json) into per-workload campaign cells, each "
+        "description": "Import a workload result directory (one <tag>-c<c>.txt per "
+        "workload and concurrency plus bench-workloads.json) into per-workload campaign cells, each "
         "row tagged with its dataset + typed ISL/OSL -- closing dataset=unknown at the source so "
-        "atlas_aggregate -> publish lands the full multi-workload suite (the one-call companion "
-        "to bench-all-workloads.sh --import-campaign).",
+        "atlas_aggregate -> publish lands the full multi-workload suite.",
     },
     "trend_view": {
         "safety": "writes_artifacts",
@@ -218,6 +218,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         ),
         "json": True,
         "ack": "--i-understand-this-submits-jobs",
+        "ack_exempt_when": ("--dry-run",),
         "description": "Run one cell via vllm-sweep, aiperf, or aa backend (ack-gated).",
     },
     "atlas_aggregate": {
@@ -251,7 +252,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         ),
     },
     "report_smoke": {
-        "safety": "read_only",
+        "safety": "writes_artifacts",
         "required": (),
         "optional": ("--out", "--title", "--json"),
         "json": True,
@@ -259,7 +260,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "description": "Render the PDF from the bundled synthetic fixture (no cluster needed).",
     },
     "publish_to_lake": {
-        "safety": "writes_artifacts",
+        "safety": "publishes_external",
         "required": ("--campaign",),
         "optional": (
             "--s3-endpoint",
@@ -276,9 +277,12 @@ CONTRACT: dict[str, dict[str, Any]] = {
             "--json",
         ),
         "json": True,
-        "ack": None,
+        "ack": "--i-understand-this-publishes-externally",
+        "ack_exempt_when": ("--dry-run",),
         "description": (
-            "Publish a campaign's atlas + provenance as Parquet to S3 "
+            "Publish a campaign's atlas and provenance as Parquet to S3. "
+            "A dry run writes local Parquet only and does not require the "
+            "external-publish acknowledgement. "
             "(s3://perf-lake/perflake/perf-report/). Ready for downstream "
             "Iceberg registration into warehouse intake tables. Under --strict the "
             "methodology gate enforces each measured row's full descriptor + its OWN "
@@ -287,7 +291,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         ),
     },
     "campaign_run": {
-        "safety": "submits_jobs",
+        "safety": "mutates_cluster",
         "required": ("--config", "--campaign"),
         "optional": (
             "--continue-on-red",
@@ -296,12 +300,15 @@ CONTRACT: dict[str, dict[str, Any]] = {
             "--json",
         ),
         "json": True,
-        "ack": "--i-understand-this-submits-jobs",
+        "ack": "--i-understand-this-mutates-cluster",
+        "ack_exempt_when": ("--dry-run",),
         "description": (
-            "Campaign-level orchestrator (v1.20.0): loops over a matrix YAML "
-            "and for each cell runs the full 10-step pipeline (drain -> helm "
-            "upgrade -> warmup -> bench -> zymtrace -> import -> aggregate -> "
-            "render -> baseline-record -> baseline-diff). Always-resume on "
+            "Campaign-level orchestrator: loops over a matrix YAML "
+            "and for each cell runs the full 10-step pipeline. The production "
+            "path can cordon nodes, change a Helm release, and run benchmark "
+            "work before import, aggregate, render, baseline-record, and "
+            "baseline-diff. It "
+            "always attempts node resume on "
             "Ctrl-C / exception via try/finally. Fail-fast on RED verdict "
             "unless --continue-on-red is passed."
         ),
@@ -320,7 +327,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "ack": None,
         "description": (
             "Diff two torch.compile dynamo+inductor log dumps and emit a "
-            "structured graph_diff.json + per-graph unified diffs (v1.21.0). "
+            "structured graph_diff.json + per-graph unified diffs. "
             "The operator pre-collects each side's log via "
             "TORCH_LOGS=+dynamo,+inductor,+graph_breaks; this verb is "
             "read-only on the cluster (parses local log files only). Output: "
@@ -346,7 +353,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "ack": None,
         "description": (
             "Scaffold a standalone CUDA/CUTLASS kernel reproducer (.cu + build "
-            "script) for white-box kernel debugging (v1.69.0) -- Track B of the "
+            "script) for white-box kernel debugging -- Track B of the "
             "inference-kernel-whitebox-debug skill. Emits a self-contained harness "
             "modeled on the proven GLM-5.1 linear_sm100_mpk reproducer, "
             "parameterized by the GEMM dims + mirage tree + GPU arch: it "
@@ -375,7 +382,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "ack": "--i-understand-this-submits-jobs",
         "description": (
             "Capture per-kernel CUDA profile from a live vLLM inference pod "
-            "via the nsys-sidecar (v1.21.0). Uses ``kubectl debug "
+            "via the nsys-sidecar. Uses ``kubectl debug "
             "--share-processes`` to attach an ephemeral container that runs "
             "nsys profile against the engine PID, then extracts .nsys-rep + "
             "summary CSVs into --output-dir. Optionally patches a bundle's "
@@ -393,14 +400,14 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "ack": None,
         "description": (
             "Render a multi-bundle vllm-bench-serve linear-comparison PDF "
-            "from a raw_bench_compare_v1 YAML manifest (v1.24.0). Sibling "
+            "from a raw_bench_compare_v1 YAML manifest. Sibling "
             "to report_render: where report_render produces a faceted "
             "multi-page PDF from atlas.jsonl, raw_bench_compare overlays "
             "N bundles' per-concurrency curves onto a single chart per "
             "metric (throughput / TTFT / TPOT) + a peak-bars chart with "
             "%gain-vs-baseline + a summary table. Targeted at the "
             "'6-variant champion comparison' use case where faceting hides "
-            "the linear story. Promotes the pre-v1.24.0 workshop renderers "
+            "the linear story. Promotes the earlier workshop renderers "
             "from ./campaigns workspacescripts/."
         ),
     },
@@ -446,7 +453,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
             "Auto-detects bundle pattern: parses raw/sweep-c*.txt + "
             "raw/sweep-K*-c*.txt (vLLM bench-serve text format, GLM/DSv4 "
             "layout) OR bench-c<NNN>/raw/load.jsonl + raw/load.jsonl "
-            "(drive_load.py JSONL format, Kimi layout). v1.21.0 adds the "
+            "(drive_load.py JSONL format, Kimi layout). The importer supports "
             "drive_load auto-dispatch. Metadata is sourced from the bundle's "
             "inference_perfbench_v1.json if present; any missing required field "
             "MUST be passed via --model / --hardware / ... overrides. "
@@ -492,8 +499,8 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "ack": None,
         "description": (
             "Import an always-on prefill+decode roofline sweep bundle "
-            "(*-deploy/profiling/roofline-sweep.sh output: decode_sweep.jsonl + "
-            "prefill_sweep.jsonl) into a campaign. Emits cells/<id>-decode + "
+            "containing decode_sweep.jsonl and prefill_sweep.jsonl into a "
+            "campaign. Emits cells/<id>-decode + "
             "<id>-prefill normalized.json (AtlasCell rows carrying per-(phase, "
             "concurrency/ISL) DCGM PROF utilization -- SM/tensor/DRAM active -- plus "
             "the analytical roofline coords -- in extra, flowing to atlas_v1.extra_json + "
@@ -535,12 +542,12 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "json": True,
         "ack": None,
         "description": (
-            "Import a cross-engine variant A/B bundle (run-variant-ab.sh output: "
+            "Import a cross-engine variant A/B bundle using the documented layout: "
             "<bundle>/<arm>/c<C>-t<T>.txt per arm) into a campaign as one "
             "cells/<arm>/normalized.json per arm, trial-averaged, engine-tagged "
             "(vllm-sweep | sglang-sweep from each arm's result.json/name) so vLLM "
             "and SGLang arms are first-class + cross-engine-comparable. Per-arm "
-            "zymtrace L1 SoL is auto-ingested when run-variant-ab.sh wrote "
+            "zymtrace L1 SoL is auto-ingested when the bundle contains "
             "<arm>/capture_sources.json (declared-coverage: a broken TSV aborts "
             "the import). This is the first-class, discoverable form of the "
             "variant-A/B path that import_perf_bench auto-dispatches; use it when "
@@ -664,7 +671,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "ack": None,
         "description": (
             "Roll a campaign's atlas.jsonl into a per-hardware tokens-per-minute "
-            "(TPM) capacity summary for pricing / capacity discussions (v1.35.0). "
+            "(TPM) capacity summary for pricing / capacity discussions. "
             "For each (model, hardware, quant, TP, strategy, MTP) group it reports "
             "a peak-capacity point and -- when --ttft-sla-ms / --tpot-sla-ms are "
             "supplied -- a latency-SLA-bounded point, each at per-GPU, per-replica "
@@ -729,11 +736,10 @@ def cmd_campaign_init(args: argparse.Namespace) -> int:
         return 2
     config = load_yaml(config_path)
 
-    slug = args.slug or slugify(config.get("name") or config_path.stem)
+    raw_slug = args.slug or slugify(config.get("name") or config_path.stem)
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
-    campaigns_root.mkdir(parents=True, exist_ok=True)
 
-    # Experiment-id is the single join key (CLAUDE.md "Experiment Isolation &
+    # Experiment-id is the single join key (AGENTS.md "Experiment isolation and
     # Traceability"): it is the evidence-bundle run-id AND the cluster label
     # value AND -- when supplied -- the campaign_id (this dir's basename). When
     # an --experiment-id (or config experiment_id:) is given, the campaign dir is
@@ -744,6 +750,17 @@ def cmd_campaign_init(args: argparse.Namespace) -> int:
     experiment_id = args.experiment_id or config.get("experiment_id")
     family = args.family or config.get("family", "") or ""
     evidence_bundle = args.evidence_bundle or config.get("evidence_bundle_path", "") or ""
+
+    try:
+        slug = safe_path_segment(raw_slug, label="slug")
+        if experiment_id:
+            experiment_id = safe_path_segment(
+                experiment_id,
+                label="experiment-id",
+            )
+    except ValueError as error:
+        print(f"FATAL: {error}", file=sys.stderr)
+        return 2
 
     if experiment_id:
         # Lazy import: lake_writer's module top is light (pyarrow is imported
@@ -757,13 +774,19 @@ def cmd_campaign_init(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        campaign_dir = campaigns_root / experiment_id
+        campaign_name = experiment_id
     else:
-        campaign_dir = campaigns_root / f"{utc_timestamp_slug()}-{slug}"
+        campaign_name = f"{utc_timestamp_slug()}-{slug}"
+
+    campaign_dir = (campaigns_root / campaign_name).resolve()
+    if not campaign_dir.is_relative_to(campaigns_root):
+        print("FATAL: campaign path escapes the campaigns root", file=sys.stderr)
+        return 2
 
     if campaign_dir.exists():
         print(f"FATAL: campaign already exists: {campaign_dir}", file=sys.stderr)
         return 2
+    campaigns_root.mkdir(parents=True, exist_ok=True)
     campaign_dir.mkdir(parents=True)
     (campaign_dir / "cells").mkdir()
     (campaign_dir / "commands").mkdir()
@@ -896,7 +919,7 @@ def cmd_cell_run(args: argparse.Namespace) -> int:
             "library": "perf_tune_report",
             "verb": "cell_run",
             "safety": CONTRACT["cell_run"]["safety"],
-            "ack_required": True,
+            "ack_required": not args.dry_run,
             "ack_field": "i_understand_this_submits_jobs",
             "campaign_dir": str(campaign_dir),
             "cell_id": cell_cfg.cell_id,
@@ -945,7 +968,7 @@ def cmd_cell_run(args: argparse.Namespace) -> int:
             "library": "perf_tune_report",
             "verb": "cell_run",
             "safety": CONTRACT["cell_run"]["safety"],
-            "ack_required": True,
+            "ack_required": not args.dry_run,
             "ack_field": "i_understand_this_submits_jobs",
             "campaign_dir": str(campaign_dir),
             "cell_id": cell_cfg.cell_id,
@@ -1023,7 +1046,7 @@ def cmd_cell_run(args: argparse.Namespace) -> int:
             "library": "perf_tune_report",
             "verb": "cell_run",
             "safety": CONTRACT["cell_run"]["safety"],
-            "ack_required": True,
+            "ack_required": not args.dry_run,
             "ack_field": "i_understand_this_submits_jobs",
             "campaign_dir": str(campaign_dir),
             "cell_id": cell_cfg.cell_id,
@@ -1531,6 +1554,17 @@ def _ordered_unique_hw(summary: Any) -> list[str]:
 
 def cmd_publish_to_lake(args: argparse.Namespace) -> int:
     """Publish a campaign's atlas + provenance as Parquet to S3."""
+    if (
+        not args.dry_run
+        and getattr(args, "i_understand_this_publishes_externally", False) is not True
+    ):
+        print(
+            "FATAL: publish_to_lake writes to external S3 storage. Pass "
+            "--i-understand-this-publishes-externally in the current command.",
+            file=sys.stderr,
+        )
+        return 2
+
     from tools.perf_tune_report.lake_writer import (
         IF_EXISTS_CHOICES,
         IF_EXISTS_FAIL,
@@ -1557,6 +1591,7 @@ def cmd_publish_to_lake(args: argparse.Namespace) -> int:
             bucket=args.s3_bucket,
             access_key_file=args.s3_access_key_file,
             secret_key_file=args.s3_secret_key_file,
+            require_credentials=not args.dry_run,
         )
     except SystemExit as exc:
         print(str(exc), file=sys.stderr)
@@ -1751,7 +1786,7 @@ def cmd_experiments_index(args: argparse.Namespace) -> int:
     if args.family:
         rows = [r for r in rows if r["family"] == args.family]
     # Default output: the perf-report bundle (campaigns_root's parent), so the
-    # index is tracked alongside configs (data, not Python) per perf-tune-report/CLAUDE.md.
+    # index is tracked alongside configs as data per AGENTS.md.
     out_dir = Path(args.out).expanduser().resolve() if args.out else campaigns_root.parent
     paths = write_index(rows, out_dir)
 
@@ -1910,7 +1945,7 @@ def cmd_import_model_eval(args: argparse.Namespace) -> int:
 
 
 def cmd_import_workloads(args: argparse.Namespace) -> int:
-    """Import a bench-all-workloads.sh output dir into dataset-tagged campaign cells."""
+    """Import a workload result directory into dataset-tagged campaign cells."""
     from tools.perf_tune_report.importers.workloads import import_workloads
 
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
@@ -1998,11 +2033,11 @@ def cmd_fleet_leaderboard(args: argparse.Namespace) -> int:
 
 def cmd_campaign_run(args: argparse.Namespace) -> int:
     """Run the full campaign orchestrator (Phase 2b)."""
-    if not args.dry_run and not getattr(args, "i_understand_this_submits_jobs", False):
+    if not args.dry_run and not getattr(args, "i_understand_this_mutates_cluster", False):
         print(
-            "FATAL: campaign_run is ack-gated (safety=submits_jobs). "
-            "Pass --i-understand-this-submits-jobs to actually run, "
-            "or --dry-run to print the plan without submitting jobs.",
+            "FATAL: campaign_run is ack-gated (safety=mutates_cluster). "
+            "Pass --i-understand-this-mutates-cluster to confirm node cordon, "
+            "Helm release changes, and benchmark execution, or use --dry-run.",
             file=sys.stderr,
         )
         return 2
@@ -2020,20 +2055,42 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
         print("FATAL: config has no 'cells' list", file=sys.stderr)
         return 2
 
-    # Build CellPlan objects
+    # Build CellPlan objects from the same canonical cell shape accepted by
+    # campaign_init and cell_run. ``id`` remains a legacy alias for callers
+    # with an older matrix.
     cells: list[CellPlan] = []
     for c in cells_cfg:
         try:
+            if not isinstance(c, dict):
+                raise TypeError("each cell must be a mapping")
+            cell_id = c.get("cell_id", c.get("id"))
+            if not isinstance(cell_id, str) or not cell_id:
+                raise ValueError("cell_id is required")
+            backend = c.get("backend", "vllm-sweep")
+            if backend == "vllm-sweep":
+                backend_config = c.get("vllm_sweep", {}) or {}
+            elif backend == "aa":
+                backend_config = c.get("aa", {}) or {}
+            elif backend == "aiperf":
+                backend_config = c.get("aiperf", {}) or {}
+            else:
+                backend_config = {}
+            if not isinstance(backend_config, dict):
+                raise TypeError(f"cell {cell_id}: backend config must be a mapping")
+            helm_overrides = c.get("helm_overrides", {}) or {}
+            if not isinstance(helm_overrides, dict):
+                raise TypeError(f"cell {cell_id}: helm_overrides must be a mapping")
             cells.append(CellPlan(
-                id=c["id"],
-                backend=c.get("backend", "vllm-sweep"),
-                concurrencies=tuple(c.get("concurrencies", [])),
-                helm_overrides=c.get("helm_overrides", {}) or {},
+                id=cell_id,
+                backend=backend,
+                concurrencies=tuple(int(value) for value in c.get("concurrencies", [])),
+                helm_overrides=helm_overrides,
                 profile=c.get("profile", {}) or {},
                 notes=c.get("notes", ""),
-                backend_config=c.get("aa") or c.get("aiperf") or {},
+                runner_config=dict(c),
+                backend_config=backend_config,
             ))
-        except (KeyError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             print(f"FATAL: cell config invalid: {exc}", file=sys.stderr)
             return 2
 
@@ -2072,8 +2129,8 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
             "library": "perf_tune_report",
             "verb": "campaign_run",
             "safety": CONTRACT["campaign_run"]["safety"],
-            "ack_required": True,
-            "ack_field": "i_understand_this_submits_jobs",
+            "ack_required": False,
+            "ack_field": "i_understand_this_mutates_cluster",
             "campaign_dir": str(campaign_dir),
             "cells_count": len(cells),
             "dry_run": True,
@@ -2084,7 +2141,7 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
         emit(payload, as_json=args.json)
         return 0
 
-    # NON-DRY-RUN path: wire the production step functions (v1.21.0).
+    # NON-DRY-RUN path: wire the production step functions.
     # The step functions use real subprocess (kubectl/helm) + library calls
     # (import_bundle_auto / aggregate / render_report / perf_baseline). The
     # cluster mutation calls are timeout-bounded; the orchestrator's
@@ -2094,24 +2151,31 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
     step_fns = production_step_fns()
 
     target_namespace = campaign_cfg.get("target_namespace", "inference")
+    manages_deployment = any(
+        cell.backend not in ("aiperf", "aa") for cell in cells
+    )
     target_release = campaign_cfg.get("target_release", "")
-    if not target_release:
+    if manages_deployment and not target_release:
         print(
             "FATAL: campaign.target_release is required for non-dry-run "
-            "(must name the helm release to upgrade per cell).",
+            "campaigns with deployment-managed cells.",
             file=sys.stderr,
         )
         return 2
 
     chart_dir_str = campaign_cfg.get("chart_dir", "")
-    if not chart_dir_str:
+    if manages_deployment and not chart_dir_str:
         print(
             "FATAL: campaign.chart_dir is required for non-dry-run "
-            "(must point at the helm chart directory).",
+            "campaigns with deployment-managed cells.",
             file=sys.stderr,
         )
         return 2
-    chart_dir = Path(chart_dir_str).expanduser().resolve()
+    chart_dir = (
+        Path(chart_dir_str).expanduser().resolve()
+        if chart_dir_str
+        else campaign_dir
+    )
 
     base_values_str = campaign_cfg.get("base_values", "")
     base_values = Path(base_values_str).expanduser().resolve() if base_values_str else Path()
@@ -2145,17 +2209,16 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
         "verb": "campaign_run",
         "safety": CONTRACT["campaign_run"]["safety"],
         "ack_required": True,
-        "ack_field": "i_understand_this_submits_jobs",
+        "ack_field": "i_understand_this_mutates_cluster",
         "dry_run": False,
     }
     payload.update(result.to_dict())
     emit(payload, as_json=args.json)
-    # Return non-zero only when the campaign was unable to complete any cell.
-    return 0 if result.cells_completed > 0 else 1
+    return 0 if result.cells_completed > 0 and result.overall_verdict != "RED" else 1
 
 
 def cmd_graph_diff(args: argparse.Namespace) -> int:
-    """Diff two torch.compile dynamo+inductor log dumps (v1.21.0)."""
+    """Diff two torch.compile dynamo+inductor log dumps."""
     side_a = Path(args.side_a_log).expanduser().resolve()
     side_b = Path(args.side_b_log).expanduser().resolve()
     output_dir = Path(args.output_dir).expanduser().resolve()
@@ -2193,7 +2256,7 @@ def cmd_graph_diff(args: argparse.Namespace) -> int:
 
 
 def cmd_kernel_reproducer_scaffold(args: argparse.Namespace) -> int:
-    """Scaffold a standalone CUDA/CUTLASS kernel reproducer .cu + build script (v1.69.0)."""
+    """Scaffold a standalone CUDA/CUTLASS kernel reproducer .cu + build script."""
     output_dir = Path(args.output_dir).expanduser().resolve()
     try:
         result = scaffold_reproducer(
@@ -2225,7 +2288,7 @@ def cmd_kernel_reproducer_scaffold(args: argparse.Namespace) -> int:
 
 
 def cmd_kernel_profile(args: argparse.Namespace) -> int:
-    """Capture per-kernel CUDA profile from a live vLLM pod (v1.21.0)."""
+    """Capture per-kernel CUDA profile from a live vLLM pod."""
     if not args.dry_run and not getattr(args, "i_understand_this_submits_jobs", False):
         print(
             "FATAL: kernel_profile is ack-gated (safety=submits_jobs). "
@@ -2368,7 +2431,7 @@ def cmd_import_perf_bench(args: argparse.Namespace) -> int:
         overrides["expected_reqs"] = args.expected_reqs
 
     # F1 fix-forward: fill any full-context descriptor the operator did NOT pass from
-    # the bundle's captured run-manifest.json (capture-run-env.sh). Operator CLI flags
+    # the bundle's captured run-manifest.json. Operator CLI flags
     # always win (setdefault only fills gaps); real captured values, never guesses.
     for _k, _v in _run_manifest_descriptor_defaults(bundle_path).items():
         overrides.setdefault(_k, _v)
@@ -2389,7 +2452,7 @@ def cmd_import_perf_bench(args: argparse.Namespace) -> int:
     # Determine which importer was dispatched (so the payload tells the
     # operator which code path actually ran). The drive_load result has an
     # importer="inference_drive_load" attribute; the bench-serve one does
-    # not (it predates v1.21.0).
+    # not because it uses the legacy result shape.
     importer_name = getattr(result, "importer", "inference_perf_bench")
 
     payload = {
@@ -2497,7 +2560,7 @@ def cmd_import_roofline_sweep(args: argparse.Namespace) -> int:
             overrides[attr] = val
 
     # F1 fix-forward: fill any full-context descriptor the operator did not pass from
-    # the sweep bundle's captured run-manifest.json (capture-run-env.sh). Operator flags win.
+    # the sweep bundle's captured run-manifest.json. Operator flags win.
     for _k, _v in _run_manifest_descriptor_defaults(bundle_path).items():
         overrides.setdefault(_k, _v)
 
@@ -2564,7 +2627,11 @@ def cmd_dcgm_correlate(args: argparse.Namespace) -> int:
 
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
     campaign_dir = resolve_campaign_dir(args.campaign, campaigns_root)
-    cell_dir = campaign_dir / "cells" / args.cell_id
+    try:
+        cell_dir = resolve_cell_dir(campaign_dir, args.cell_id)
+    except ValueError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
     if not cell_dir.is_dir():
         print(f"FATAL: cell dir not found: {cell_dir}", file=sys.stderr)
         return 2
@@ -2652,7 +2719,11 @@ def cmd_import_nsys(args: argparse.Namespace) -> int:
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
     campaign_dir = resolve_campaign_dir(args.campaign, campaigns_root)
     bundle_path = Path(args.bundle).expanduser().resolve()
-    cell_dir = campaign_dir / "cells" / args.cell_id
+    try:
+        cell_dir = resolve_cell_dir(campaign_dir, args.cell_id)
+    except ValueError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
 
     try:
         result = import_nsys_kernels(
@@ -2693,7 +2764,11 @@ def cmd_import_ncu(args: argparse.Namespace) -> int:
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
     campaign_dir = resolve_campaign_dir(args.campaign, campaigns_root)
     bundle_path = Path(args.bundle).expanduser().resolve()
-    cell_dir = campaign_dir / "cells" / args.cell_id
+    try:
+        cell_dir = resolve_cell_dir(campaign_dir, args.cell_id)
+    except ValueError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
 
     try:
         result = import_ncu_kernels(
@@ -2728,7 +2803,7 @@ def cmd_import_ncu(args: argparse.Namespace) -> int:
 
 
 def cmd_raw_bench_compare(args: argparse.Namespace) -> int:
-    """v1.24.0: render a multi-bundle vllm-bench-serve comparison PDF."""
+    """Render a multi-bundle vllm-bench-serve comparison PDF."""
     from tools.perf_tune_report.raw_bench_compare import (
         RawBenchCompareManifestMalformed,
         render_comparison,
@@ -2931,7 +3006,7 @@ def build_parser() -> argparse.ArgumentParser:
     iw = sub.add_parser("import_workloads",
                         description=CONTRACT["import_workloads"]["description"])
     iw.add_argument("--bench-dir", required=True, dest="bench_dir",
-                    help="bench-all-workloads.sh output dir (<tag>-c<c>.txt + bench-workloads.json)")
+                    help="Workload result dir (<tag>-c<c>.txt + bench-workloads.json)")
     iw.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
     iw.add_argument("--model", required=True, help="Served model (matches the campaign's model)")
     iw.add_argument("--hardware", required=True, help="Hardware token (GB300 / B200)")
@@ -2949,7 +3024,7 @@ def build_parser() -> argparse.ArgumentParser:
     iw.add_argument("--gpu-memory-utilization", type=float, default=None,
                     dest="gpu_memory_utilization")
     iw.add_argument("--bench-backend", default="openai", dest="bench_backend",
-                    help="bench CLIENT backend (bench-all-workloads.sh uses --backend openai)")
+                    help="Benchmark client backend recorded on imported rows")
     iw.add_argument("--dry-run", action="store_true", help="Parse + report, write nothing")
     iw.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     iw.add_argument("--json", action="store_true", help="Emit JSON envelope")
@@ -3070,7 +3145,7 @@ def build_parser() -> argparse.ArgumentParser:
     rr.add_argument("--json", action="store_true", help="Emit JSON envelope")
     rr.set_defaults(func=cmd_report_render)
 
-    # tpm_summary (v1.35.0): per-hardware TPM capacity rollup for pricing
+    # tpm_summary: per-hardware TPM capacity rollup for pricing
     ts = sub.add_parser("tpm_summary", description=CONTRACT["tpm_summary"]["description"])
     ts.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
     ts.add_argument(
@@ -3109,23 +3184,23 @@ def build_parser() -> argparse.ArgumentParser:
     ts.add_argument("--json", action="store_true", help="Emit JSON envelope")
     ts.set_defaults(func=cmd_tpm_summary)
 
-    # campaign_run (v1.20.0; Phase 2b)
+    # campaign_run (Phase 2b)
     cp = sub.add_parser("campaign_run", description=CONTRACT["campaign_run"]["description"])
     cp.add_argument("--config", required=True, help="Path to a campaign matrix YAML")
     cp.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
     cp.add_argument("--continue-on-red", action="store_true", dest="continue_on_red", help="Continue past RED cell verdicts instead of fail-fast")
     cp.add_argument("--dry-run", action="store_true", help="Print the 10-step plan JSON without submitting jobs")
     cp.add_argument(
-        "--i-understand-this-submits-jobs",
-        dest="i_understand_this_submits_jobs",
+        "--i-understand-this-mutates-cluster",
+        dest="i_understand_this_mutates_cluster",
         action="store_true",
-        help="Ack flag (safety_class=submits_jobs)",
+        help="Acknowledge node cordon, Helm release changes, and benchmark execution.",
     )
     cp.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     cp.add_argument("--json", action="store_true", help="Emit JSON envelope")
     cp.set_defaults(func=cmd_campaign_run)
 
-    # import_perf_bench (v1.18.0)
+    # import_perf_bench
     ip = sub.add_parser("import_perf_bench", description=CONTRACT["import_perf_bench"]["description"])
     ip.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
     ip.add_argument(
@@ -3177,8 +3252,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("warm", "cold", "unknown"),
         help="Warm-vs-cold methodology label for these rows (default: bundle meta or 'unknown')",
     )
-    # Full-context descriptor overrides (2026-06-07; CLAUDE.md "Every performance number
-    # carries its full context"). Required (via flag or bundle meta) for a measured campaign
+    # Full-context descriptor overrides follow AGENTS.md "Benchmark methodology hygiene".
+    # They are required via a flag or bundle metadata for a measured campaign
     # to pass publish/render --strict.
     ip.add_argument("--dataset", dest="dataset", default=None, help="Workload dataset (random|sharegpt|sonnet|aa|code|...) -- full-context descriptor")
     ip.add_argument("--cudagraph-mode", dest="cudagraph_mode", default=None, help="full|piecewise|none|eager -- full-context descriptor (the eager/cudagraph trap)")
@@ -3196,7 +3271,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help=(
-            "Concurrency override (v1.21.0). Required only for single-c "
+            "Concurrency override. Required only for single-c "
             "drive_load bundles that have raw/load.jsonl without "
             "bench-c<NNN>/ subdirs. Ignored for sweep-c*.txt bundles."
         ),
@@ -3230,10 +3305,10 @@ def build_parser() -> argparse.ArgumentParser:
     ip.add_argument("--json", action="store_true", help="Emit JSON envelope")
     ip.set_defaults(func=cmd_import_perf_bench)
 
-    # import_roofline_sweep (v1.61.0): prefill+decode roofline sweep + per-(c,ISL) DCGM
+    # import_roofline_sweep: prefill+decode roofline sweep + per-(c,ISL) DCGM
     irs = sub.add_parser("import_roofline_sweep", description=CONTRACT["import_roofline_sweep"]["description"])
     irs.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
-    irs.add_argument("--bundle", required=True, help="roofline-sweep.sh output dir (decode_sweep.jsonl + prefill_sweep.jsonl)")
+    irs.add_argument("--bundle", required=True, help="Roofline bundle (decode_sweep.jsonl + prefill_sweep.jsonl)")
     irs.add_argument("--cell-id", default=None, dest="cell_id", help="Override cell_id base (default: bundle dirname)")
     irs.add_argument("--model", default=None, help="Model name (default: from manifest / zai-org/GLM-5.1)")
     irs.add_argument("--hardware", default=None, help="e.g. B200, GB300, H100 (default: GB300)")
@@ -3247,7 +3322,7 @@ def build_parser() -> argparse.ArgumentParser:
     irs.add_argument("--max-num-batched-tokens", type=int, default=None, dest="max_num_batched_tokens", help="default 12288")
     irs.add_argument("--cache-mode", dest="cache_mode", default=None, choices=("warm", "cold", "unknown"), help="methodology label")
     # full-context descriptors (2026-06-07) so roofline cells pass publish_to_lake --strict
-    irs.add_argument("--dataset", default=None, help="full-context: workload dataset (roofline-sweep.sh drives random) -- default random")
+    irs.add_argument("--dataset", default=None, help="full-context: workload dataset (default random)")
     irs.add_argument("--cudagraph-mode", dest="cudagraph_mode", default=None, help="full-context: full|piecewise|none|eager (the eager/cudagraph trap)")
     irs.add_argument("--enforce-eager", dest="enforce_eager", type=lambda s: s.lower() in ("true", "1", "yes"), default=None, help="full-context: sets cudagraph_mode=eager when no explicit --cudagraph-mode")
     irs.add_argument("--gpu-memory-utilization", dest="gpu_memory_utilization", type=float, default=None, help="full-context: gmu the sweep ran at")
@@ -3262,10 +3337,10 @@ def build_parser() -> argparse.ArgumentParser:
     irs.add_argument("--json", action="store_true", help="Emit JSON envelope")
     irs.set_defaults(func=cmd_import_roofline_sweep)
 
-    # import_variant_ab (v1.66.0): first-class cross-engine variant A/B import
+    # import_variant_ab: first-class cross-engine variant A/B import
     iva = sub.add_parser("import_variant_ab", description=CONTRACT["import_variant_ab"]["description"])
     iva.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
-    iva.add_argument("--bundle", required=True, help="run-variant-ab.sh output dir (<arm>/c<C>-t<T>.txt per arm)")
+    iva.add_argument("--bundle", required=True, help="Variant A/B bundle (<arm>/c<C>-t<T>.txt per arm)")
     iva.add_argument("--model", required=True, help="Served model id (arm result.json carries no model)")
     iva.add_argument("--hardware", default=None, help="e.g. GB300, B200 (default: B200)")
     iva.add_argument("--quant", default=None, help="NVFP4 | FP8 | BF16 (default: NVFP4)")
@@ -3338,7 +3413,7 @@ def build_parser() -> argparse.ArgumentParser:
     ins.add_argument("--json", action="store_true", help="Emit JSON envelope")
     ins.set_defaults(func=cmd_import_nsys)
 
-    # import_ncu (v1.31.0): ncu per-kernel bundle -> cells/<id>/ncu_kernels.json
+    # import_ncu: ncu per-kernel bundle -> cells/<id>/ncu_kernels.json
     inc = sub.add_parser("import_ncu", description=CONTRACT["import_ncu"]["description"])
     inc.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
     inc.add_argument("--cell-id", required=True, help="Target cell id under cells/")
@@ -3357,7 +3432,7 @@ def build_parser() -> argparse.ArgumentParser:
     inc.add_argument("--json", action="store_true", help="Emit JSON envelope")
     inc.set_defaults(func=cmd_import_ncu)
 
-    # graph_diff (v1.21.0)
+    # graph_diff
     gd = sub.add_parser(
         "graph_diff",
         description=CONTRACT["graph_diff"]["description"],
@@ -3401,7 +3476,7 @@ def build_parser() -> argparse.ArgumentParser:
     gd.add_argument("--json", action="store_true", help="Emit JSON envelope")
     gd.set_defaults(func=cmd_graph_diff)
 
-    # kernel_reproducer_scaffold (v1.69.0)
+    # kernel_reproducer_scaffold
     krs = sub.add_parser(
         "kernel_reproducer_scaffold",
         description=CONTRACT["kernel_reproducer_scaffold"]["description"],
@@ -3423,7 +3498,7 @@ def build_parser() -> argparse.ArgumentParser:
     krs.add_argument("--json", action="store_true", help="Emit JSON envelope")
     krs.set_defaults(func=cmd_kernel_reproducer_scaffold)
 
-    # kernel_profile (v1.21.0)
+    # kernel_profile
     kp = sub.add_parser(
         "kernel_profile",
         description=CONTRACT["kernel_profile"]["description"],
@@ -3445,7 +3520,7 @@ def build_parser() -> argparse.ArgumentParser:
     kp.add_argument(
         "--sidecar-image",
         dest="sidecar_image",
-        default="ghcr.io/cfregly/nsys-sidecar:0.1.0",
+        default="ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d",
         help="nsys sidecar image (public canonical image; override with your own mirror)",
     )
     kp.add_argument(
@@ -3493,7 +3568,7 @@ def build_parser() -> argparse.ArgumentParser:
     kp.add_argument("--json", action="store_true", help="Emit JSON envelope")
     kp.set_defaults(func=cmd_kernel_profile)
 
-    # raw_bench_compare (v1.24.0)
+    # raw_bench_compare
     rbc = sub.add_parser(
         "raw_bench_compare",
         description=CONTRACT["raw_bench_compare"]["description"],
@@ -3582,7 +3657,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="allow_ungrounded",
         action="store_true",
         help=(
-            "Escape the MANDATORY DCGM byte-grounding gate (v1.33.0): by default "
+            "Escape the MANDATORY DCGM byte-grounding gate: by default "
             "publish FAILS-CLOSED when a campaign has the L1 SoL roofline but "
             "dcgm_grounded=False (no DCGM workload-level byte/FLOP grounding, "
             "pages 6/6b). Pass this only for a deliberately zymtrace-only L1 "
@@ -3591,6 +3666,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     pl.add_argument("--dry-run", dest="dry_run", action="store_true", help="Build + write parquet locally; skip S3 upload.")
+    pl.add_argument(
+        "--i-understand-this-publishes-externally",
+        dest="i_understand_this_publishes_externally",
+        action="store_true",
+        help=(
+            "Confirm current-turn approval to upload campaign data to external "
+            "S3 storage. Not required with --dry-run."
+        ),
+    )
     pl.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     pl.add_argument("--json", action="store_true", help="Emit JSON envelope")
     pl.set_defaults(func=cmd_publish_to_lake)
@@ -3619,7 +3703,7 @@ def build_parser() -> argparse.ArgumentParser:
     pv.add_argument("--json", action="store_true", help="Emit JSON envelope")
     pv.set_defaults(func=cmd_portability_view)
 
-    # champion_select (v1.66.0): baseline vs top-X cross-engine champion selection
+    # champion_select: baseline vs top-X cross-engine champion selection
     cs = sub.add_parser("champion_select", description=CONTRACT["champion_select"]["description"])
     cs.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
     cs.add_argument("--focus", default=None, choices=("throughput", "latency", "mixed"),

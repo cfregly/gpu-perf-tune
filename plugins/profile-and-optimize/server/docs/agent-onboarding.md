@@ -1,97 +1,128 @@
-# Agent Onboarding
+# Agent and MCP Client Onboarding
 
 Status: Active
 
-This repo ships agent skills and the `profile_and_optimize` MCP server that an
-operator or agent needs for MLPerf / performance work. Anyone with a clone
-of the repo can install the same surface locally. The package is
-`profile_and_optimize_mcp`, the configured MCP server key is `profile_and_optimize`, and
-repository docs and runbooks are exposed as MCP resources.
+`gpu-perf-tune` ships three related surfaces. Agent Skills describe the
+workflows. The `profile_and_optimize` MCP server provides repeatable tools and
+repository resources. Safety guards inspect risky shell commands before a
+supported client runs them.
 
-## Install profile_and_optimize
+## Names
 
-From `plugins/profile-and-optimize/server/`, configure Cursor:
+| Name | Meaning |
+| --- | --- |
+| `gpu-perf-tune` | The project and repository |
+| `profile-and-optimize` | The skills package and Claude Code plugin adapter |
+| `profile_and_optimize` | The configured MCP server key |
+| `profile_and_optimize_mcp` | The Python package and module that serves MCP |
+
+## Client coverage
+
+| Client | Agent Skills | MCP server | Safety guards |
+| --- | --- | --- | --- |
+| Claude Code | First-class marketplace plugin | Plugin or repo installer | Provenance hook installed, enforcement opt-in |
+| Codex | First-class repo installer into `~/.agents/skills` | Repo installer | No packaged client hook |
+| Cursor, Gemini CLI, and Antigravity | Best-effort helpers | Best-effort repo installer | No release-tested adapter |
+| Other stdio MCP clients | Client-owned discovery | Manual stdio configuration | No packaged adapter |
+
+The Skill sources follow the open Agent Skills format. This repository tests
+the Claude Code and Codex paths as part of the release bar. The MCP protocol
+remains client-neutral. Other client helpers may work, but they do not define
+release readiness.
+
+## Install the MCP server
+
+From the `gpu-perf-tune` repository root, choose a client:
 
 ```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client cursor
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client codex
 ```
 
-Or configure every supported local MCP client:
+First-class client names are `claude` and `codex`. The installer also accepts
+the best-effort `cursor`, `gemini`, `antigravity`, and `all` helpers. Add
+`--dry-run` to inspect the config changes before writing them.
 
-```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client all
-```
-
-The installer creates `~/.local/share/profile-and-optimize-mcp-venv`, installs the
-repo package editable, and merges the server block into the chosen
-client config. The Cursor block is:
+The installer creates `~/.local/share/profile-and-optimize-mcp-venv`, installs
+the MCP package as editable, and merges a `profile_and_optimize` server block
+into the selected client config. A typical JSON block is:
 
 ```json
 "profile_and_optimize": {
   "command": "~/.local/share/profile-and-optimize-mcp-venv/bin/python",
   "args": ["-m", "profile_and_optimize_mcp", "serve"],
   "env": {
-    "PROFILE_AND_OPTIMIZE_REPO_ROOT": "/path/to/claude-gpu-perf-tune/plugins/profile-and-optimize/server",
-    "PROFILE_AND_OPTIMIZE_LOGIN_HOST": "${USER}@192.0.2.10"
+    "PROFILE_AND_OPTIMIZE_REPO_ROOT": "/path/to/gpu-perf-tune/plugins/profile-and-optimize/server"
   }
 }
 ```
 
-The package also installs a `profile-and-optimize-mcp serve` console entry point,
-but the installer writes the venv-backed `python -m profile_and_optimize_mcp serve`
-form so local clients resolve the editable package and its dependencies
-from the MCP venv instead of the IDE's ambient Python.
+The package also installs a `profile-and-optimize-mcp serve` console entry
+point. The generated config uses the venv Python directly so each client finds
+the editable package and its dependencies without relying on ambient Python.
 
-Restart Cursor. The server exposes the repo's docs and runbooks as MCP
-resources, plus structured tools that wrap the same CLIs documented in
-`tools/README.md`. The canonical agent-facing request/response contract is
-[`mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md).
+Restart the selected client after installation. Full config snippets and
+troubleshooting live in the
+[MCP installation reference](../tools/profile_and_optimize_mcp/INSTALL.md).
 
-MCP tools are derived from [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py), which reads
-each library's live CLI parser contract. The FastMCP runtime
-is [`server.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py).
+## Install the Agent Skills
 
-Client-specific notes:
+Claude Code installs the Skills through the `profile-and-optimize` marketplace
+plugin. Codex users run this command from the repository root:
 
-- Cursor: `~/.cursor/mcp.json`, then restart Cursor.
-- Claude Code: `~/.claude/settings.json`, or use `claude mcp add ...`.
-- Codex CLI: `~/.codex/config.toml` under `[mcp_servers.profile_and_optimize]`.
-- Gemini CLI: `~/.gemini/settings.json` under `mcpServers.profile_and_optimize`.
-- Google Antigravity: raw `mcp_config.json` via Agent window -> Manage
-  MCP Servers -> View raw config, then refresh MCP servers.
+```bash
+make install-skills CLIENT=codex
+```
 
-Full snippets and troubleshooting live in
-[`tools/profile_and_optimize_mcp/INSTALL.md`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/INSTALL.md).
+The command links each maintained Skill into `~/.agents/skills/`. Restart
+Codex after it finishes. Codex can list the installed skills with `/skills` or
+invoke one with `$skill-name`. These paths follow the official Codex
+[Skills reference](https://developers.openai.com/codex/skills/).
 
-## Skills
+The repository retains a best-effort Cursor symlink helper. Gemini CLI and
+Antigravity do not have maintained skill installers here.
 
-The plugin's skills live under `plugins/profile-and-optimize/skills/` and
-travel with any clone. The plugin README carries the full table. Cursor
-users can symlink every skill into `~/.cursor/skills/` with
-`make refresh-symlinks` from the repo root.
+Use Skills for workflow behavior and the MCP tools for repeatable execution.
+The MCP server also exposes repository docs and runbooks as resources.
 
-Use the skills for agent behavior and the `profile_and_optimize` MCP tools for
-repeatable tool execution. Mutating MCP tools still require explicit
-`i_understand_this_*` arguments per [`../CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md).
+## Install safety guards
 
-## Full profile_and_optimize Tool List
+Claude Code loads the provenance hook from the plugin. Enforcement remains off
+until `PROVENANCE_COMMIT_GATE=ask` or `PROVENANCE_COMMIT_GATE=deny` is present
+in the hook environment. Codex and other clients do not have a packaged hook
+adapter in this repository. MCP acknowledgement fields still gate registered
+external and cluster mutations for every MCP client.
 
-Run `python3 mcp_surface.py list` for the live tool names and
-descriptions. Tools are derived from the CLI contracts of these server
-libraries:
+Read the [guard installation reference](../../hooks/README.md)
+for the exact contract and client-specific paths.
 
-- `ai_tuning`, `profile`
-- `perf_baseline`, `evidence`
-- `slurm`, `findings`
-- `perf_tune_report`, `known_good_config`
+## MCP contracts and implementation
 
-## Mutating Tool Pattern
+The canonical request and response contract is
+[`mcp-tool-io-contract.md`](mcp-tool-io-contract.md).
+[`mcp_surface.py`](../mcp_surface.py) derives
+the tool surface from each library's live CLI parser. The FastMCP runtime is
+[`server.py`](../tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/server.py).
 
-Every mutating tool mirrors the CLI acknowledgement field. Examples:
+Run this command from `plugins/profile-and-optimize/server/` for the current
+tool names and descriptions:
+
+```bash
+python3 mcp_surface.py list
+```
+
+The derived libraries are `ai_tuning`, `profile`, `perf_baseline`, `evidence`,
+`slurm`, `findings`, `perf_tune_report`, and `known_good_config`.
+
+## Ack-gated tools
+
+The MCP wrapper mirrors an explicit CLI acknowledgement only when the tool
+contract declares one. Current fields are:
 
 - `i_understand_this_submits_jobs=true`
-- `i_understand_this_pulls_license_gated_data=true`
-- `i_understand_this_stages_artifacts=true`
+- `i_understand_this_substitutes_nodes=true`
+- `i_understand_this_publishes_externally=true`
 
-The MCP wrapper refuses before invoking the underlying command if the
-acknowledgement is absent.
+The MCP wrapper refuses the operation before invoking the command when the
+required acknowledgement is absent. Local `writes_artifacts` tools use an
+explicit output path and do not require a separate acknowledgement.

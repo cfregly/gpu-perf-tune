@@ -2,17 +2,19 @@
 
 Creates a new immutable evidence bundle directory under
 ``<repo_root>/experiments/artifacts/<family>/<run-id>/`` populated with the
-skeleton the workspace's "Reproducibility-Grade Evidence" rule expects:
+skeleton the project's "Reproducibility-Grade Evidence" rule expects:
 
 - ``SOURCE.md`` with operator + cluster + timestamp + git SHA + intent.
 - ``summary.md`` with a verdict skeleton the operator fills in.
 - ``commands/`` with a ``README.md`` documenting the four-file tuple
-  capture convention and a ``.gitkeep`` so the directory survives
-  ``git add``.
+  capture convention and a ``.gitkeep`` for the local directory shape.
 
-Workload-agnostic; works for any experiment family. Added in profile-and-optimize v0.4.0.
-See the skill [``evidence-bundle-init``](../../skills/evidence-bundle-init/SKILL.md)
-for the operator-facing workflow.
+Evidence artifacts are ignored by default. Publishing a scrubbed bundle to the
+repository requires an explicit review and ``git add -f``.
+
+Works with any experiment family. See the skill
+[``evidence-bundle-init``](../../../skills/evidence-bundle-init/SKILL.md) for the
+operator-facing workflow.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -32,7 +35,6 @@ from tools.perf_baseline.helpers import (
     utc_now_slug,
 )
 
-
 CONTRACT: dict[str, dict[str, Any]] = {
     "init": {
         "safety": "writes_artifacts",
@@ -44,6 +46,30 @@ CONTRACT: dict[str, dict[str, Any]] = {
     },
 }
 
+_SLUG_PART = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+_PUBLIC_SKILL_URL = (
+    "https://github.com/cfregly/gpu-perf-tune/blob/main/"
+    "plugins/profile-and-optimize/skills/evidence-bundle-init/SKILL.md"
+)
+
+
+def _safe_relative_path(value: str, *, label: str, allow_nested: bool) -> Path:
+    """Validate an operator slug before using it in an artifact path."""
+
+    if not value or "\\" in value:
+        raise ValueError(f"{label} must use letters, numbers, dots, underscores, hyphens, or slashes")
+    path = Path(value)
+    parts = path.parts
+    if (
+        path.is_absolute()
+        or not parts
+        or any(part in {"", ".", ".."} or _SLUG_PART.fullmatch(part) is None for part in parts)
+    ):
+        raise ValueError(f"{label} must be a safe relative slug")
+    if not allow_nested and len(parts) != 1:
+        raise ValueError(f"{label} must be one path segment")
+    return path
+
 
 def _resolve_repo_root(arg: str | None) -> Path:
     if arg:
@@ -53,7 +79,11 @@ def _resolve_repo_root(arg: str | None) -> Path:
         return Path(env).expanduser().resolve()
     current = Path.cwd().resolve()
     while current != current.parent:
-        if (current / "CLAUDE.md").is_file() and (current / "tools").is_dir():
+        if (
+            (current / "pyproject.toml").is_file()
+            and (current / "mcp_surface.py").is_file()
+            and (current / "tools").is_dir()
+        ):
             return current
         current = current.parent
     raise SystemExit("FATAL: cannot resolve repo root; pass --repo-root or set PROFILE_AND_OPTIMIZE_REPO_ROOT")
@@ -64,7 +94,7 @@ SOURCE_MD_TEMPLATE = """# SOURCE
 **Family:** `{family}`
 **Run-id:** `{run_id}`
 **Created at (UTC):** `{utc_iso}`
-**Created by:** the MLPerf team (operator: `{operator_user}` on `{hostname}`)
+**Created by:** `{operator_user}` on `{hostname}`
 **profile-and-optimize SHA at creation:** `{sha_short}`
 
 ## Intent
@@ -74,14 +104,15 @@ SOURCE_MD_TEMPLATE = """# SOURCE
 ## Provenance
 
 - Workstation kernel: `{uname}`
-- Repo: `<your-org>/claude-gpu-perf-tune` (skills + bundled MCP server).
+- Repo: `cfregly/gpu-perf-tune` (skills + bundled MCP server).
 - Bundle path: `experiments/artifacts/{family}/{run_id}/`
 
 ## Experiment isolation & traceability
 
 The run-id IS the experiment-id: the single join key across this bundle, the
-cluster objects, and the perf-lake (workspace `CLAUDE.md` "Experiment Isolation
-& Traceability").
+cluster objects, and the perf-lake (`gpu-perf-tune`
+[`AGENTS.md`](https://github.com/cfregly/gpu-perf-tune/blob/main/AGENTS.md)
+"Experiment Isolation and Traceability").
 
 - experiment_id: {run_id}
 - family: {family}
@@ -94,14 +125,17 @@ cluster objects, and the perf-lake (workspace `CLAUDE.md` "Experiment Isolation
   --experiment-id {run_id} --family {family} --evidence-bundle <this-bundle>`
   so campaign_id == experiment_id; the s3 atlas_v1 + campaign_v1 paths are
   auto-appended below by `publish_to_lake`).
-- pre-apply label gate: `perf-tune-glm51/verify-experiment-labels.sh {run_id} <manifests>`.
+- pre-apply label check: confirm every rendered object and pod template uses
+  `experiment={run_id}`. Record the exact validator command and its output in
+  `commands/`.
 
 ## Source-code attribution (provenance)
 
 Machine-readable link from this run-id to the ACTUAL source under test
 (`experiment_provenance_v1`). Fill `source[]` (repo/branch/commit/delivery/image)
-before publishing a VERDICT; in a deploy bundle, auto-capture/refresh it with
-`capture-provenance.sh <this-bundle> --write --force`.
+before publishing a VERDICT. Record `git rev-parse HEAD` and `git status
+--short` from the source checkout in `commands/` so the attribution can be
+audited.
 
 ```provenance
 schema: experiment_provenance_v1
@@ -132,9 +166,10 @@ verdict:
 
 ## Cross-references
 
-- Workspace [`CLAUDE.md`](../../../CLAUDE.md) "Reproducibility-Grade Evidence" +
+- Project [`AGENTS.md`](https://github.com/cfregly/gpu-perf-tune/blob/main/AGENTS.md)
+  "Reproducibility-Grade Evidence" +
   "Experiment Isolation & Traceability" rules.
-- This file was scaffolded by `mcp__profile_and_optimize__evidence_init` (skill: [`evidence-bundle-init`](../../../plugins/profile-and-optimize/skills/evidence-bundle-init/SKILL.md)).
+- This file was scaffolded by `mcp__profile_and_optimize__evidence_init` (skill: [`evidence-bundle-init`]({skill_link})).
 """
 
 
@@ -162,7 +197,8 @@ _(to be filled in by operator at end of experiment)_
 
 COMMANDS_README_TEMPLATE = """# commands/
 
-Per workspace [`CLAUDE.md`](../../../../CLAUDE.md) "Reproducibility-Grade Evidence",
+Per project [`AGENTS.md`](https://github.com/cfregly/gpu-perf-tune/blob/main/AGENTS.md)
+"Reproducibility-Grade Evidence",
 every shell command run during this experiment is captured as a four-file tuple:
 
     00-<step-slug>.cmd       # the exact command
@@ -170,32 +206,56 @@ every shell command run during this experiment is captured as a four-file tuple:
     00-<step-slug>.stderr    # captured stderr
     00-<step-slug>.exit      # exit code
 
-Filenames are zero-padded sequential (00, 01, 02, ...) so the chronological
-order is preserved in `ls`. Use this helper to capture all four atomically:
+Filenames are zero-padded sequential (00, 01, 02, ...) so natural sort order
+matches execution order. From the server root, use the checked-in and tested
+capture helper. The `||` branch preserves a nonzero command status even when
+the caller enabled `set -e`:
 
-    run() {
-      local n="$1"; shift
-      local slug="$1"; shift
-      local prefix="$(printf '%02d-%s' "${n}" "${slug}")"
-      printf '%s ' "$@" > "${prefix}.cmd"; echo >> "${prefix}.cmd"
-      "$@" > "${prefix}.stdout" 2> "${prefix}.stderr"
-      echo $? > "${prefix}.exit"
-    }
-    run 0 ls-image ls /mnt/data/images/
+    capture_rc=0
+    ART_DIR="{bundle_relative}" \
+      bash tools/shared/capture_cmd.sh ls-image -- ls /mnt/data/images/ \
+      || capture_rc=$?
+    if [ "$capture_rc" -ne 0 ]; then
+      exit "$capture_rc"
+    fi
+
+The helper shell-quotes the exact argv into `.cmd`, writes stdout and stderr
+separately, writes `.exit` before returning, and returns the wrapped command's
+status.
 """
 
 
 def cmd_init(args: argparse.Namespace) -> int:
     repo_root = _resolve_repo_root(args.repo_root)
-    family = args.family
-    run_id = args.run_id or utc_now_slug()
-    bundle = repo_root / "experiments" / "artifacts" / family / run_id
+    try:
+        family_path = _safe_relative_path(
+            args.family,
+            label="family",
+            allow_nested=True,
+        )
+        run_id_path = _safe_relative_path(
+            args.run_id or utc_now_slug(),
+            label="run-id",
+            allow_nested=False,
+        )
+    except ValueError as error:
+        print(f"FATAL: {error}", file=sys.stderr)
+        return 2
+
+    evidence_root = (repo_root / "experiments" / "artifacts").resolve()
+    bundle = (evidence_root / family_path / run_id_path).resolve()
+    if not bundle.is_relative_to(evidence_root):
+        print("FATAL: evidence bundle path escapes experiments/artifacts", file=sys.stderr)
+        return 2
+
+    family = family_path.as_posix()
+    run_id = run_id_path.as_posix()
 
     if bundle.exists():
-        # Per workspace CLAUDE.md artifact-durability rule: bundles are immutable.
+        # Per project AGENTS.md artifact-durability rule: bundles are immutable.
         print(
             f"FATAL: bundle already exists: {bundle}\n"
-            "Bundles are immutable per workspace CLAUDE.md. Use a fresh --run-id.",
+            "Bundles are immutable per project AGENTS.md. Use a fresh --run-id.",
             file=sys.stderr,
         )
         return 2
@@ -204,6 +264,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     profile_and_optimize_sha = discover_profile_and_optimize_sha(repo_root)
     sha_short = (profile_and_optimize_sha or "(unknown)")[:12]
     utc_iso = utc_now_iso()
+
+    skill_target = repo_root.parent / "skills" / "evidence-bundle-init" / "SKILL.md"
+    if skill_target.is_file():
+        skill_link = Path(os.path.relpath(skill_target, bundle)).as_posix()
+    else:
+        skill_link = _PUBLIC_SKILL_URL
 
     bundle.mkdir(parents=True, exist_ok=False)
     (bundle / "commands").mkdir(parents=True, exist_ok=False)
@@ -218,10 +284,12 @@ def cmd_init(args: argparse.Namespace) -> int:
             sha_short=sha_short,
             intent=args.intent,
             uname=uname,
+            skill_link=skill_link,
         )
     )
     (bundle / "summary.md").write_text(SUMMARY_MD_TEMPLATE)
-    (bundle / "commands" / "README.md").write_text(COMMANDS_README_TEMPLATE)
+    bundle_relative = bundle.relative_to(repo_root).as_posix()
+    (bundle / "commands" / "README.md").write_text(COMMANDS_README_TEMPLATE.format(bundle_relative=bundle_relative))
 
     payload = {
         "tool": "evidence_init",

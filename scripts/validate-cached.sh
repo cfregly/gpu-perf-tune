@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Cached wrapper around `claude plugin validate`.
 #
-# Why: `claude plugin validate` is deterministic on the plugin-manifest tree
-# (plugin.json + .mcp.json + SKILL.md frontmatter). It is the slowest of the
+# Why: `claude plugin validate` is deterministic on the Claude-facing plugin
+# tree. It is the slowest of the
 # four gates in `make -j4 all` (~1.5s) and rarely needs to re-run between
 # commits. This script hashes the manifest tree, looks up
 # `.cache/plugin-validate-<sha>.ok`, and skips the real invocation on a hit.
 #
-# Cache invalidation is automatic: any byte change in plugin.json, .mcp.json,
-# or any SKILL.md content yields a different SHA -> cache miss -> real
-# validation. Stale cache entries can be wiped via `rm -rf .cache/`.
+# Cache invalidation is automatic. Changes to plugin manifests, MCP config,
+# skills, hook manifests, or hook scripts yield a cache miss. Stale cache
+# entries can be wiped via `rm -rf .cache/`.
 #
 # Environment overrides:
 #   CLAUDE_PLUGIN_VALIDATE_CMD  command to invoke instead of `claude plugin
@@ -27,16 +27,15 @@ CACHE_DIR="${REPO_ROOT}/.cache"
 
 mkdir -p "${CACHE_DIR}"
 
-# Compute a stable SHA over the manifest-tree files: plugin.json, .mcp.json,
-# every SKILL.md, marketplace.json. Use the sorted-find -> shasum pattern so
-# the same set of files in the same content always yields the same SHA, and
-# any byte change yields a different SHA.
+# Compute a stable SHA over every Claude-facing validation input. Hook scripts
+# are part of the plugin contract, so they must invalidate this cache too.
 SHA="$(
   {
     cat "${PLUGIN_DIR}/.claude-plugin/plugin.json" 2>/dev/null || true
     cat "${PLUGIN_DIR}/.mcp.json" 2>/dev/null || true
     cat "${REPO_ROOT}/.claude-plugin/marketplace.json" 2>/dev/null || true
     find "${PLUGIN_DIR}/skills" -name SKILL.md -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null || true
+    find "${PLUGIN_DIR}/hooks" -type f ! -path '*/__pycache__/*' -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null || true
   } | shasum -a 256 | awk '{print $1}' | cut -c1-16
 )"
 

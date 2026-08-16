@@ -1,6 +1,9 @@
 ---
 name: prometheus-anchored-query
-last_validated: 2026-05-21
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-21"
 description: >-
   Reusable wrapper for the knowledge-base-first PromQL pattern.
   Operator names the metric / question / time range. Skill calls
@@ -13,19 +16,7 @@ description: >-
   query", "query the Prometheus MCP", "what's the prometheus metric for", "save
   prometheus payload", or any combination of "promql / prometheus / metric /
   query" with "anchored / knowledge-base / safe / provenance".
-allowed-tools:
-  - mcp__prometheus_mcp__query_observability_knowledge_base
-  - mcp__prometheus_mcp__query_prometheus
-  - mcp__prometheus_mcp__list_prometheus_label_values
-  - mcp__prometheus_mcp__list_prometheus_label_names
-  - mcp__prometheus_mcp__list_prometheus_metric_names
-  - mcp__prometheus_mcp__list_prometheus_metric_metadata
-  - mcp__prometheus_mcp__list_datasources
-  - mcp__prometheus_mcp__get_datasource
-  - Bash(date:*)
-  - Bash(jq:*)
-  - Read
-  - Write
+allowed-tools: "mcp__prometheus_mcp__query_observability_knowledge_base mcp__prometheus_mcp__query_prometheus mcp__prometheus_mcp__list_prometheus_label_values mcp__prometheus_mcp__list_prometheus_label_names mcp__prometheus_mcp__list_prometheus_metric_names mcp__prometheus_mcp__list_prometheus_metric_metadata mcp__prometheus_mcp__list_datasources mcp__prometheus_mcp__get_datasource Bash(date:*) Bash(jq:*) Read Write"
 ---
 
 # prometheus-anchored-query
@@ -34,7 +25,7 @@ allowed-tools:
 
 Make ad-hoc PromQL queries **safe by default** by wrapping the "Contention And O11y Pattern" discipline (anchor labels in the knowledge base FIRST, then run the query) as a reusable skill. Saves the raw payload to a provenance-bearing bundle so future queries can replay the same shape, and so the perf-lake-contract is honored without operator effort.
 
-This skill exists because PromQL is easy to write **wrong** at cluster scale: a missing label selector turns a 100-series query into a 10,000-series query that overloads the Prometheus backend. The bundled server's [`mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) Contention And O11y Pattern (step 3) makes the knowledge-base-first call mandatory. This skill enforces it.
+This skill exists because PromQL is easy to write **wrong** at cluster scale: a missing label selector turns a 100-series query into a 10,000-series query that overloads the Prometheus backend. The bundled server's [`mcp-composition.md`](../../server/docs/mcp-composition.md) Contention And O11y Pattern (step 3) makes the knowledge-base-first call mandatory. This skill enforces it.
 
 Use it for ad-hoc questions ("what's the IB traffic on `<node>` right now?" / "is the dataloader being starved?" / "what's the median dcgm_xid rate across a partition?").
 
@@ -61,7 +52,7 @@ Do **not** use this skill for:
 
 ### Inference-perf example
 
-The [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) workflow scrapes four canonical vLLM Prometheus metrics pre/post each benchmark run:
+The [`inference-perf-bench`](../inference-perf-bench/SKILL.md) workflow scrapes four canonical vLLM Prometheus metrics pre/post each benchmark run:
 
 | Metric | What it answers |
 | --- | --- |
@@ -70,7 +61,7 @@ The [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf
 | `vllm:num_requests_running` | Concurrent requests peak |
 | `vllm:avg_generation_throughput_toks_per_s` | Generation throughput |
 
-Operators replaying a perf-bench run via this skill should anchor against these four metric names first (knowledge-base call confirms cardinality + datasource UID), then run the narrow PromQL with `{model_name="<served-name>", namespace="<ns>"}` selectors. See [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) Phase 4 / 7 for the in-pod scrape pattern this skill complements at the Prometheus MCP layer.
+Operators replaying a perf-bench run via this skill should anchor against these four metric names first (knowledge-base call confirms cardinality + datasource UID), then run the narrow PromQL with `{model_name="<served-name>", namespace="<ns>"}` selectors. See [`inference-perf-bench`](../inference-perf-bench/SKILL.md) Phase 4 / 7 for the in-pod scrape pattern this skill complements at the Prometheus MCP layer.
 
 ## Prerequisites
 
@@ -109,7 +100,7 @@ The knowledge-base response tells us:
 - The canonical datasource UID for this metric on this cluster (the MCP can front several datasources - e.g. per-cluster Prometheus instances plus a log backend - so every query tool takes an explicit `datasourceUid`).
 - Any noted caveats (sampling rate, retention, legacy renames).
 
-If the knowledge base does NOT cover the metric: stop. Report what's missing. Per [`mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) "Contention And O11y Pattern" step 3, running uncovered PromQL is unsafe.
+If the knowledge base does NOT cover the metric: stop. Report what's missing. Per [`mcp-composition.md`](../../server/docs/mcp-composition.md) "Contention And O11y Pattern" step 3, running uncovered PromQL is unsafe.
 
 ### Phase 2: validate labels exist
 
@@ -209,7 +200,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 - **Knowledge base first is mandatory.** Phase 1 cannot be skipped - fail fast, no silent fallbacks. The whole point of the skill is to enforce that discipline.
 - **No high-cardinality queries.** If the knowledge base reports the proposed query would return >10k series, the skill refuses to run it. Operator narrows the selector and retries.
-- **Raw payload preservation.** Per [`perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md), every saved query records the datasource UID, the exact PromQL, the time range, the response time, and the source label.
+- **Raw payload preservation.** Per [`perf-lake-contract.md`](../../server/docs/perf-lake-contract.md), every saved query records the datasource UID, the exact PromQL, the time range, the response time, and the source label.
 - **Read-only.** The skill never mutates state through the Prometheus MCP. Never creates dashboards / annotations / alerts (those would need `create_*` tools which are not in `allowed-tools`).
 
 ## Known limitations
@@ -218,6 +209,6 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Source-of-truth references
 
-- [`server/docs/mcp-composition.md`](/plugins/profile-and-optimize/server/docs/mcp-composition.md) - "Contention And O11y Pattern" (the workflow this skill generalizes).
-- [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md) - raw-payload provenance contract.
-- [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor).
+- [`server/docs/mcp-composition.md`](../../server/docs/mcp-composition.md) - "Contention And O11y Pattern" (the workflow this skill generalizes).
+- [`server/docs/perf-lake-contract.md`](../../server/docs/perf-lake-contract.md) - raw-payload provenance contract.
+- [`docs/METHODOLOGY.md`](../../../../docs/METHODOLOGY.md) - measurement canon (full-context reporting, verdict rigor).

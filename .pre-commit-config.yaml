@@ -1,4 +1,4 @@
-# Pre-commit hooks for profile-and-optimize contributors (v0.6.4+).
+# Pre-commit hooks for gpu-perf-tune contributors.
 #
 # Local setup:
 #   cd plugins/profile-and-optimize/server && pip install -e ".[dev]"
@@ -7,22 +7,13 @@
 # Then `git commit` runs the hooks below on staged files; `pre-commit run
 # --all-files` runs them on the whole tree.
 #
-# Why the ruff hooks are filtered to 5 profile-and-optimize-native subtrees: the
-# vendored MLPerf code under plugins/profile-and-optimize/server/{launcher,selector,
-# validator,contention,leaderboard,preflight,ai_tuning,submission,campaign,
-# profile,tools/...} has its own upstream style + we accept it as-is to
-# avoid cherry-pick conflicts on the optional sync from
-# the upstream MLPerf-training mirror.
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        # Pre-commit complains on multi-document YAML by default; the dbt /
-        # ARM manifests use ---/--- separators. Allow them.
         args: [--allow-multiple-documents]
       - id: check-json
       - id: check-toml
@@ -31,13 +22,14 @@ repos:
         args: [--maxkb=1024]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.16.3
     hooks:
       - id: ruff
-        args: [--fix]
-        files: '^plugins/profile-and-optimize/server/(perf_baseline|evidence|slurm|cohort_health|experiments|tools/(perf_baseline|evidence|slurm|cohort_health|experiments))/'
+        args: [--fix, --select, E4,E7,E9,F, --config, plugins/profile-and-optimize/server/pyproject.toml]
+        files: '^plugins/profile-and-optimize/server/(perf_baseline|evidence|slurm|tools/(perf_baseline|evidence|slurm))/'
       - id: ruff-format
-        files: '^plugins/profile-and-optimize/server/(perf_baseline|evidence|slurm|cohort_health|experiments|tools/(perf_baseline|evidence|slurm|cohort_health|experiments))/'
+        args: [--config, plugins/profile-and-optimize/server/pyproject.toml]
+        files: '^plugins/profile-and-optimize/server/(perf_baseline|evidence|slurm|tools/(perf_baseline|evidence|slurm))/'
 
   - repo: local
     hooks:
@@ -48,34 +40,26 @@ repos:
         pass_filenames: false
         files: '\.md$'
       - id: lint-skill-mcp-args
-        name: lint-skill-mcp-args (descriptor cross-check; v0.8.2+)
+        name: lint-skill-mcp-args (descriptor cross-check)
         entry: python3 scripts/lint-skill-mcp-args.py
         language: system
         pass_filenames: false
         files: '^plugins/profile-and-optimize/skills/.*/SKILL\.md$'
       - id: lint-skill-counts
-        # Catches the v1.13.0 class of bug: doc says "21 skills" but the
-        # on-disk plugins/profile-and-optimize/skills/ tree has 44. Added in v1.14.0.
         name: lint-skill-counts (single source of truth for skill totals)
         entry: python3 scripts/lint-skill-counts.py
         language: system
         pass_filenames: false
-        files: '(^plugins/profile-and-optimize/skills/|^README\.md$|^CATALOG\.md$|^CONTRIBUTING\.md$|^REVIEWERS\.md$|^SECURITY\.md$|^Makefile$|^plugins/profile-and-optimize/README\.md$|^plugins/profile-and-optimize/\.claude-plugin/plugin\.json$|^\.claude-plugin/marketplace\.json$)'
+        files: '(^plugins/profile-and-optimize/skills/|^README\.md$|^CONTRIBUTING\.md$|^REVIEWERS\.md$|^SECURITY\.md$|^Makefile$|^plugins/profile-and-optimize/README\.md$|^plugins/profile-and-optimize/\.claude-plugin/plugin\.json$|^\.claude-plugin/marketplace\.json$)'
       - id: lint-tool-counts
-        # Catches the v1.13.0 class of bug: doc says "75-tool surface" but
-        # mcp_surface.py exposes 97 (95 contract + 2 aux). Added in v1.14.0.
         name: lint-tool-counts (single source of truth for MCP tool / library totals)
         entry: python3 scripts/lint-tool-counts.py
         language: system
         pass_filenames: false
-        files: '(^plugins/profile-and-optimize/server/(mcp_surface\.py|README\.md|AGENTS\.md|docs/|tools/profile_and_optimize_mcp/README\.md)|^README\.md$|^CATALOG\.md$|^CONTRIBUTING\.md$|^REVIEWERS\.md$|^SECURITY\.md$|^Makefile$|^plugins/profile-and-optimize/README\.md$|^plugins/profile-and-optimize/\.claude-plugin/plugin\.json$)'
-      - id: lint-release-tag
-        # Tagging rigidity (v1.32.0+): a plugin.json version with no matching
-        # vX.Y.Z tag blocks the push. pre-push stage; enable once with
-        # `pre-commit install --hook-type pre-push`.
-        name: lint-release-tag (tagging rigidity; pre-push)
-        entry: bash scripts/check-release-tag.sh
+        files: '(^plugins/profile-and-optimize/server/(mcp_surface\.py|README\.md|AGENTS\.md|docs/|tools/profile_and_optimize_mcp/README\.md)|^README\.md$|^CONTRIBUTING\.md$|^REVIEWERS\.md$|^SECURITY\.md$|^Makefile$|^plugins/profile-and-optimize/README\.md$|^plugins/profile-and-optimize/\.claude-plugin/plugin\.json$)'
+      - id: lint-versions
+        name: lint-versions (VERSION source of truth)
+        entry: python3 scripts/lint-versions.py
         language: system
-        stages: [pre-push]
         pass_filenames: false
-        always_run: true
+        files: '(^VERSION$|^CHANGELOG\.md$|^scripts/lint-versions\.py$|^plugins/profile-and-optimize/README\.md$|^plugins/profile-and-optimize/\.claude-plugin/plugin\.json$|^plugins/profile-and-optimize/server/pyproject\.toml$|^plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/pyproject\.toml$|^plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/__init__\.py$)'

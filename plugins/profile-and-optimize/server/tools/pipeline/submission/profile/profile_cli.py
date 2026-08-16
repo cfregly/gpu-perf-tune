@@ -8,9 +8,9 @@ helper; each subverb's run path comes from the script's `run(args)`
 helper.
 
 The standalone scripts continue to be invokable directly
-(`python3 -m tools.pipeline.submission.profile.<script>`); this CLI is
+(`python3 -m tools.pipeline.submission.profile.<script>`). This CLI is
 the umbrella entrypoint reachable as `python3 -m profile <verb>` via
-the shim package at `mlperf-6.0-training/profile/`.
+the top-level `profile` shim package.
 """
 
 from __future__ import annotations

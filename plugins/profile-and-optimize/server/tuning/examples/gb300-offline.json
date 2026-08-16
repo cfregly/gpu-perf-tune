@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "id": "example-gb300-offline",
+  "status": "example",
+  "description": "Offline example only. Replace these values with workload-specific bounds before tuning.",
+  "target": {
+    "benchmark": "llama31_405b",
+    "default_gate_nodes": 1,
+    "partition": "example"
+  },
+  "objectives": [
+    {
+      "name": "gb300_operational_readiness",
+      "direction": "maximize",
+      "primary_metric": "readiness_score",
+      "minimum_successful_runs": 1
+    }
+  ],
+  "parameters": [
+    {
+      "name": "RUN_STAGE",
+      "category": "workflow",
+      "kind": "enum",
+      "values": ["smoke", "gate"],
+      "wire": "example environment variable",
+      "description": "Example workflow stage."
+    },
+    {
+      "name": "GATE_NODES",
+      "category": "shape",
+      "kind": "enum",
+      "values": ["1", "8"],
+      "wire": "example scheduler shape",
+      "description": "Example node count."
+    },
+    {
+      "name": "NCCL_IB_TC",
+      "category": "collective transport",
+      "kind": "enum",
+      "values": ["0", "96", "106"],
+      "wire": "example environment variable",
+      "description": "Example traffic class values."
+    },
+    {
+      "name": "NCCL_RAIL_PLANE",
+      "category": "collective transport",
+      "kind": "enum",
+      "values": ["0", "1"],
+      "wire": "example environment variable",
+      "description": "Example rail plane values."
+    }
+  ]
+}

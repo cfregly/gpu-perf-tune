@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 import unittest
 from pathlib import Path
@@ -14,14 +13,10 @@ if str(REPO_ROOT) not in sys.path:
 from tools.shared import validation_schema  # noqa: E402
 
 
-def _load_validate_artifacts():
-    path = REPO_ROOT / "validate_artifacts.py"
-    spec = importlib.util.spec_from_file_location("validate_artifacts", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def _load_artifact_validation():
+    from tools.ai_tuning import artifact_validation
+
+    return artifact_validation
 
 
 class SchemaModuleTests(unittest.TestCase):
@@ -48,9 +43,9 @@ class SchemaModuleTests(unittest.TestCase):
                 self.assertNotIn(" ", field)
 
 
-class ValidateArtifactsReExportTests(unittest.TestCase):
-    def test_validate_artifacts_re_exports_match_schema_module(self) -> None:
-        validator = _load_validate_artifacts()
+class ArtifactValidationReExportTests(unittest.TestCase):
+    def test_artifact_validation_re_exports_match_schema_module(self) -> None:
+        validator = _load_artifact_validation()
         self.assertEqual(
             tuple(validator.BENCHMARK_COLUMNS),
             validation_schema.BENCHMARK_COLUMNS,
@@ -60,8 +55,8 @@ class ValidateArtifactsReExportTests(unittest.TestCase):
             validation_schema.REQUIRED_SUMMARY_FIELDS,
         )
 
-    def test_validate_artifacts_all_names_resolve(self) -> None:
-        validator = _load_validate_artifacts()
+    def test_artifact_validation_all_names_resolve(self) -> None:
+        validator = _load_artifact_validation()
         for name in validator.__all__:
             with self.subTest(name=name):
                 self.assertTrue(hasattr(validator, name))

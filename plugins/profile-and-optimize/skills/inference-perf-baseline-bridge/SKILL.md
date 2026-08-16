@@ -1,6 +1,9 @@
 ---
 name: inference-perf-baseline-bridge
-last_validated: 2026-05-24
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-24"
 description: >-
   Bridge between the inference-perf-bench / ai-bench output bundle and the
   profile-and-optimize perf-baseline registry. Knows the canonical inference perf
@@ -15,16 +18,7 @@ description: >-
   regression real", "perf-bench baseline", "ai-bench baseline", or any
   combination of "register / record / diff / compare" with "inference /
   ai-bench / perf-bench / vllm / kimi / glm / deepseek / minimax".
-allowed-tools:
-  - mcp__profile_and_optimize__perf_baseline_record
-  - mcp__profile_and_optimize__perf_baseline_diff
-  - mcp__profile_and_optimize__search_evidence
-  - mcp__profile_and_optimize__search_runbooks
-  - Bash(jq:*)
-  - Bash(sha256sum:*)
-  - Bash(date:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__perf_baseline_record mcp__profile_and_optimize__perf_baseline_diff mcp__profile_and_optimize__search_evidence mcp__profile_and_optimize__search_runbooks Bash(jq:*) Bash(sha256sum:*) Bash(date:*) Read Write"
 ---
 
 # inference-perf-baseline-bridge
@@ -32,11 +26,11 @@ allowed-tools:
 ## Purpose
 
 Translate the output of an
-[`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md) (or its
+[`inference-perf-bench`](../inference-perf-bench/SKILL.md) (or its
 colloquial alias `ai-bench`) run into the
 shape the workload-agnostic
-[`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) /
-[`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-baseline-diff/SKILL.md) registry
+[`perf-baseline-record`](../perf-baseline-record/SKILL.md) /
+[`perf-baseline-diff`](../perf-baseline-diff/SKILL.md) registry
 expects. The bridge fixes three pain points:
 
 1. The upstream `perf-bench` skill's report is a markdown table per
@@ -117,7 +111,7 @@ This bridge does NOT add a new MCP verb. It wraps the existing
 The two top-level fields `kernel_class_gpu_pct` and `cpu_spinpoll_pct`
 are **optional**. They surface profile-grade signals that the upstream
 `perf-bench` runbook does not produce on its own - they are populated
-when the operator also captures a [zymtrace](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md)
+when the operator also captures a [zymtrace](../zymtrace-anchored-query/SKILL.md)
 or Nsight-Systems profile against the same time window.
 
 Field shapes and origins:
@@ -130,7 +124,7 @@ Field shapes and origins:
   set go under arbitrary `<other-class>` keys (free-form). The map is
   derived from a GPU-side `event_kind = 'cuda'` zymtrace query grouped
   by kernel-name regex. The source bucket-rules live in the
-  [zymtrace-anchored-query](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) skill's
+  [zymtrace-anchored-query](../zymtrace-anchored-query/SKILL.md) skill's
   "Kernel-class bucketing" appendix.
 - **`cpu_spinpoll_pct`** is a single scalar: the percent of CPU on-cpu
   samples that fall inside vLLM's spin-poll IPC path
@@ -174,7 +168,7 @@ the metric is reported as `NULL_LEGACY_BASELINE` and skipped (see
 
 ## When to use
 
-- After an [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
+- After an [`inference-perf-bench`](../inference-perf-bench/SKILL.md)
   run completes (Phase 9 of the upstream runbook).
 - Periodic regression sweep - weekly cron diffs each registered
   baseline against the most recent run.
@@ -182,14 +176,14 @@ the metric is reported as `NULL_LEGACY_BASELINE` and skipped (see
   verdict is RED.
 - Pairing perf vs quality - register the baseline with `--notes
   "GPQA=<score>. MMLU-Pro=<score>"` from the
-  [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md) run so
+  [`inference-model-eval`](../inference-model-eval/SKILL.md) run so
   future diffs can confirm the regression is not masked by a quality
   gain (or vice versa).
 
 Do **not** use this skill for:
 
 - MLPerf training step-time / MFU baselines - use
-  [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) directly
+  [`perf-baseline-record`](../perf-baseline-record/SKILL.md) directly
   with `--family <bench>` and a custom schema.
 - One-off diagnostic measurements - register a baseline only when the
   measurement is worth remembering.
@@ -231,7 +225,7 @@ Read the upstream perf-bench output:
 If the operator also captured a paired profile bundle (zymtrace or
 Nsight) against the same window, source the two optional fields:
 
-- `experiments/artifacts/zymtrace-bundles/<run-id>/response.json` (or any sibling bundle that follows the [zymtrace-anchored-query](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) layout) - derive `kernel_class_gpu_pct` from the GPU-side `event_kind = 'cuda'` query response, bucketed per the kernel-class regex appendix in that skill. Derive `cpu_spinpoll_pct` from the CPU-side `event_kind = 'on_cpu'` response by summing samples whose `py_file` matches `shm_broadcast.py` or `utils.py::sched_yield`.
+- `experiments/artifacts/zymtrace-bundles/<run-id>/response.json` (or any sibling bundle that follows the [zymtrace-anchored-query](../zymtrace-anchored-query/SKILL.md) layout) - derive `kernel_class_gpu_pct` from the GPU-side `event_kind = 'cuda'` query response, bucketed per the kernel-class regex appendix in that skill. Derive `cpu_spinpoll_pct` from the CPU-side `event_kind = 'on_cpu'` response by summing samples whose `py_file` matches `shm_broadcast.py` or `utils.py::sched_yield`.
 - If no paired profile bundle exists, emit `null` for both optional fields. The diff verb will skip them per the "Optional fields" rule above. The registry record stays valid.
 
 Emit `inference_perfbench_v1.json` to a scratch path, `sha256sum` it.
@@ -243,6 +237,7 @@ mcp__profile_and_optimize__perf_baseline_record with:
   args: ["--family", "inference",
          "--measurement", "<model>-perfbench-v1",
          "--source", "<scratch-path-to-inference_perfbench_v1.json>",
+         "--direction", "two-sided",
          "--unit", "structured-json",
          "--notes", "<operator-supplied notes; e.g. GPQA + MMLU-Pro scores from inference-model-eval>",
          "--json"]
@@ -260,7 +255,7 @@ Print:
 - Source SHA-256.
 - Headline metrics at concurrency 16 (the canonical operating point
   for routine comparison).
-- Cross-link to [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) `diff`
+- Cross-link to [`inference-perf-baseline-bridge`](SKILL.md) `diff`
   for future regression checks.
 
 ### Mode 2: diff
@@ -325,7 +320,7 @@ authoritative classification this skill returns.
 - RED:
   - If headline `throughput_toks_per_s` regressed: prompt the
     operator to check for cohort contention via
-    [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md)
+    [`prometheus-anchored-query`](../prometheus-anchored-query/SKILL.md)
     on `vllm:num_requests_running` for the same time window.
   - If TTFT regressed but throughput didn't: suggest checking
     scheduler / queue depth (`vllm:num_requests_running` peak +
@@ -349,7 +344,7 @@ authoritative classification this skill returns.
   cross-schema fuzzy diffing.
 - **Provenance preserved.** Every record / diff carries the perf-bench
   bundle's source SHA-256 + operator + cluster + profile_and_optimize SHA, per
-  the `server/CLAUDE.md` reproducibility-grade-evidence rule.
+  the `server/AGENTS.md` reproducibility-grade-evidence rule.
 
 ## Full-context reporting (no bare numbers)
 
@@ -367,10 +362,10 @@ default, ship a config, or appear in a report.
 - **Grounding:** `%SoL` (+ ceiling key from `configs/sol-ceilings.yaml` - never inline a peak), sol_rigor (L1-L4), trials n (mean±std), same-node, baseline named.
 - **Per-number exact shape (no smoothing):** when reporting more than one number, keep EACH with its own exact shape (ISL/OSL, concurrency, dataset, regime) - never normalize a set to one uniform descriptor that hides per-point variation (e.g. `c=1 @ ISL1024/OSL256` + `c=64 @ ISL4096/OSL512`, NOT one shared "random").
 
-See `server/CLAUDE.md` "Speed-of-light framing". When this bridge
+See `server/AGENTS.md` "Speed-of-light framing". When this bridge
 records / diffs a perf-bench run, the baseline record SHOULD carry a
 `sol_pct` field per the
-[`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md) schema, and
+[`perf-baseline-record`](../perf-baseline-record/SKILL.md) schema, and
 the diff SHOULD report SoL delta alongside the absolute throughput /
 latency delta. Peaks are sourced from
 `configs/sol-ceilings.yaml` - never inlined.
@@ -379,7 +374,7 @@ latency delta. Peaks are sourced from
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
@@ -391,9 +386,9 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Source-of-truth references
 
-- The pair this bridge wraps: [`perf-baseline-record`](/plugins/profile-and-optimize/skills/perf-baseline-record/SKILL.md),
-  [`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-baseline-diff/SKILL.md).
-- Perf-bench input: [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md)
+- The pair this bridge wraps: [`perf-baseline-record`](../perf-baseline-record/SKILL.md),
+  [`perf-baseline-diff`](../perf-baseline-diff/SKILL.md).
+- Perf-bench input: [`inference-perf-bench`](../inference-perf-bench/SKILL.md)
   (also reachable via the `ai-bench` colloquial alias).
-- Quality counterpart: [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md).
-- `server/CLAUDE.md` - fail-fast + provenance rules.
+- Quality counterpart: [`inference-model-eval`](../inference-model-eval/SKILL.md).
+- `server/AGENTS.md` - fail-fast + provenance rules.

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# nsys-validate-capture.sh — the mechanical "empty != blind spot" gate.
+# nsys-validate-capture.sh is the mechanical "empty != blind spot" gate.
 #
 # An empty nsys cuda_gpu_kern_sum on a cudagraph-on vLLM deploy is almost ALWAYS a
 # capture-hygiene bug, not a "cudagraph blind spot". This script enforces the 4-point
-# gate from docs/METHODOLOGY.md capture hygiene + `docs/METHODOLOGY.md`
+# gate from the capture hygiene section in docs/METHODOLOGY.md
 # BEFORE anyone concludes nsys cannot resolve kernels on this stack.
 #
 # Worked failure mode: an idle capture window yields an empty kernel table and reads
@@ -31,13 +31,31 @@ REP="${REP:?set REP=/path/to/capture.nsys-rep}"
 MIN_REP_MB="${MIN_REP_MB:-10}"
 LOCAL="${LOCAL:-0}"
 
-# run a command either locally or via kubectl exec into the pod
-run() {
-  if [ "$LOCAL" = "1" ]; then bash -lc "$1"
-  else kubectl -n "${NS:?set NS or LOCAL=1}" exec "${POD:?set POD or LOCAL=1}" -c "${CONT:-vllm}" -- bash -lc "$1"; fi
+# Run an argv vector locally or through kubectl. User-controlled paths never
+# enter shell source text.
+run_argv() {
+  if [ "$LOCAL" = "1" ]; then
+    "$@"
+  else
+    kubectl -n "${NS:?set NS or LOCAL=1}" exec \
+      "${POD:?set POD or LOCAL=1}" -c "${CONT:-vllm}" -- "$@"
+  fi
 }
 
-fail() { echo "RETRY: $1"; echo "  -> see docs/METHODOLOGY.md 'capture hygiene' + `docs/METHODOLOGY.md`"; exit 1; }
+fail() {
+  printf 'RETRY: %s\n' "$1"
+  printf '%s\n' "  -> see docs/METHODOLOGY.md, capture hygiene."
+  exit 1
+}
+
+case "$LOCAL" in
+  0|1) ;;
+  *) fail "LOCAL must be 0 or 1." ;;
+esac
+case "$MIN_REP_MB" in
+  ''|*[!0-9]*) fail "MIN_REP_MB must be a positive integer." ;;
+esac
+[ "$MIN_REP_MB" -gt 0 ] || fail "MIN_REP_MB must be a positive integer."
 
 echo "== nsys capture-validation gate =="
 echo "rep=$REP  min_rep_mb=$MIN_REP_MB  mode=$([ "$LOCAL" = 1 ] && echo local || echo "exec $NS/$POD")"
@@ -53,7 +71,12 @@ else
 fi
 
 # ---- Check 2 (size) + Check 3 (rep exists) ----
-SZ=$(run "stat -c %s '$REP' 2>/dev/null || echo 0" | tr -dc '0-9')
+if ! SZ=$(run_argv stat -c %s -- "$REP" 2>/dev/null); then
+  if ! SZ=$(run_argv stat -f %z -- "$REP" 2>/dev/null); then
+    SZ=0
+  fi
+fi
+SZ=$(printf '%s' "$SZ" | tr -dc '0-9')
 SZ="${SZ:-0}"
 [ "$SZ" -gt 0 ] || fail "[2/4] rep MISSING or 0 bytes at $REP (capture did not finalize, or wrong path)."
 SZ_MB=$(( SZ / 1048576 ))
@@ -63,13 +86,21 @@ if [ "$SZ_MB" -lt "$MIN_REP_MB" ]; then
 fi
 
 # ---- Check 4: sqlite KERNEL row count (the decisive probe) ----
-NSYS="${NSYS:-$(run "ls -d /opt/nvidia/nsight-systems/*/bin/nsys 2>/dev/null | head -1")}"
+if [ -z "${NSYS:-}" ]; then
+  NSYS=$(run_argv find /opt/nvidia/nsight-systems -type f -path '*/bin/nsys' -print -quit 2>/dev/null || true)
+fi
 [ -n "$NSYS" ] || fail "[4/4] nsys binary not found (set NSYS=...)."
 SQ="/tmp/nsys-validate-$$.sqlite"
 echo "[3/4] exporting sqlite (large reps take minutes; KERNEL table is what matters)..."
-run "$NSYS export --type sqlite --force-overwrite=true --output='$SQ' '$REP' >/dev/null 2>&1 || true"
-KROWS=$(run "python3 -c \"import sqlite3;print(sqlite3.connect('$SQ').execute('select count(*) from CUPTI_ACTIVITY_KIND_KERNEL').fetchone()[0])\" 2>/dev/null || echo ERR" | tr -dc '0-9A-Za-z')
-run "rm -f '$SQ' 2>/dev/null || true"
+run_argv "$NSYS" export --type sqlite --force-overwrite=true \
+  "--output=$SQ" "$REP" >/dev/null 2>&1 || true
+if ! KROWS=$(run_argv python3 -c \
+  'import sqlite3, sys; print(sqlite3.connect(sys.argv[1]).execute("select count(*) from CUPTI_ACTIVITY_KIND_KERNEL").fetchone()[0])' \
+  "$SQ" 2>/dev/null); then
+  KROWS=ERR
+fi
+KROWS=$(printf '%s' "$KROWS" | tr -dc '0-9A-Za-z')
+run_argv rm -f -- "$SQ" 2>/dev/null || true
 case "$KROWS" in
   ERR|"") fail "[4/4] could not read CUPTI_ACTIVITY_KIND_KERNEL (export failed or no python3/sqlite). Re-run export manually before concluding empty.";;
   0)      fail "[4/4] KERNEL rows = 0 EVEN WITH a >=${MIN_REP_MB}MB rep. Re-verify Check 1 (--cuda-graph-trace=node) + Check 2 (driven traffic). Only escalate to a genuine tooling limit after all 4 hold and it is still 0.";;

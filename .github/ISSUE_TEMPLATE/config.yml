@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/cfregly/gpu-perf-tune/security/policy
+    about: Read the private reporting instructions. Do not post sensitive details in a public issue.
+  - name: Code of Conduct report
+    url: https://github.com/cfregly/gpu-perf-tune/blob/main/CODE_OF_CONDUCT.md
+    about: Use the private contact listed there. Do not file conduct reports publicly.

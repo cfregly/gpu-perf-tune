@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """Cross-check SKILL.md `with:` argument blocks against MCP tool descriptors.
 
-This lint exists because v0.8.0 -> v0.8.1 was a wasted PATCH cycle: a SKILL.md
-called `list_prometheus_metric_names with: filter: "dpu"`, but the actual MCP
-tool descriptor declared the parameter as `regex`. The the Prometheus MCP MCP
-server silently dropped the unknown key and returned the alphabetically-first
-page of metrics; the operator interpreted that as missing DPU data.
+An MCP server may ignore an unknown argument and return a plausible but wrong
+result. This lint catches that mismatch before a skill ships.
 
 This lint catches that class of bug at commit time:
 
@@ -72,42 +69,12 @@ def optional_servers() -> set[str]:
     are NOT declared in `.mcp.json`.
 
     Two sources:
-      1. Servers declared in `.mcp.json` with the legacy `${VAR:-true}` no-op
-         placeholder command (Claude Code honors the placeholder; Cursor
-         doesn't, hence v1.5.0 trimmed them).
-      2. Hardcoded operator-side-optional allowlist:
-         - v1.5.1+: the 4 servers that v1.5.0 removed from `.mcp.json` for
-           the Cursor-red-dot fix (`<node-diagnosis-tool>`, `<blast-radius-tool>`, `<vms-tool>`,
-           `cursor_ide_browser`).
-         - v1.9.0+: 6 additional external servers moved out of `.mcp.json`
-           for the same Cursor-vs-Claude-Code placeholder asymmetry
-           (`prometheus_mcp`, `<enterprise-search-mcp>`, `slack`, `sourcegraph`,
-           `atlassian`, `google_workspace`). These have unguarded `${VAR}`
-           placeholders with no `:-default` fallback; v1.9.0 docs the
-           operator-side wiring snippet for each in the README.
-         All operator-side-optional references are still legitimate because
-         the skill body skip-gracefully behavior is the contract. Operators
-         wire them via their own `~/.cursor/mcp.json` or
-         `~/.claude/settings.json` per the "Operator-side optional MCPs"
-         section of [`plugins/profile-and-optimize/README.md`](../plugins/profile-and-optimize/README.md).
+      1. Servers declared in `.mcp.json` with a `${VAR:-true}` no-op command.
+      2. Operator-provided servers used by checked-in skills and documented in
+         the plugin README.
     """
-    # Hardcoded operator-side-optional allowlist (v1.5.1+ + v1.9.0+ + v1.15.0+)
     out: set[str] = {
-        "<node-diagnosis-tool>",
-        "<blast-radius-tool>",
-        "<vms-tool>",
-        "cursor_ide_browser",
         "prometheus_mcp",
-        "<enterprise-search-mcp>",
-        "slack",
-        "sourcegraph",
-        "atlassian",
-        "google_workspace",
-        # v1.15.0: added with the analyze-zymtrace-workload import. The
-        # zymtrace MCP server is operator-side optional (declared in
-        # ~/.cursor/mcp.json or ~/.claude/settings.json, NOT in the
-        # plugin's .mcp.json). See plugin README "Operator-side optional
-        # MCPs (not in `.mcp.json`)" for the env-var-driven setup.
         "zymtrace",
     }
     # Plus any `${VAR:-true}` placeholders still in .mcp.json (defense in depth)
@@ -127,18 +94,8 @@ OPTIONAL_SERVERS = optional_servers()
 
 
 def iter_skill_md_files() -> list[Path]:
-    """Return sorted list of SKILL.md files, excluding the `_template/` scaffold.
-
-    The `_template/SKILL.md` under `plugins/profile-and-optimize/skills/_template/` is the
-    starter file operators copy when authoring a new skill (per the
-    `plugins/profile-and-optimize/README.md` "Skill file shape" section); it is not itself
-    a real skill. `bash scripts/validate-skill-prompt.sh` also excludes it,
-    so filtering here keeps the two scripts agreeing on the skill count.
-    """
-    return sorted(
-        p for p in SKILLS_DIR.glob("*/SKILL.md")
-        if p.parent.name != "_template"
-    )
+    """Return every installable SKILL.md file."""
+    return sorted(SKILLS_DIR.glob("*/SKILL.md"))
 
 
 def remap_server(server: str) -> Optional[str]:
@@ -161,11 +118,16 @@ def list_profile_and_optimize_surface() -> Optional[set[str]]:
         return None
     names: set[str] = set()
     for line in out.splitlines():
-        m = re.match(r"^\s+(\w+)\s+(read_only|writes_artifacts|submits_jobs|pulls_data|substitutes_nodes)", line)
+        m = re.match(
+            r"^\s+(\w+)\s+"
+            r"(read_only|writes_artifacts|submits_jobs|pulls_data|"
+            r"publishes_external|substitutes_nodes|mutates_cluster)",
+            line,
+        )
         if m:
             names.add(m.group(1))
-    # Known aux tools (advertised by the MCP server but not derived from CONTRACT
-    # dicts; verified via `validate-mcp-tool-contract.sh` to be 75 total = 73 + 2).
+    # Auxiliary tools advertised by the MCP server but not derived from
+    # CONTRACT dictionaries. The runtime smoke test verifies the total surface.
     names.update({"search_runbooks", "search_evidence"})
     return names
 
@@ -263,7 +225,7 @@ def lint_skill(skill_md: Path, profile_and_optimize_surface: Optional[set[str]])
     findings: list[dict] = []
     allowed_tools = fm.get("allowed-tools", [])
     if isinstance(allowed_tools, str):
-        allowed_tools = [allowed_tools]
+        allowed_tools = allowed_tools.strip('"').split()
 
     # 1. Validate frontmatter allowed-tools: every `mcp__<server>__<tool>`
     #    must map to a real descriptor or to a declared-optional server.

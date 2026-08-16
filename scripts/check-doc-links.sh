@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # Operator-facing doc link checker for profile-and-optimize.
 #
-# Walks the in-scope markdown set (profile-and-optimize-authored docs + vendored
-# top-level READMEs), extracts every `[text](url|path)` link via a single
+# Walks every Markdown file in the repository, extracts every `[text](url|path)` link via a single
 # embedded python pass, classifies each link as relative-path / http-url /
 # mailto / anchor-only, and reports a per-file verdict.
 #
-# - Relative paths: assert the file or directory exists under repo root.
-#   (Anchor fragments are stripped before existence checks.)
-# - http(s) URLs: cheap HEAD with 10s timeout via `curl`. Skipped silently
+# - Relative paths: assert the file or directory exists from the source file.
+# - Markdown anchors: assert the target heading exists, including anchor-only
+#   links and fragments on relative Markdown paths.
+# - Leading-slash paths: reject them because GitHub resolves them from the
+#   website root, not the repository root.
+# - Issue and pull request templates: require absolute links because GitHub
+#   copies their Markdown into a new issue or pull request body.
+# - http(s) URLs: lightweight request with a 10s timeout via `curl`. Skipped
 #   when curl is missing or --no-network is passed (cluster login nodes
 #   often have outbound HTTP blocked).
-# - mailto: / `#anchor` / `${VAR}` / `<PLACEHOLDER>` links: skipped.
+# - mailto / `${VAR}` / `<PLACEHOLDER>` links: skipped.
 #
 # Exit codes:
 #   0 = green (no broken relative paths; HTTP failures are warnings if --no-network)
@@ -41,7 +45,7 @@ Usage: scripts/check-doc-links.sh [options]
 Options:
   --no-network         Skip the http(s) HEAD checks; only validate relative paths.
   --quiet              Only print red findings + final verdict (not per-file ok lines).
-  --files PATTERN      Restrict scan to filepaths matching the given pattern (rg --glob style).
+  --files PATTERN      Restrict the scan with a shell-style path glob.
   -h, --help           Show this help.
 
 Returns exit 0 on green (no broken relative paths). HTTP 4xx/5xx return exit 1.
@@ -52,7 +56,15 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-network) NO_NETWORK=1; shift ;;
     --quiet) QUIET=1; shift ;;
-    --files) FILES_PATTERN="$2"; shift 2 ;;
+    --files)
+      if [[ $# -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+        printf 'missing value for --files\n' >&2
+        usage >&2
+        exit 2
+      fi
+      FILES_PATTERN="$2"
+      shift 2
+      ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'unknown arg: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
@@ -68,10 +80,14 @@ fi
 # links).
 REPO_ROOT="${REPO_ROOT}" NO_NETWORK="${NO_NETWORK}" QUIET="${QUIET}" FILES_PATTERN="${FILES_PATTERN}" \
   python3 - <<'PYEOF'
+import fnmatch
+import html
 import os
 import re
 import subprocess
 import sys
+import unicodedata
+from urllib.parse import unquote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.parse import urlparse
@@ -81,84 +97,34 @@ NO_NETWORK = os.environ.get("NO_NETWORK", "0") == "1"
 QUIET = os.environ.get("QUIET", "0") == "1"
 FILES_PATTERN = os.environ.get("FILES_PATTERN", "")
 
-# Scope: profile-and-optimize-authored docs + the 3 vendored runbooks + selected vendored READMEs.
-# Exclude: per-operator artifact bundles (mutable evidence), per-operator learnings (Slack captures),
-# .venv, __pycache__.
-SCOPE_GLOBS = [
-    # Top-level marketplace docs
-    "README.md",
-    "CHANGELOG.md",
-    "CONTRIBUTING.md",
-    "CATALOG.md",
-    "REVIEWERS.md",
-    "SECURITY.md",
-    # Marketplace docs subdir
-    "docs/**/*.md",
-    # Plugin-level docs
-    "plugins/profile-and-optimize/README.md",
-    "plugins/profile-and-optimize/server/README.md",
-    "plugins/profile-and-optimize/server/CLAUDE.md",
-    "plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/README.md",
-    # Skills
-    "plugins/profile-and-optimize/skills/**/*.md",
-    # GitHub templates
-    ".github/**/*.md",
-    # Vendored runbooks (3 files, operator-critical)
-    "plugins/profile-and-optimize/server/runbooks/*.md",
-    # Vendored top-level READMEs we cite
-    "plugins/profile-and-optimize/server/tools/README.md",
-    "plugins/profile-and-optimize/server/tuning/best-known/README.md",
-    # Vendored docs CITED FROM profile-and-optimize-authored content (per repository convention)
-    "plugins/profile-and-optimize/server/docs/mcp-composition.md",
-    "plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md",
-    "plugins/profile-and-optimize/server/docs/agent-onboarding.md",
-    "plugins/profile-and-optimize/server/docs/grace-blackwell-deltas.md",
-]
-EXCLUDE_GLOBS = [
-    "**/.venv/**",
-    "**/__pycache__/**",
-    "**/experiments/artifacts/**",   # per-operator mutable evidence
-    "**/learnings/slack/**",          # verbatim Slack captures
-]
-
-# Legacy vendored content (snapshot of the original-seed surface).
-# Broken links inside these files are reported as YELLOW (warn) instead of RED
-# (fail) because they predate profile-and-optimize authorship and are tracked as legacy
-# tech debt rather than blocking the gate. profile-and-optimize-authored docs are RED on
-# the same finding.
-VENDORED_GLOBS = [
-    "plugins/profile-and-optimize/server/runbooks/**",
-    "plugins/profile-and-optimize/server/docs/**",
-    "plugins/profile-and-optimize/server/tools/**",
-    "plugins/profile-and-optimize/server/tuning/**",
-]
+# Exclude generated environments and mutable operator evidence. Test path
+# parts relative to the repository because Path.match on an absolute path does
+# not reliably match a leading ``**/.venv/**`` pattern.
+EXCLUDED_DIR_NAMES = {".git", ".venv", "__pycache__"}
+EXCLUDED_PART_SEQUENCES = {
+    ("experiments", "artifacts"),
+    ("learnings", "slack"),
+}
 
 
-def is_vendored(p: Path) -> bool:
-    rel = p.relative_to(REPO_ROOT).as_posix()
-    for g in VENDORED_GLOBS:
-        # Convert simple glob to a Path-match prefix.
-        prefix = g.split("**", 1)[0].rstrip("/")
-        if rel.startswith(prefix):
-            return True
-    return False
+def contains_part_sequence(parts: tuple[str, ...], sequence: tuple[str, ...]) -> bool:
+    width = len(sequence)
+    return any(parts[index:index + width] == sequence for index in range(len(parts) - width + 1))
 
 def collect_files() -> list[Path]:
     files: list[Path] = []
-    seen = set()
-    for g in SCOPE_GLOBS:
-        for p in REPO_ROOT.glob(g):
-            if not p.is_file():
-                continue
-            rel = p.relative_to(REPO_ROOT).as_posix()
-            if FILES_PATTERN and FILES_PATTERN not in rel:
-                continue
-            if any(p.match(eg) for eg in EXCLUDE_GLOBS):
-                continue
-            if p in seen:
-                continue
-            seen.add(p)
-            files.append(p)
+    for p in REPO_ROOT.rglob("*.md"):
+        if not p.is_file():
+            continue
+        relative_path = p.relative_to(REPO_ROOT)
+        rel = relative_path.as_posix()
+        if FILES_PATTERN and not fnmatch.fnmatch(rel, FILES_PATTERN):
+            continue
+        if any(part in EXCLUDED_DIR_NAMES for part in relative_path.parts):
+            continue
+        if any(contains_part_sequence(relative_path.parts, seq) for seq in EXCLUDED_PART_SEQUENCES):
+            continue
+        files.append(p)
     return sorted(files)
 
 # Match [text](url-or-path). Be liberal with text; the url stops at unescaped ).
@@ -202,19 +168,80 @@ def classify(url: str) -> str:
         return "placeholder"
     return "relative"
 
+ANCHOR_CACHE: dict[Path, set[str]] = {}
+HEADING_RE = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
+EXPLICIT_ANCHOR_RE = re.compile(
+    r"<(?:a|span)[^>]+(?:id|name)=[\"']([^\"']+)[\"']",
+    re.IGNORECASE,
+)
+
+
+def github_heading_base(value: str) -> str:
+    """Return the GitHub-style base slug for a Markdown heading."""
+    value = re.sub(r"<[^>]+>", "", value)
+    value = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", value)
+    value = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", value)
+    value = html.unescape(value).lower()
+    value = re.sub(r"[`*_~]", "", value)
+    value = "".join(
+        char
+        for char in value
+        if char in {" ", "-", "_"}
+        or unicodedata.category(char)[0] in {"L", "M", "N"}
+    )
+    return re.sub(r"\s+", "-", value.strip())
+
+
+def markdown_anchors(target: Path) -> set[str]:
+    cached = ANCHOR_CACHE.get(target)
+    if cached is not None:
+        return cached
+    body = target.read_text(errors="replace")
+    anchors = set(EXPLICIT_ANCHOR_RE.findall(body))
+    duplicates: dict[str, int] = {}
+    heading_body = FENCED_BLOCK_RE.sub(
+        lambda match: "\n" * match.group(0).count("\n"),
+        body,
+    )
+    for heading in HEADING_RE.findall(heading_body):
+        base = github_heading_base(heading)
+        suffix = duplicates.get(base, 0)
+        anchors.add(base if suffix == 0 else f"{base}-{suffix}")
+        duplicates[base] = suffix + 1
+    ANCHOR_CACHE[target] = anchors
+    return anchors
+
+
 def check_relative(url: str, source: Path) -> tuple[bool, str]:
-    # Strip anchor + querystring.
-    bare = url.split("#", 1)[0].split("?", 1)[0]
-    if not bare:
-        return True, "anchor-only"
-    # Resolve relative to source's parent.
+    path_part, separator, fragment = url.partition("#")
+    bare = path_part.split("?", 1)[0]
     if bare.startswith("/"):
-        target = REPO_ROOT / bare.lstrip("/")
-    else:
-        target = (source.parent / bare).resolve()
-    if target.exists():
-        return True, f"-> {target.relative_to(REPO_ROOT) if str(target).startswith(str(REPO_ROOT)) else target}"
-    return False, f"not found: {target}"
+        return False, "leading-slash links resolve from github.com, not the repository"
+    source_relative = source.relative_to(REPO_ROOT)
+    copied_template = (
+        source_relative == Path(".github/PULL_REQUEST_TEMPLATE.md")
+        or source_relative.parts[:2] == (".github", "ISSUE_TEMPLATE")
+    )
+    if copied_template and bare:
+        return False, "relative link is copied into an issue or pull request body"
+    target = source if not bare else (source.parent / bare).resolve()
+    if not target.exists():
+        return False, f"not found: {target}"
+    if separator and fragment and target.suffix.lower() in {".md", ".markdown"}:
+        decoded_fragment = unquote(fragment)
+        if decoded_fragment not in markdown_anchors(target):
+            relative_target = (
+                target.relative_to(REPO_ROOT)
+                if str(target).startswith(str(REPO_ROOT))
+                else target
+            )
+            return False, f"heading not found: {relative_target}#{decoded_fragment}"
+    relative_target = (
+        target.relative_to(REPO_ROOT)
+        if str(target).startswith(str(REPO_ROOT))
+        else target
+    )
+    return True, f"-> {relative_target}"
 
 # Cache HTTP results across the run.
 HTTP_CACHE: dict[str, tuple[int, str]] = {}
@@ -247,7 +274,7 @@ def check_http(url: str) -> tuple[bool, str]:
         return True, "skipped (--no-network)"
     if url in HTTP_CACHE:
         code, msg = HTTP_CACHE[url]
-        return code < 400, msg
+        return 200 <= code < 400, msg
     if url.startswith(INTERNAL_ORG_PREFIXES):
         # Internal repo / blob; unauth curl would return 404. Trust that the
         # org/repo was validated separately via `gh api`.
@@ -260,25 +287,23 @@ def check_http(url: str) -> tuple[bool, str]:
     # extraction time but outside at validation time). Fall back to per-URL.
     code, msg = _curl_head_inner(url)
     HTTP_CACHE[url] = (code, msg)
-    return code < 400, msg
+    return 200 <= code < 400, msg
 
 def shutil_which(prog: str) -> str | None:
     import shutil
     return shutil.which(prog)
 
 green_files = 0
-red_files = 0       # profile-and-optimize-authored files with broken links
-yellow_files = 0    # vendored files with broken links (don't fail the gate)
+red_files = 0
 total_relative = 0
 total_http = 0
-broken_relative_red = 0
-broken_relative_yellow = 0
+broken_relative = 0
 broken_http = 0
 
-per_file_findings: list[tuple[str, bool, list[str]]] = []   # (rel, vendored, findings)
+per_file_findings: list[tuple[str, list[str]]] = []
 
 # Pre-pass 1: collect every unique HTTP URL across all in-scope files so we
-# can batch-fetch them in parallel. The per-file loop below then reads from
+# can fetch them in parallel. The per-file loop below then reads from
 # HTTP_CACHE in O(1). On a 55-URL corpus this drops the wall-clock from ~7.6s
 # (sequential) to ~1.5s (10-worker thread pool); the per-URL 10s timeout is
 # unchanged.
@@ -293,7 +318,7 @@ for f in files_for_prefetch:
 
 if not NO_NETWORK and prefetch_urls and shutil_which("curl"):
     if not QUIET:
-        print(f"[prefetch] HEAD-checking {len(prefetch_urls)} unique HTTP URLs in parallel...")
+        print(f"[prefetch] checking {len(prefetch_urls)} unique HTTP URLs in parallel...")
     with ThreadPoolExecutor(max_workers=10) as ex:
         futures = {ex.submit(_curl_head_inner, url): url for url in sorted(prefetch_urls)}
         for fut in as_completed(futures):
@@ -308,9 +333,8 @@ for f in collect_files():
     raw_text = f.read_text(errors="replace")
     text = strip_code_blocks(raw_text)
     findings: list[str] = []
-    vendored = is_vendored(f)
-    severity = "[YELLOW-PATH]" if vendored else "[RED-PATH]"
-    http_severity = "[YELLOW-HTTP]" if vendored else "[RED-HTTP]"
+    severity = "[RED-PATH]"
+    http_severity = "[RED-HTTP]"
 
     for m in LINK_RE.finditer(text):
         url = m.group("url").strip()
@@ -321,16 +345,13 @@ for f in collect_files():
             if not ok:
                 broken_http += 1
                 findings.append(f"  {http_severity}  {url}  ({msg})")
-        elif kind == "relative":
+        elif kind in {"relative", "anchor"}:
             total_relative += 1
             ok, msg = check_relative(url, f)
             if not ok:
-                if vendored:
-                    broken_relative_yellow += 1
-                else:
-                    broken_relative_red += 1
+                broken_relative += 1
                 findings.append(f"  {severity}  {url}  ({msg})")
-        # anchor / mailto / placeholder: skip silently
+        # mailto / placeholder: skip silently
 
     for m in CODE_REF_RE.finditer(raw_text):
         cited = m.group("path").strip()
@@ -340,49 +361,28 @@ for f in collect_files():
             alt = (f.parent / cited).resolve()
             if alt.exists():
                 continue
-            if vendored:
-                broken_relative_yellow += 1
-            else:
-                broken_relative_red += 1
+            broken_relative += 1
             findings.append(f"  {severity} code-ref {cited}  (not found: {target})")
 
     rel = f.relative_to(REPO_ROOT).as_posix()
     if findings:
-        if vendored:
-            yellow_files += 1
-        else:
-            red_files += 1
-        per_file_findings.append((rel, vendored, findings))
+        red_files += 1
+        per_file_findings.append((rel, findings))
     else:
         green_files += 1
         if not QUIET:
             print(f"[ok]  {rel}")
 
-red_only = [(rel, fs) for rel, v, fs in per_file_findings if not v]
-yellow_only = [(rel, fs) for rel, v, fs in per_file_findings if v]
-
-if red_only:
-    print("\n=== RED findings (profile-and-optimize-authored docs; will fail the gate) ===")
-    for rel, fs in red_only:
+if per_file_findings:
+    print("\n=== Broken links ===")
+    for rel, fs in per_file_findings:
         print(f"\n{rel}")
         for ff in fs:
             print(ff)
 
-if yellow_only:
-    print("\n=== YELLOW findings (legacy vendored docs; pre-existing tech debt; do NOT fail the gate) ===")
-    print("  These files predate profile-and-optimize authorship. Fix opportunistically when a related")
-    print("  edit lands; bulk rewrites are out of scope for the doc-link gate.")
-    for rel, fs in yellow_only:
-        print(f"\n{rel}")
-        for ff in fs:
-            print(ff)
-
-# v0.8.2 extension: cross-validate each SKILL.md `allowed-tools` mcp__<server>__*
-# reference against the servers declared in plugins/profile-and-optimize/.mcp.json. Catches
-# the case where a skill references an MCP server the marketplace doesn't bundle.
-# Optional servers (<node-diagnosis-tool> / <blast-radius-tool> / <vms-tool> / cursor-ide-browser) are
-# accepted as WARN since the .mcp.json placeholder-mode keeps them gracefully
-# absent from non-equipped operator sessions.
+# Cross-check each SKILL.md `allowed-tools` MCP reference against the bundled
+# server manifest. Operator-provided servers documented in the plugin README are
+# accepted as warnings.
 import json as _json
 MCP_JSON_PATH = REPO_ROOT / "plugins" / "profile-and-optimize" / ".mcp.json"
 mcp_servers_red = 0
@@ -399,23 +399,11 @@ if MCP_JSON_PATH.exists():
     # SKILL.md style: `mcp__<server>__<tool>` (server uses underscores, no `user-`/`plugin-` prefix).
     SKILL_FILES = list((REPO_ROOT / "plugins" / "profile-and-optimize" / "skills").glob("*/SKILL.md"))
     MCP_SERVER_RE = re.compile(r"mcp__([a-z_][a-z0-9_-]*)__")
-    # Operator-side optional servers (per v1.5.1 + v1.9.0 README "Operator-side
-    # optional MCPs (not in `.mcp.json`)"). Frontmatter `allowed-tools` may
-    # reference these even when the server is not declared in `.mcp.json` —
-    # operators wire them in their own ~/.cursor/mcp.json or
-    # ~/.claude/settings.json. Mirror of the same allowlist in
+    # Frontmatter may reference operator-provided servers that are not declared
+    # in `.mcp.json`. Mirror the current allowlist in
     # scripts/lint-skill-mcp-args.py optional_servers().
     KNOWN_OPTIONAL = {
-        "<node-diagnosis-tool>", "<blast-radius-tool>", "<vms-tool>",
-        "cursor_ide_browser", "cursor-ide-browser",
-        "prometheus_mcp", "<enterprise-search-mcp>", "slack",
-        "sourcegraph", "atlassian", "google_workspace",
-        # v1.15.0: added with the analyze-zymtrace-workload import. The
-        # zymtrace MCP server is operator-side optional, declared in
-        # ~/.cursor/mcp.json or ~/.claude/settings.json (NOT in the
-        # plugin's .mcp.json). See plugin README "Operator-side optional
-        # MCPs" for the env-var-driven setup.
-        "zymtrace",
+        "prometheus_mcp", "zymtrace",
     }
     for skill_md in SKILL_FILES:
         text = skill_md.read_text()
@@ -442,12 +430,11 @@ if mcp_server_findings:
             print(ff)
 
 print("\n=== Summary ===")
-print(f"  Files scanned:           {green_files + red_files + yellow_files}")
+print(f"  Files scanned:           {green_files + red_files}")
 print(f"  Files green:             {green_files}")
-print(f"  Files yellow (vendored): {yellow_files}")
-print(f"  Files red (authored):    {red_files}")
+print(f"  Files red:               {red_files}")
 print(f"  Relative links checked:  {total_relative}")
-print(f"  Relative links broken:   {broken_relative_red} red + {broken_relative_yellow} yellow")
+print(f"  Relative links broken:   {broken_relative}")
 print(f"  HTTP links checked:      {total_http}")
 print(f"  HTTP links broken:       {broken_http}")
 print(f"  MCP-server xref red:     {mcp_servers_red}")
@@ -455,9 +442,9 @@ print(f"  MCP-server xref warn:    {mcp_servers_warn}")
 if NO_NETWORK:
     print(f"  (HTTP checks SKIPPED via --no-network)")
 
-if broken_relative_red > 0 or broken_http > 0 or mcp_servers_red > 0:
-    print(f"\n[FAIL] {broken_relative_red} broken relative paths + {broken_http} broken HTTP URLs + {mcp_servers_red} undeclared MCP servers in profile-and-optimize-authored docs")
+if broken_relative > 0 or broken_http > 0 or mcp_servers_red > 0:
+    print(f"\n[FAIL] {broken_relative} broken relative paths + {broken_http} broken HTTP URLs + {mcp_servers_red} undeclared MCP servers")
     sys.exit(1)
-print(f"\n[ok] no broken relative paths in profile-and-optimize-authored docs ({broken_relative_yellow} vendored YELLOWs accepted as known tech debt; {mcp_servers_warn} optional-MCP WARNs accepted)")
+print(f"\n[ok] no broken links ({mcp_servers_warn} optional-MCP warnings accepted)")
 sys.exit(0)
 PYEOF

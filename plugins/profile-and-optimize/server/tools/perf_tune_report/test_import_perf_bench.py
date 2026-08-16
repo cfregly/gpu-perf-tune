@@ -1,4 +1,4 @@
-"""Unit tests for the perf-bench bundle importer (v1.18.0)."""
+"""Unit tests for the perf-bench bundle importer."""
 
 from __future__ import annotations
 
@@ -155,7 +155,7 @@ def test_parse_metrics_returns_none_for_malformed(tmp_path):
     assert _parse_metrics(fp) is None
 
 
-# --- v1.42.0 carry-through: ISL/OSL, cache_mode, prefix-cache --------------
+# --- Carry-through: ISL/OSL, cache_mode, prefix-cache ----------------
 
 _SWEEP_WITH_TOKENS = """============ Serving Benchmark Result ============
 Successful requests:                     100

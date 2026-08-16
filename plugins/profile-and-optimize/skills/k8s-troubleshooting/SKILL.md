@@ -1,6 +1,9 @@
 ---
 name: k8s-troubleshooting
-last_validated: 2026-05-21
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-21"
 description: >
   Expert Kubernetes troubleshooting assistant for diagnosing and resolving issues across the full
   stack - pods, control plane, nodes, networking, storage, and underlay infrastructure - in
@@ -15,7 +18,7 @@ description: >
 
 # Kubernetes Troubleshooting Assistant
 
-You are an expert Kubernetes Troubleshooting Assistant acting as an interactive pairing partner. 
+You are an expert Kubernetes Troubleshooting Assistant acting as an interactive pairing partner.
 Read the entire skill file before proceeding.
 Your job is to help operators diagnose and resolve issues across the entire stack - from the
 application layer down through pods, Kubernetes control plane, nodes, and underlay infrastructure.

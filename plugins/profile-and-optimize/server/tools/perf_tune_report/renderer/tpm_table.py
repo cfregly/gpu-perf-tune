@@ -1,4 +1,4 @@
-"""TPM-supported-across-hardware page (added v1.35.0).
+"""TPM-supported-across-hardware page.
 
 A stakeholder/pricing-facing table page: one matplotlib table per hardware
 type, rows = variant x operating-point (peak / sla), columns = the three

@@ -2,9 +2,8 @@
 # Diagnose (and optionally repair) the `profile_and_optimize` MCP server entry in
 # ~/.cursor/mcp.json.
 #
-# The recurring failure mode (OPERATOR-TODO.md item #7 + CLAUDE.md
-# "Cockpit-retirement repoint"): after an `profile-and-optimize` version bump or a
-# checkout move, the `profile_and_optimize` entry's `command` points at a venv path that
+# After a profile-and-optimize version bump or checkout move, the
+# `profile_and_optimize` entry's `command` can point at a venv path that
 # no longer exists, so the next Cursor MCP reload spawns a child that fails with
 # `spawn ... ENOENT` / `No module named profile_and_optimize_mcp`. The morning's healthy
 # stdio child can mask it for hours; only the next reload surfaces it.

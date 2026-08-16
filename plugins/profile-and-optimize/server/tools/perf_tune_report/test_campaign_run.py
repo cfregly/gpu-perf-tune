@@ -1,4 +1,4 @@
-"""Unit tests for the v1.20.0 campaign_run orchestrator (Phase 2b)."""
+"""Unit tests for the campaign_run orchestrator (Phase 2b)."""
 
 from __future__ import annotations
 
@@ -233,6 +233,25 @@ def test_run_one_cell_helm_fail_aborts_cell(tmp_path):
     assert not result.helm_ok
     assert not result.bench_ok  # skipped because helm failed
     assert result.resume_ok  # always-resume still ran
+
+
+def test_run_one_cell_baseline_record_failure_is_red(tmp_path):
+    cell = CellPlan(id="cell-1", backend="vllm-sweep", concurrencies=(1,))
+    result = run_one_cell(
+        cell,
+        campaign_dir=tmp_path,
+        target_namespace="ns",
+        target_release="rel",
+        chart_dir=tmp_path,
+        base_values=tmp_path / "values.yaml",
+        drain_nodes=(),
+        comparator_baseline="",
+        step_fns=_make_stub_fns(baseline_record_ok=False),
+    )
+
+    assert result.baseline_record_ok is False
+    assert result.baseline_diff_verdict == "RED"
+    assert any("directional scalar" in note for note in result.notes)
 
 
 # -----------------------------------------------------------------------------
@@ -497,8 +516,8 @@ def test_run_campaign_writes_receipts(tmp_path):
 
 
 def test_contract_verb_set():
-    """The perf_tune_report CONTRACT verb set (champion_select + import_variant_ab
-    joined in v1.66.0)."""
+    """The perf_tune_report CONTRACT verb set, including champion_select and
+    import_variant_ab."""
     from tools.perf_tune_report.perf_tune_report_cli import CONTRACT
     assert set(CONTRACT) == {
         "campaign_init", "cell_run", "atlas_aggregate",
@@ -516,8 +535,21 @@ def test_contract_verb_set():
 
 
 def test_contract_campaign_run_is_ack_gated():
-    from tools.perf_tune_report.perf_tune_report_cli import CONTRACT
-    assert CONTRACT["campaign_run"]["safety"] == "submits_jobs"
-    assert CONTRACT["campaign_run"]["ack"] == "--i-understand-this-submits-jobs"
+    from tools.perf_tune_report.perf_tune_report_cli import CONTRACT, build_parser
+    assert CONTRACT["campaign_run"]["safety"] == "mutates_cluster"
+    assert CONTRACT["campaign_run"]["ack"] == "--i-understand-this-mutates-cluster"
+    assert CONTRACT["campaign_run"]["ack_exempt_when"] == ("--dry-run",)
     assert "--config" in CONTRACT["campaign_run"]["required"]
     assert "--campaign" in CONTRACT["campaign_run"]["required"]
+    parsed = build_parser().parse_args([
+        "campaign_run", "--config", "matrix.yaml", "--campaign", "campaign",
+        "--i-understand-this-mutates-cluster",
+    ])
+    assert parsed.i_understand_this_mutates_cluster is True
+    assert not hasattr(parsed, "i_understand_this_submits_jobs")
+
+
+def test_contract_cell_run_dry_run_is_ack_exempt():
+    from tools.perf_tune_report.perf_tune_report_cli import CONTRACT
+
+    assert CONTRACT["cell_run"]["ack_exempt_when"] == ("--dry-run",)

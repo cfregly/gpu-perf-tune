@@ -5,9 +5,7 @@ Reads a single
 and writes a perf-report-compatible ``cells/<cell-id>/normalized.json`` into a
 named campaign directory.
 
-Source format conventions (vLLM ``bench serve`` text output, captured by
-``perf-tune-glm51/03f-variant-runner.sh`` + ``perf-tune-dsv4/03f-variant-runner.sh``
-+ analogous Kimi scripts):
+Source format conventions for captured vLLM ``bench serve`` text output:
 
 - One file per concurrency at ``raw/sweep-c<N>.txt`` (single-K runs)
 - OR one file per ``(K, concurrency)`` at ``raw/sweep-K<K>-c<N>.txt`` (DSv4 K-sweep runs)
@@ -50,6 +48,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from tools.perf_tune_report.helpers import resolve_cell_dir
 
 from tools.perf_tune_report.schema import (
     BACKEND_SGLANG_SWEEP,
@@ -235,12 +235,12 @@ class _CellIdentity:
     variant_extra: dict[str, Any] = field(default_factory=dict)
     notes: str = ""
 
-    # Analysis-carry-through (v1.42.0). Bundle-level, same for every concurrency.
+    # Analysis-carry-through. Bundle-level, same for every concurrency.
     cache_mode: str = "unknown"  # warm | cold | unknown (declared label)
     prefix_cache_hit_rate: float | None = None  # 0..1, from bundle meta if present
 
-    # Full-context descriptor (2026-06-07; CLAUDE.md "Every performance number carries its
-    # full context"). Bundle-level invariants; the methodology gate flags any left "unknown"
+    # Full-context descriptor follows AGENTS.md "Benchmark methodology hygiene".
+    # The methodology gate flags any bundle-level invariant left "unknown"
     # /None on a measured row under --strict.
     dataset: str = "unknown"
     cudagraph_mode: str = "unknown"
@@ -249,7 +249,7 @@ class _CellIdentity:
     image: str = "unknown"
     data_parallel: int = 1
     pipeline_parallel: int = 1
-    # Delivery ladder (2026-06-07; CLAUDE.md "Experiment delivery ladder"): how the code
+    # AGENTS.md "Experiment delivery ladder" records how the code
     # reached the cluster + the overlay sub-tier when delivery=overlay. Surfaced into extra.
     delivery: str = ""
     overlay_mode: str = ""
@@ -553,9 +553,9 @@ def _check_plot_ready(
             f"{len(bad)} STATUS_FULL cell(s) are NOT plot-ready (missing "
             "'Median TTFT (ms)' and/or 'Request throughput (req/s)' in the bench "
             f"output): {', '.join(bad)}. A strict throughput campaign cannot be "
-            "built from incomplete capture. How to fix: re-capture with the FULL "
-            "`vllm bench serve` output (use profiling/capture-bench.sh; never "
-            "grep-drop those lines), then re-import."
+            "built from incomplete capture. How to fix: re-capture the full, "
+            "unfiltered `vllm bench serve` stdout and stderr. Do not grep-drop "
+            "those lines. Then re-import the bundle."
             + (f" [{context}]" if context else "")
         )
 
@@ -641,7 +641,7 @@ def import_perf_bench_bundle(
     # Determine the output cell_id (some K-sweeps emit multiple cell_ids;
     # use the base identity.cell_id for the directory name, the rows
     # themselves may have K-suffixed cell_ids).
-    cell_dir = campaign_dir / "cells" / identity.cell_id
+    cell_dir = resolve_cell_dir(campaign_dir, identity.cell_id)
 
     concurrencies = sorted({r.concurrency for r in rows})
     k_values = sorted({sf.k for sf in sweep_files if sf.path not in skipped})

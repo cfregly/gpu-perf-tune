@@ -1,39 +1,21 @@
 #!/usr/bin/env bash
-# Read-only per-node NVMe probe for the GB300 cohort.
+# Read-only per-node NVMe probe for a Slurm GPU cohort.
 #
-# Origin: 2026-05-01 NVIDIA review feedback in #<team-channel>
-# (<slack-permalink>).
-# In-repo capture of the surrounding thread:
-# docs/learnings/slack/<team-channel>/2026-05-01-scaling-guidance-and-nfs-vs-nvme.md
-# (and the parent DSv3/LLaMA container-drop thread
-# docs/learnings/slack/<team-channel>/2026-04-30-dsv3-llama31-container-drop-and-conversion-fixes.md
-# where the NFS->NVMe step-time impact was first measured).
-# NVIDIA observed our 405B / 8B / DSv3 runs were ~10% slower per step and
-# attributed it to NFS reads. NVIDIA's `run.sub` already supports per-node
-# NVMe staging via the `SLOW_DATADIR` -> `DATADIR` rsync gate (see
-# (removed 2026-05-11 per reproducibility-v1 cleanup)), but
-# we never set the variable. Before wiring the launchers (`Phase 2`), we
-# need to know the canonical per-node NVMe mount + free capacity on the
-# GB300 cohort. This script is the Phase 1 probe.
-#
-# Per mlperf-6.0-training/CLAUDE.md "Fail Fast, No Silent Fallbacks": this
-# script is read-only by design (df / mount / findmnt / stat / a single
-# touch+rm in /tmp-of-the-mount). It does NOT run training, does NOT pull
-# a container, and does NOT write the dataset. Operator-runnable from the
-# Slurm submit host. Output is captured into
+# The script reports candidate local mounts and free capacity before an
+# operator enables data or model staging. It uses df, mount, findmnt, stat,
+# and one temporary write probe. It does not run a workload, pull an image,
+# or stage data. Output is captured into
 # experiments/artifacts/local-nvme-probe-<date>/<host>.txt, one file per probed node.
 #
 # Usage (operator-driven):
-#   bash mlperf-6.0-training/tools/local-nvme-probe.sh \
+#   bash plugins/profile-and-optimize/server/tools/local-nvme-probe.sh \
 #       --nodes 4 \
 #       --partition gb300 \
 #       --reservation <existing-rack-reservation> \
 #       --out-dir experiments/artifacts/campaign/local-nvme-probe-$(date -u +%Y-%m-%d)
 #
-# Without --reservation the probe will queue on whatever idle gb300 capacity
-# the scheduler hands out; with --reservation it stays inside the existing
-# rack-reserve cohort (per CLAUDE.md the launcher never creates reservations,
-# the operator does).
+# Without --reservation the scheduler chooses available nodes. The script
+# never creates a reservation.
 
 set -euo pipefail
 
@@ -52,9 +34,8 @@ Required env (no defaults):
 
 Probed mount candidates: /raid /mnt/local /mnt/nvme /scratch/local /local /dev/shm /tmp
 
-Per CLAUDE.md "Fail Fast, No Silent Fallbacks": the script exits non-zero
-when no candidate mount is rw-writable on any probed node, so the operator
-sees the failure and knows Phase 2 cannot proceed.
+The script exits non-zero when no candidate mount is writable on any probed
+node.
 EOF
 }
 
@@ -169,8 +150,7 @@ printf 'Probe finished rc=%s. Per-node output captured under %s\n' "${rc}" "${OU
 echo
 echo "Next step: aggregate the per-node files into ${OUT_DIR}/decision.md"
 echo "  pick the canonical mount across all probed nodes (must be rw on all),"
-echo "  capture min(free_bytes) across nodes, then drive Phase 2:"
-echo "  docs link: mlperf-6.0-training/specs/mlperf_training_v6_0_runbook.md"
-echo "             section 'Local NVMe staging (SLOW_DATADIR)'"
+echo "  capture min(free_bytes) across nodes, then select a staging path."
+echo "  docs: plugins/profile-and-optimize/server/docs/inference-fast-model-loading.md"
 
 exit "${rc}"

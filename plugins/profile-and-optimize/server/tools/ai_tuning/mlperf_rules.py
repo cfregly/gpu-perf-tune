@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """MLPerf Training v6.0 rule constraint validator.
 
-Loads ``tuning/mlperf_rules_v6_0.json`` and checks a candidate parameter
-dict against benchmark-specific rules: max LR, max global batch, warmup
-ratio, ruleset string, hyperparameter borrowing, expert parallel values,
-LoRA rank, etc.
+Loads an operator-supplied rules file and checks a candidate parameter dict
+against its benchmark-specific bounds. The check covers values such as maximum
+learning rate, global batch size, warmup ratio, and expert parallel choices.
+It does not evaluate or claim MLPerf submission compliance.
 
-Per ``mlperf-6.0-training/CLAUDE.md`` "Fail Fast, No Silent Fallbacks", a
-violation produces a structured rejection with a stable error code; never
-a silent clamp to legal range.
+A violation produces a structured rejection with a stable error code. The
+validator never silently clamps a value into the legal range.
 
 Usage from Python::
 
     from mlperf_rules import load_rules, validate_candidate
-    rules = load_rules(Path("tuning/mlperf_rules_v6_0.json"))
+    rules = load_rules(Path("/path/to/verified-rules.json"))
     violations = validate_candidate(
         rules,
         benchmark="llama31_405b",
@@ -26,7 +25,7 @@ Usage from CLI::
     python3 tools/ai_tuning/mlperf_rules.py validate \\
         --proposal experiments/proposals/foo.json \\
         --benchmark llama31_405b \\
-        --rules tuning/mlperf_rules_v6_0.json
+        --rules /path/to/verified-rules.json
 """
 
 from __future__ import annotations
@@ -38,7 +37,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-DEFAULT_RULES_PATH = Path(__file__).resolve().parents[2] / "tuning" / "mlperf_rules_v6_0.json"
+EXAMPLE_RULES_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "tuning"
+    / "examples"
+    / "mlperf-rules-v6-guardrails.json"
+)
 
 
 @dataclass
@@ -96,7 +100,7 @@ def validate_candidate(
         out.append(
             RuleViolation(
                 code="unknown_benchmark",
-                message=f"benchmark {benchmark!r} not found in mlperf_rules_v6_0.json",
+                message=f"benchmark {benchmark!r} not found in the supplied rules file",
                 parameter="benchmark",
                 observed=benchmark,
             )
@@ -329,7 +333,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     validate = sub.add_parser("validate", help="validate a proposal against the rules")
     validate.add_argument("--proposal", type=Path, required=True)
     validate.add_argument("--benchmark", required=True)
-    validate.add_argument("--rules", type=Path, default=DEFAULT_RULES_PATH)
+    validate.add_argument(
+        "--rules",
+        type=Path,
+        required=True,
+        help="Operator-supplied rules file. No bundled example is used by default.",
+    )
     validate.add_argument("--out", type=Path)
     return parser.parse_args(argv)
 
@@ -341,7 +350,12 @@ def main(argv: list[str] | None = None) -> int:
     results = validate_proposal(rules, proposal, benchmark=args.benchmark)
     payload = {
         "schema_version": 1,
+        "scope": "candidate_constraints_only",
+        "submission_compliance": "not_evaluated",
+        "rules_path": str(args.rules),
         "rules_id": rules.get("id"),
+        "rules_status": rules.get("status"),
+        "rules_notice": rules.get("notice"),
         "benchmark": args.benchmark,
         "valid_count": sum(1 for r in results if r["valid"]),
         "invalid_count": sum(1 for r in results if not r["valid"]),

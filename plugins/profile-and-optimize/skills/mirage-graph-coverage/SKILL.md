@@ -1,6 +1,9 @@
 ---
 name: mirage-graph-coverage
-last_validated: 2026-06-05
+license: MIT
+compatibility: Requires a skills-compatible agent.
+metadata:
+  last-validated: "2026-06-05"
 description: >-
   Read-only coverage auditor for the mirage / MPK persistent-megakernel's
   GENERATED task graph: cross-references DECLARED tensors (all_tensors[...] in

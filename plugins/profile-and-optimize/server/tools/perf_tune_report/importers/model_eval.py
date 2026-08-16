@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tools.perf_tune_report.helpers import resolve_cell_dir
 from tools.perf_tune_report.schema import STATUS_FULL, AtlasCell
 
 # lm-eval metric keys we treat as quality scores; ``*_stderr`` and hyperparameters are dropped.
@@ -95,7 +96,7 @@ def import_model_eval(
             "eval_tasks": tasks,
         },
     )
-    cell_dir = Path(campaign_dir) / "cells" / cell_id
+    cell_dir = resolve_cell_dir(Path(campaign_dir), cell_id)
     cell_dir.mkdir(parents=True, exist_ok=True)
     normalized = cell_dir / "normalized.json"
     normalized.write_text(json.dumps([row.to_dict()], indent=2, sort_keys=True) + "\n")

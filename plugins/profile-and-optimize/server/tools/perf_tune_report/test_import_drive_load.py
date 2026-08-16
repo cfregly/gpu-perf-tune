@@ -1,4 +1,4 @@
-"""Unit tests for the drive_load.py JSONL importer (v1.21.0)."""
+"""Unit tests for the drive_load.py JSONL importer."""
 
 from __future__ import annotations
 
@@ -350,7 +350,7 @@ def test_import_single_c_with_override(tmp_path: Path) -> None:
 
 
 def test_import_drive_load_isl_osl_total_and_cache_mode(tmp_path: Path) -> None:
-    """v1.42.0 carry-through: mean ISL/OSL + total_tps_per_gpu + cache_mode."""
+    """Carry through mean ISL/OSL, total_tps_per_gpu, and cache_mode."""
     bundle = _make_single_c_bundle(tmp_path)
     campaign = _make_campaign(tmp_path)
     result = import_drive_load_bundle(
@@ -403,7 +403,7 @@ def test_auto_dispatches_to_perf_bench(tmp_path: Path) -> None:
     (bundle / "inference_perfbench_v1.json").write_text(json.dumps(_BUNDLE_META))
     campaign = _make_campaign(tmp_path)
     result = import_bundle_auto(bundle, campaign)
-    # bench-serve ImportResult has no `importer` attr (predates v1.21.0)
+    # bench-serve ImportResult uses the legacy result shape with no `importer` attr
     assert not isinstance(result, DriveLoadImportResult)
 
 

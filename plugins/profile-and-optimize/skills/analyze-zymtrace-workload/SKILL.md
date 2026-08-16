@@ -1,6 +1,9 @@
 ---
 name: analyze-zymtrace-workload
-last_validated: 2026-05-25
+license: Apache-2.0
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-08-16"
 description: >-
   Investigate a GPU or CPU workload through the zymtrace MCP. The MCP does most
   of the analysis. This skill enforces the cross-view discipline -- always pull
@@ -12,14 +15,7 @@ description: >-
   "use zymtrace mcp to analyze", or any combination of "analyze / investigate
   / bottleneck / hot kernel" with "GPU / CPU / vllm / training / flamegraph /
   zymtrace".
-allowed-tools:
-  - mcp__zymtrace__topfunctions
-  - mcp__zymtrace__flamegraph
-  - mcp__zymtrace__topentities
-  - mcp__zymtrace__get_date_time
-  - Bash(claude:*)
-  - Read
-  - Write
+allowed-tools: "mcp__zymtrace__topfunctions mcp__zymtrace__flamegraph mcp__zymtrace__topentities mcp__zymtrace__get_date_time Read Write"
 ---
 
 # Analyze zymtrace Workload
@@ -30,7 +26,11 @@ allowed-tools:
 
 Connection setup lives in the operator-side `configure-zymtrace-mcp` skill from the upstream zymtrace plugin (installed separately). This skill assumes the MCP is already connected.
 
-**Optional pairing -- GitHub MCP**: if the user also has the GitHub MCP connected (`claude mcp list` shows both) **and** asks for code-level pointers, Claude can locate the hot frame in their repo and reference a specific `<file>:<line>` in the fix. This is a suggestion, not a default -- many users don't want or need code access from the session. Mention the option once if both MCPs are available. Respect the answer either way.
+**Optional pairing with GitHub MCP**: if the user also has the GitHub MCP
+connected and asks for code-level pointers, the agent can locate the hot frame
+in the repository and cite a specific `<file>:<line>` in the fix. This is not a
+default because many users do not want repository access in the same session.
+Mention the option once if both MCPs are available. Respect the answer.
 
 ## Standard starter prompt (for customers who don't know what to ask)
 
@@ -47,13 +47,10 @@ For any of these: default to the last 1 hour if no time range is given, default 
 
 ## Pre-flight
 
-##### Claude runs
-
-```bash
-claude mcp list | grep -i zymtrace
-```
-
-If zymtrace isn't listed → route the operator to the `configure-zymtrace-mcp` skill from the upstream zymtrace plugin. If listed, proceed.
+Confirm that the client exposes the `zymtrace` tools named in `allowed-tools`.
+If those tools are unavailable, route the operator to the
+`configure-zymtrace-mcp` skill from the upstream zymtrace plugin. Otherwise,
+proceed.
 
 ## The cross-view protocol
 
@@ -71,7 +68,7 @@ The MCP handles the analysis. You handle the discipline of asking for both sides
    - Specific GPU kernel dominant → the CPU view often shows the launcher / scheduler that's calling it. Useful for understanding launch-overhead vs kernel-time tradeoffs.
    - CPU dominated by `cudaMemcpy*` / `aten::*` synchronization → the workload is sync-bound on device transfers. The GPU view will show idle stretches.
 
-> If you escalate beyond zymtrace to an **nsys** per-kernel timeline (e.g. for absolute kernel durations or graph-internal kernels), remember: an EMPTY nsys `cuda_gpu_kern_sum` on a cudagraph-on deploy is a capture-hygiene bug (missing `--cuda-graph-trace=node`, idle window, or tiny rep), NOT a "cudagraph blind spot" - validate via [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) "Capture-quality gate" / `scripts/nsys-validate-capture.sh` before concluding the stack is unprofilable. One real exception: on GB300 nodes a CUDA 12.x-image vs 13.x-driver CUPTI skew makes CUPTI fail to init (`CUPTI_ERROR_INVALID_DEVICE`) -> 0 kernels for ALL CUPTI clients regardless of hygiene. Grep the logs for `CUDA versions. CUPTI/Runtime/Driver` first -> that needs a CUDA-13 image or zymtrace, not more capture tuning.
+> If you escalate beyond zymtrace to an **nsys** per-kernel timeline (e.g. for absolute kernel durations or graph-internal kernels), remember: an EMPTY nsys `cuda_gpu_kern_sum` on a cudagraph-on deploy is a capture-hygiene bug (missing `--cuda-graph-trace=node`, idle window, or tiny rep), NOT a "cudagraph blind spot" - validate via [`inference-kernel-profile`](../inference-kernel-profile/SKILL.md) "Capture-quality gate" / `scripts/nsys-validate-capture.sh` before concluding the stack is unprofilable. One real exception: on GB300 nodes a CUDA 12.x-image vs 13.x-driver CUPTI skew makes CUPTI fail to init (`CUPTI_ERROR_INVALID_DEVICE`) -> 0 kernels for ALL CUPTI clients regardless of hygiene. Grep the logs for `CUDA versions. CUPTI/Runtime/Driver` first -> that needs a CUDA-13 image or zymtrace, not more capture tuning.
 
 5. **Write the recap using the output template below.** Use the data the MCP returned -- kernel names, percentages, hot stacks, the call tree from the CPU view, and the kernels triggered on the GPU side -- to fill the template. Don't paraphrase the MCP's suggestions verbatim. Synthesize across the two views into a concrete next step. If the MCP didn't surface a suggestion, you still produce one -- grounded in the returned data, not invented.
 
@@ -191,7 +188,7 @@ MCP returned them or they're well-known order-of-magnitude estimates.>
   for a window that JUST ended -- that is **ingest lag, not absence**. Wait for the flush and
   re-query (and query by `host=<node>`+window, not the hash-suffixed pod name) before concluding
   the workload wasn't profiled. See
-  [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).
+  [`server/docs/zymtrace-query-hygiene.md`](../../server/docs/zymtrace-query-hygiene.md).
 - **Reading a headline perf number off an injection-ON pod (the injection tax).** The zymtrace GPU
   flamegraph needs the per-pod CUDA implant (`CUDA_INJECTION64_PATH`), which adds **~11% overhead on
   launch-bound (low-c / decode-latency) models** -- so a TPOT/tok-s number captured WITH the implant
@@ -237,7 +234,7 @@ the proxy is recorded as a rigor level, not withheld. Add DCGM (L3) /
 ncu (L4) for a tighter number (always-publish policy).
 
 For tight per-kernel roofline scatter use
-[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)
+[`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md)
 (captures the FLOPS + bytes counters that this skill's sample-share
 view cannot give you).
 
@@ -257,9 +254,9 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Pairs with
 
-- [`zymtrace-anchored-query`](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) -- the anchored-SQL primitive against the same zymtrace ClickHouse backend. Use that skill for `DESCRIBE table` + `SELECT ... FROM zymtrace_profiling.events ...` patterns. Use this skill (`analyze-zymtrace-workload`) for the MCP-driven flamegraph cross-view workflow. The two are complementary: anchored-query is the operator-shaped raw-SQL escape hatch. This skill is the MCP-shaped guided analysis.
-- [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) -- captures `.nsys-rep` + `gpu_kern_sum.csv` from a live vllm pod via a debug sidecar. **Cross-view with this skill**: when an `inference_perfbench_v1` bundle carries a `kernel_profile` field, read its `summary_csv_path` to resolve the zymtrace `native` category into per-kernel SASS-level entries. Example: zymtrace says "FMHA = 14.2% of GPU time". The nsys CSV says "fmha_v2_kernel<sm100>: 11.8%, fmha_v2_kernel_paged<sm100>: 2.4%" - answering "is the hot category one kernel or three?" which zymtrace alone can't.
-- [`inference-graph-diff`](/plugins/profile-and-optimize/skills/inference-graph-diff/SKILL.md) -- diffs the torch.compile / FX-Inductor graphs between two helm configs. **Cross-view with this skill**: when zymtrace shows a kernel-share shift between two variants, graph-diff identifies WHICH compilation choice produced the shift.
+- [`zymtrace-anchored-query`](../zymtrace-anchored-query/SKILL.md) -- the anchored-SQL primitive against the same zymtrace ClickHouse backend. Use that skill for `DESCRIBE table` + `SELECT ... FROM zymtrace_profiling.events ...` patterns. Use this skill (`analyze-zymtrace-workload`) for the MCP-driven flamegraph cross-view workflow. The two are complementary: anchored-query is the operator-shaped raw-SQL escape hatch. This skill is the MCP-shaped guided analysis.
+- [`inference-kernel-profile`](../inference-kernel-profile/SKILL.md) -- captures `.nsys-rep` + `gpu_kern_sum.csv` from a live vllm pod via a debug sidecar. **Cross-view with this skill**: when an `inference_perfbench_v1` bundle carries a `kernel_profile` field, read its `summary_csv_path` to resolve the zymtrace `native` category into per-kernel SASS-level entries. Example: zymtrace says "FMHA = 14.2% of GPU time". The nsys CSV says "fmha_v2_kernel<sm100>: 11.8%, fmha_v2_kernel_paged<sm100>: 2.4%" - answering "is the hot category one kernel or three?" which zymtrace alone can't.
+- [`inference-graph-diff`](../inference-graph-diff/SKILL.md) -- diffs the torch.compile / FX-Inductor graphs between two helm configs. **Cross-view with this skill**: when zymtrace shows a kernel-share shift between two variants, graph-diff identifies WHICH compilation choice produced the shift.
 
 ## Origin
 

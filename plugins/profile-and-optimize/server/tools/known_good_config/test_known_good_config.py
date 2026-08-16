@@ -65,9 +65,10 @@ def test_contract_shape() -> None:
 
 def test_build_parser_accepts_json_for_both_verbs() -> None:
     parser = build_parser()
-    for verb in ("record", "check"):
-        ns = parser.parse_args([verb, "--model", "m", "--json"])
-        assert ns.json is True
+    assert parser.parse_args(["record", "--model", "m", "--json"]).json is True
+    assert parser.parse_args(
+        ["check", "--model", "m", "--serve-args", "", "--json"]
+    ).json is True
 
 
 def test_parse_required_flag_defaults() -> None:
@@ -75,6 +76,16 @@ def test_parse_required_flag_defaults() -> None:
     assert rf["flag"] == "--foo"
     assert rf["severity"] == "boot-blocker"
     assert rf["match"]  # defaults to re.escape(flag)
+
+
+@pytest.mark.parametrize("severity", ["", "warning", "critical", "PERF", "unknown"])
+def test_parse_required_flag_rejects_unknown_severity(severity: str) -> None:
+    raw = f"--foo|foo|{severity}|why"
+    if severity == "":
+        assert _parse_required_flag(raw)["severity"] == "boot-blocker"
+    else:
+        with pytest.raises(SystemExit, match="severity must be one of"):
+            _parse_required_flag(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -122,24 +133,43 @@ def test_check_perf_severity_missing_is_warning_not_failure(registry: Path, caps
 def test_check_require_registered_fails_for_unknown_model(registry: Path, capsys) -> None:
     rc = main([
         "check", "--registry", str(registry),
-        "--model", "made/up-model", "--require-registered", "--json",
+        "--model", "made/up-model", "--serve-args", "", "--require-registered", "--json",
     ])
     assert rc == 1
     assert "model_not_registered" in capsys.readouterr().out
 
 
-def test_check_unknown_model_without_require_registered_passes(registry: Path) -> None:
-    rc = main(["check", "--registry", str(registry), "--model", "made/up-model", "--json"])
-    assert rc == 0
-
-
-def test_check_registered_no_serveargs_passes(registry: Path, capsys) -> None:
+def test_check_unknown_model_fails_without_compatibility_flag(registry: Path, capsys) -> None:
     rc = main([
-        "check", "--registry", str(registry),
-        "--model", "zai-org/GLM-5.1", "--json",
+        "check", "--registry", str(registry), "--model", "made/up-model",
+        "--serve-args", "", "--json",
     ])
-    assert rc == 0
-    assert '"checked_args": false' in capsys.readouterr().out
+    assert rc == 1
+    output = capsys.readouterr().out
+    assert '"registered": false' in output
+    assert '"verdict": "fail"' in output
+
+
+def test_check_requires_exactly_one_input(registry: Path) -> None:
+    parser = build_parser()
+    common = ["check", "--registry", str(registry), "--model", "zai-org/GLM-5.1"]
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(common)
+    with pytest.raises(SystemExit):
+        parser.parse_args(common + ["--serve-args", "vllm serve", "--deploy-file", "deploy.yaml"])
+
+
+def test_check_rejects_unknown_registry_severity(registry: Path) -> None:
+    registry.write_text(REGISTRY_HEADER.replace("severity: perf", "severity: informational"))
+
+    with pytest.raises(SystemExit, match="severity must be one of"):
+        main([
+            "check", "--registry", str(registry),
+            "--model", "zai-org/GLM-5.1",
+            "--serve-args", "vllm serve",
+            "--json",
+        ])
 
 
 # ---------------------------------------------------------------------------

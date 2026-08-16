@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "example-mlperf-v6-guardrails",
+  "status": "example",
+  "notice": "These values exercise the offline guardrail evaluator. Verify current official benchmark rules before submission use.",
+  "global": {
+    "ruleset_string": "6.0.0",
+    "submission_runs_required": 5,
+    "synthetic_data_forbidden_in_submission": true
+  },
+  "benchmarks": {
+    "llama31_8b": {
+      "warmup_proportion_of_max_steps_max": 0.1
+    },
+    "llama31_405b": {
+      "min_lr": 0.000001,
+      "max_lr": 0.0003,
+      "global_batch_size": {
+        "min": 1,
+        "max": 8192
+      },
+      "warmup_proportion_of_max_steps_max": 0.1
+    },
+    "deepseekv3_671b": {
+      "expert_parallel_legal_values": [1, 2, 4, 8],
+      "aux_loss_balance_coef_legal_range": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "dlrm_dcnv2": {},
+    "flux1": {},
+    "llama2_70b_lora": {},
+    "gpt_oss_20b": {}
+  }
+}

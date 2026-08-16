@@ -1,4 +1,4 @@
-"""Unit tests for the campaign_run production step-fn wiring (v1.21.0)."""
+"""Unit tests for the campaign_run production step-fn wiring."""
 
 from __future__ import annotations
 
@@ -183,8 +183,53 @@ def test_step_bench_vllm_sweep_without_serve_cmd_returns_false() -> None:
     assert step_bench(Path("/tmp"), cell) is False
 
 
+def test_step_bench_vllm_uses_canonical_cell_shape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tools.perf_tune_report.runners import vllm_sweep
+
+    captured: dict[str, Any] = {}
+
+    class FakeResult:
+        row_count = 2
+
+    def fake_run_cell(config, campaign_dir, **kwargs):
+        captured["config"] = config
+        captured["campaign_dir"] = campaign_dir
+        captured.update(kwargs)
+        return FakeResult()
+
+    monkeypatch.setattr(vllm_sweep, "run_cell", fake_run_cell)
+    cell = CellPlan(
+        id="canonical-cell",
+        backend="vllm-sweep",
+        concurrencies=(1, 8),
+        runner_config={
+            "model": "example/model",
+            "hardware": "B200",
+            "quant": "FP8",
+            "tensor_parallel": 4,
+            "parallel_strategy": "TP",
+            "mtp": False,
+            "max_num_batched_tokens": 2048,
+        },
+        backend_config={
+            "serve_cmd": "vllm serve example/model",
+            "bench_cmd": "vllm bench serve --model example/model",
+        },
+    )
+
+    assert step_bench(tmp_path, cell) is True
+    assert captured["config"].cell_id == "canonical-cell"
+    assert captured["config"].model == "example/model"
+    assert captured["config"].tensor_parallel == 4
+    assert captured["serve_cmd"] == "vllm serve example/model"
+    assert captured["bench_cmd"] == "vllm bench serve --model example/model"
+
+
 def test_step_bench_aiperf_returns_false() -> None:
-    """aiperf backend is intentionally a no-op in production_steps v1.21.0."""
+    """aiperf backend is intentionally a no-op in production_steps."""
     cell = CellPlan(
         id="test-cell", backend="aiperf", concurrencies=(8,),
     )
@@ -248,7 +293,7 @@ def test_step_render_returns_false_when_no_atlas(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 8. step_baseline_diff returns NA when comparator is empty / missing
+# 8. production baseline wiring uses one directional scalar headline
 # ---------------------------------------------------------------------------
 
 
@@ -256,5 +301,110 @@ def test_step_baseline_diff_empty_comparator_returns_na(tmp_path: Path) -> None:
     assert step_baseline_diff(tmp_path, "c1", "") == "NA"
 
 
-def test_step_baseline_diff_missing_comparator_returns_na(tmp_path: Path) -> None:
-    assert step_baseline_diff(tmp_path, "c1", str(tmp_path / "nope.json")) == "NA"
+def test_step_baseline_diff_missing_comparator_is_red(tmp_path: Path) -> None:
+    assert step_baseline_diff(tmp_path, "c1", str(tmp_path / "nope")) == "RED"
+
+
+def _seed_baseline_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    root = tmp_path / "server-root"
+    root.mkdir()
+    (root / "pyproject.toml").write_text("[project]\nname='test'\nversion='0'\n")
+    (root / "mcp_surface.py").write_text("# marker\n")
+    (root / "tools").mkdir()
+    monkeypatch.setenv("PROFILE_AND_OPTIMIZE_REPO_ROOT", str(root))
+    return root
+
+
+def _write_headline_campaign(
+    tmp_path: Path,
+    values: tuple[float, float],
+    *,
+    focus: str = "throughput",
+) -> Path:
+    campaign = tmp_path / "campaign"
+    (campaign / "cells" / "c1").mkdir(parents=True, exist_ok=True)
+    (campaign / "config.yaml").write_text(f"focus: {focus}\n")
+    rows = [
+        {
+            "cell_id": "c1",
+            "concurrency": concurrency,
+            "output_tps_per_gpu": value,
+            "tpot_median_ms": 100.0 / value,
+        }
+        for concurrency, value in zip((1, 2), values, strict=True)
+    ]
+    (campaign / "atlas.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in rows)
+    )
+    return campaign
+
+
+def test_step_baseline_record_extracts_supported_scalar_headline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _seed_baseline_repo(tmp_path, monkeypatch)
+    campaign = _write_headline_campaign(tmp_path, (80.0, 100.0))
+
+    assert step_baseline_record(campaign, "c1") is True
+
+    measurement_dir = (
+        root
+        / "experiments"
+        / "artifacts"
+        / "perf-baselines"
+        / "inference"
+        / "output_tps_per_gpu-c2"
+    )
+    entries = [
+        entry
+        for entry in measurement_dir.iterdir()
+        if entry.is_dir()
+    ]
+    assert len(entries) == 1
+    baseline = json.loads((entries[0] / "baseline.json").read_text())
+    assert baseline["value"] == 100.0
+    assert baseline["direction"] == "higher-is-better"
+    assert baseline["schema_path"] is None
+    snapshot = json.loads((entries[0] / "source-snapshot.json").read_text())
+    assert snapshot["metric"] == "output_tps_per_gpu"
+    assert snapshot["concurrency"] == 2
+
+
+@pytest.mark.parametrize(
+    ("candidate", "expected"),
+    [((80.0, 90.0), "RED"), ((80.0, 110.0), "GREEN")],
+)
+def test_step_baseline_diff_parses_real_directional_verdict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate: tuple[float, float],
+    expected: str,
+) -> None:
+    root = _seed_baseline_repo(tmp_path, monkeypatch)
+    campaign = _write_headline_campaign(tmp_path, (80.0, 100.0))
+    assert step_baseline_record(campaign, "c1") is True
+    measurement_dir = (
+        root
+        / "experiments"
+        / "artifacts"
+        / "perf-baselines"
+        / "inference"
+        / "output_tps_per_gpu-c2"
+    )
+    baseline_dir = next(
+        entry for entry in measurement_dir.iterdir() if entry.is_dir()
+    )
+    _write_headline_campaign(tmp_path, candidate)
+
+    assert step_baseline_diff(campaign, "c1", str(baseline_dir)) == expected
+
+
+def test_step_baseline_record_fails_without_directional_focus(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_baseline_repo(tmp_path, monkeypatch)
+    campaign = _write_headline_campaign(tmp_path, (80.0, 100.0), focus="mixed")
+
+    assert step_baseline_record(campaign, "c1") is False

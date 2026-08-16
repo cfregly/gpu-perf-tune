@@ -1,4 +1,4 @@
-"""Multi-bundle vllm-bench-serve comparison report (v1.24.0).
+"""Multi-bundle vllm-bench-serve comparison report.
 
 Promotes the GLM-LWS workshop renderers
 (``./campaigns workspacescripts/render_lws_baseline_report.py``

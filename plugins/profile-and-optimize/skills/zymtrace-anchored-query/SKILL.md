@@ -1,6 +1,9 @@
 ---
 name: zymtrace-anchored-query
-last_validated: 2026-05-24
+license: MIT
+compatibility: Requires a skills-compatible agent and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-24"
 description: >-
   Reusable wrapper for the knowledge-base-first SQL pattern,
   adapted to the zymtrace ClickHouse profiling backend. Operator names the
@@ -14,15 +17,7 @@ description: >-
   "anchored zymtrace", "anchored clickhouse", or any combination of
   "zymtrace / clickhouse / profile" with "anchored / safe / provenance /
   query / saved-payload".
-allowed-tools:
-  - Bash(kubectl:port-forward,*)
-  - Bash(kubectl:get,*)
-  - Bash(curl:*)
-  - Bash(jq:*)
-  - Bash(sha256sum:*)
-  - Bash(date:*)
-  - Read
-  - Write
+allowed-tools: "Bash(kubectl:port-forward,*) Bash(kubectl:get,*) Bash(curl:*) Bash(jq:*) Bash(sha256sum:*) Bash(date:*) Read Write"
 ---
 
 # zymtrace-anchored-query
@@ -45,7 +40,7 @@ overloads ClickHouse and starves real-time ingest. The anchor-then-query
 pattern works for arbitrary profiling questions. This skill makes it
 agent-routable.
 
-[`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md) is
+[`prometheus-anchored-query`](../prometheus-anchored-query/SKILL.md) is
 the Prometheus version of the same pattern. Use this
 when the question targets profiling data (CPU on-cpu samples, GPU cuda
 kernel samples, stack-traces, function-resolution lookups). Use the
@@ -60,7 +55,7 @@ Prometheus skill when the question targets time-series cluster metrics.
   (for evidence bundles, profile-findings write-ups, share-with-team
   artifacts, or feeding the optional `kernel_class_gpu_pct` +
   `cpu_spinpoll_pct` fields into the
-  [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md)
+  [`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md)
   schema).
 - Operator wants to confirm a `pod_name` LIKE pattern matches the
   expected pod set + that the time window has enough samples to be
@@ -177,7 +172,7 @@ instantaneous - rank two causes in this order:
    ended), zymtrace may not have flushed to ClickHouse yet - it flushes
    **asynchronously** (~seconds-to-minutes). **Wait for the flush and re-run the
    cardinality probe** for the freshest data before concluding. A simple poll
-   (mirrors [`scripts/zymtrace-ingest-wait.sh`](/scripts/zymtrace-ingest-wait.sh)):
+   (mirrors [`scripts/zymtrace-ingest-wait.sh`](../../../../scripts/zymtrace-ingest-wait.sh)):
 
    ```bash
    for i in $(seq 1 "${ZYM_INGEST_MAX_ATTEMPTS:-6}"); do
@@ -194,7 +189,7 @@ instantaneous - rank two causes in this order:
    the host filter returns frames) and confirm the window.
 
 Per the fail-fast rationale in
-[`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md),
+[`server/docs/zymtrace-query-hygiene.md`](../../server/docs/zymtrace-query-hygiene.md),
 running the top-N on an empty result would look like "no signal" when it is really
 either ingest lag (requery) or a wrong selector (fix it) - never silently proceed.
 
@@ -271,7 +266,7 @@ Print:
 - **Top 5 rows** of the response (highest `pct` or `total_samples`).
 - **Bundle path** for the saved payload.
 - **Cross-link** to
-  [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md)
+  [`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md)
   if the operator's question maps to a `kernel_class_gpu_pct` or
   `cpu_spinpoll_pct` field (it usually does - that's the canonical
   consumer of this skill's output).
@@ -279,7 +274,7 @@ Print:
 ## Kernel-class bucketing (appendix)
 
 The
-[`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md)
+[`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md)
 schema's `kernel_class_gpu_pct` field is derived by bucketing kernel
 names from this skill's GPU-side response. The canonical regex set
 covers the kernel classes that dominate FP8 MoE serving on B200-class
@@ -335,7 +330,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
   asynchronously. **Wait for the flush and re-probe** (`ZYM_INGEST_WAIT_SEC` /
   `ZYM_INGEST_MAX_ATTEMPTS`) before concluding. Only a persistent 0 past the flush
   is a wrong selector / real gap. See
-  [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).
+  [`server/docs/zymtrace-query-hygiene.md`](../../server/docs/zymtrace-query-hygiene.md).
 - **Schema-anchor first is mandatory.** Phase 1 cannot be skipped. The
   whole point of the skill is to enforce that discipline.
 - **All three bounds required.** Every SQL the skill emits has
@@ -348,7 +343,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
   override to as many as 100. Anything larger is refused - the bundle
   is for human-readable summary, not bulk export.
 - **Raw payload preservation.** Per
-  [`server/docs/perf-lake-contract.md`](/plugins/profile-and-optimize/server/docs/perf-lake-contract.md),
+  [`server/docs/perf-lake-contract.md`](../../server/docs/perf-lake-contract.md),
   every saved query records the SQL, the schema anchor, the time
   range, the response time, and the cluster context.
 - **Read-only.** The skill only runs `SELECT` / `DESCRIBE` / `SHOW`
@@ -369,7 +364,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Source-of-truth references
 
-- [`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md) - the Prometheus cousin of this skill.
-- [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md) - primary consumer. Derives `kernel_class_gpu_pct` + `cpu_spinpoll_pct` from this skill's output.
-- [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md) - the zymtrace MCP analytical workflow (different layer. Pattern-recognition over the same data).
-- Bundled server [`CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) - fail-fast + provenance rules.
+- [`prometheus-anchored-query`](../prometheus-anchored-query/SKILL.md) - the Prometheus cousin of this skill.
+- [`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md) - primary consumer. Derives `kernel_class_gpu_pct` + `cpu_spinpoll_pct` from this skill's output.
+- [`analyze-zymtrace-workload`](../analyze-zymtrace-workload/SKILL.md) - the zymtrace MCP analytical workflow (different layer. Pattern-recognition over the same data).
+- Bundled server [`AGENTS.md`](../../server/AGENTS.md) - fail-fast + provenance rules.

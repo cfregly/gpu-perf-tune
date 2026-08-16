@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "candidates": [
+    {
+      "objective": "mlperf_submission_readiness",
+      "parameters": {
+        "RUN_MODE": "unknown-stage",
+        "NOT_A_PARAMETER": "1"
+      },
+      "priority": 1
+    }
+  ]
+}

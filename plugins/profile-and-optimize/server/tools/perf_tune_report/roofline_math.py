@@ -1,7 +1,6 @@
 """Generalized analytical roofline math for the prefill/decode roofline (page 7).
 
-This is the model-agnostic generalization of the GLM-5.1-only
-``perf-tune-glm51/.../driver/roofline_math.py`` probe. It turns a HuggingFace
+It turns a HuggingFace
 ``config.json`` into the two analytical quantities a Williams roofline needs:
 
 - **arithmetic intensity (FLOP/byte)** -- the x-axis. Derived from the model's

@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-"""Assert every doc that names a tool / library / aux-tool count agrees with
-the canonical constants in ``plugins/profile-and-optimize/server/mcp_surface.py``.
+"""Check public tool counts against the canonical MCP surface.
 
-Background: the v1.13.0 rescan found severe drift between docs that claim
-"73 tools" / "75-tool surface" / "84 + 2 = 86" / "90 contract tools" /
-"92 total" / "95 contract" / "97 total" while the live derivation
-produces 95 + 2 = 97. This lint reads the canonical constants from
-``mcp_surface.py`` and fails any future commit that lets a doc drift
-away from them.
+This lint reads the current constants from
+``plugins/profile-and-optimize/server/mcp_surface.py`` and rejects stale totals
+in public manifests, docs, and command help.
 
 How it works:
 
@@ -19,8 +15,8 @@ How it works:
 2. For each doc in ``DOCS_TO_LINT``, scan for lines that name a tool
    count, library count, or aux-tool count. Accept the line only if
    the number matches the canonical constant.
-3. Lines that name historical counts (intentional CHANGELOG history,
-   "75 -> 97" migration notes) are exempt via ``LINE_EXEMPT_SUBSTRINGS``.
+3. Explicit migration notes may be exempted through
+   ``LINE_EXEMPT_SUBSTRINGS``.
 
 Exit codes:
   0 - clean (every doc agrees with the canonical constants).
@@ -61,7 +57,7 @@ DOCS_TO_LINT = (
     "plugins/profile-and-optimize/README.md",
     "plugins/profile-and-optimize/.claude-plugin/plugin.json",
     "plugins/profile-and-optimize/server/README.md",
-    "plugins/profile-and-optimize/server/CLAUDE.md",
+    "plugins/profile-and-optimize/server/AGENTS.md",
     "plugins/profile-and-optimize/server/pyproject.toml",
     "plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/README.md",
     "plugins/profile-and-optimize/server/docs/cli-contract.md",
@@ -112,13 +108,8 @@ LIBRARY_PATTERNS = (
 )
 
 
-# Exempt ONLY true migration-arrow captions ("75 -> 97", "15 -> 22"). The old
-# blanket version-family exemptions ("v0.4" ... "v1.1") were removed in v1.29.0:
-# they exempted any dense status/description line that merely *mentioned* a
-# version, which is most of them — that is exactly how the 95/97/101/102/105
-# count drift survived a passing `make lint-tool-counts`. Narrow exemptions keep
-# the lint honest; a genuinely historical count must wear an explicit `N -> M`
-# arrow (or live in CHANGELOG.md, which is out of scope) to be skipped.
+# Exempt only explicit migration-arrow captions. Broad exemptions can hide
+# stale totals on otherwise current status lines.
 LINE_EXEMPT_SUBSTRINGS = (
     # Historical migration prose ("75 -> 97").
     "-> 22",
@@ -127,7 +118,7 @@ LINE_EXEMPT_SUBSTRINGS = (
     " -> 86",  # historical step
     " -> 90",  # historical step
     " -> 92",  # historical step
-    "11 stub libraries +",  # historical "11 stub libraries + tools/" intro paragraph; v0.4 era
+    "11 stub libraries +",  # historical migration note
     # `(15 -> 22)` migration captions.
     "15 -> 22",
     "20 -> 22",

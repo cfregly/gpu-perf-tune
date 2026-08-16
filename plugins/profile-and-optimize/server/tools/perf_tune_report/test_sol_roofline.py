@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -45,7 +44,6 @@ from tools.perf_tune_report.renderer.sol_roofline import (
     load_ceilings,
 )
 from tools.perf_tune_report.schema import BACKEND_VLLM_SWEEP, STATUS_FULL, AtlasCell
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -161,6 +159,30 @@ def test_load_ceilings_happy_path(tmp_path):
     assert "b200_sm100" in data
     assert "category_ceiling_map" in data
     assert data["b200_sm100"]["hbm3e_tbps"]["value"] == 8.0
+
+
+def test_workspace_ceilings_use_dense_per_gpu_values_and_network_units() -> None:
+    workspace_root = Path(__file__).resolve().parents[5]
+    data = yaml.safe_load((workspace_root / "configs" / "sol-ceilings.yaml").read_text())
+
+    b200_tf32 = data["b200_sm100"]["fp32_tc_tflops"]
+    assert b200_tf32["value"] == 1125
+    assert b200_tf32["units"] == "TFLOPS"
+    assert b200_tf32["source"].startswith("https://images.nvidia.com/")
+
+    gb300 = data["gb300_nvl72"]
+    assert gb300["fp8_dense_pflops"]["value"] == 5.0
+    assert gb300["bf16_dense_pflops"]["value"] == 2.5
+    assert gb300["fp8_dense_pflops"]["source"].startswith("https://www.nvidia.com/")
+    assert gb300["bf16_dense_pflops"]["source"].startswith("https://www.nvidia.com/")
+    assert gb300["roce_per_nic_gbps"] == {
+        "value": 400,
+        "units": "Gb/s",
+        "source": "https://docs.nvidia.com/enterprise-reference-architectures/nvl72-ai-factory/latest/networking-physical-topologies.html",
+        "notes": "One link in the dual-plane ConnectX-8 topology.",
+    }
+    assert gb300["roce_two_nic_gbs"]["value"] == 100
+    assert gb300["roce_two_nic_gbs"]["units"] == "GB/s"
 
 
 def test_load_ceilings_missing_category_map_raises(tmp_path):
@@ -427,8 +449,9 @@ def test_render_page_raises_when_hardware_key_missing():
     import matplotlib
 
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     from collections import OrderedDict
+
+    import matplotlib.pyplot as plt
 
     fig = plt.figure(figsize=(8, 11))
     try:

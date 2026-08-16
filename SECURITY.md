@@ -2,52 +2,60 @@
 
 ## Supported versions
 
-`profile-and-optimize` follows semantic versioning. Security fixes ship as PATCH releases against the latest MINOR.
+Security fixes land on `main` while the next release is in development.
 
-| Version | Supported |
+| Version | Status |
 | --- | --- |
-| `1.14.x` | Yes (latest. Current release line) |
-| `1.13.x` | Yes (previous MINOR. Best-effort PATCH backports) |
-| `1.0.x`-`1.12.x` | Best-effort. Please upgrade to `1.14.x` |
-| `< 1.0.0` | No |
+| `main` | Supported development branch |
+| `0.3.x` | Supported release line |
+| `0.2.x` and earlier | Unsupported |
 
-The release line moves forward as new MINORs ship. See the GitHub releases for the version history.
+The latest published release may not contain fixes that have landed on `main`.
+Check the [release history](https://github.com/cfregly/gpu-perf-tune/releases) before deploying.
 
-## Reporting a vulnerability
+## Report a vulnerability privately
 
-**Please do NOT open a public GitHub issue for a security vulnerability.** Open a public issue only if the report does not contain any sensitive information (token leaks, credential paths, internal hostnames, etc.).
+Do not open a public issue for a suspected vulnerability. Use GitHub's
+[private vulnerability report](https://github.com/cfregly/gpu-perf-tune/security/advisories)
+form. If that form is unavailable, email
+[chris@fregly.com](mailto:chris@fregly.com) with the subject
+`gpu-perf-tune security report`.
 
-For a security report:
+Include only the detail needed to reproduce and assess the issue:
 
-- Open a private report through GitHub Security Advisories from the repository's
-  **Security** tab: **Advisories** → **Report a vulnerability**.
-- Include a minimal reproduction (skill name, exact prompt, what was leaked or what unsafe action was taken).
-- Include the plugin version (`cat plugins/profile-and-optimize/.claude-plugin/plugin.json | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])"`).
-- Include the operator workstation OS + Claude Code / Cursor version.
+- The affected commit or plugin version.
+- The affected skill, MCP tool, manifest, or script.
+- A minimal reproduction using synthetic or redacted values.
+- The impact and any known workaround.
+- A safe way to contact you for follow-up.
 
-You should receive an initial response within 5 business days. If you do not, add a comment to the advisory thread referencing the original report.
+Never post tokens, credentials, internal hostnames, private URLs, customer data,
+proprietary code, or unredacted logs in a public issue. If you accidentally post
+a secret, revoke or rotate it first, then email the maintainer. Deleting a public
+comment does not remove the value from every copy or notification.
 
-## In scope
+You should receive an initial response within five business days. Fix and
+disclosure timing depends on severity, exploitability, and release readiness.
+The project will coordinate public disclosure with the reporter when practical.
 
-- The bundled MCP server source at [`plugins/profile-and-optimize/server/`](/plugins/profile-and-optimize/server), including the 8 stub libraries and the `tools/` implementations.
-- The skill files at [`plugins/profile-and-optimize/skills/`](/plugins/profile-and-optimize/skills), specifically: any skill that grants `allowed-tools` access beyond what its purpose requires. Any skill that exfiltrates secrets / tokens. Any skill that writes to external chat systems (skills are read-only toward chat).
-- The plugin manifests ([`marketplace.json`](/.claude-plugin/marketplace.json), [`plugin.json`](/plugins/profile-and-optimize/.claude-plugin/plugin.json), [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json)) - specifically: tokens / URLs hard-coded instead of `${ENV}` placeholders, ack-flag bypass paths, or any change that escalates a tool's safety class without operator notice.
-- The helper scripts in [`scripts/`](/scripts).
+## Scope
 
-## Out of scope
+Reports are in scope when they affect code or configuration maintained in this
+repository, including:
 
-- The 2 external MCP servers declared in [`.mcp.json`](/plugins/profile-and-optimize/.mcp.json) (`grafana`, `github`) and any optional operator-configured MCP servers (e.g. `prometheus_mcp`, `zymtrace`). Vulnerabilities in those should be reported to their respective vendors.
-- Cluster-side vulnerabilities (Slurm, container images, NCCL, etc.). Report those to your cluster operator or the relevant upstream project.
-- Any vulnerability disclosed in a public GitHub issue (we will close it without comment if it contains sensitive info, and request re-reporting through the private advisory channel above).
+- The bundled MCP server under `plugins/profile-and-optimize/server/`.
+- Skills under `plugins/profile-and-optimize/skills/`.
+- Plugin manifests, including `.mcp.json`.
+- Repository helper scripts and CI workflows.
+- Unsafe defaults, permission escalation, secret exposure, or unintended
+  external writes caused by this project.
 
-## Disclosure timeline
+External MCP servers, third-party packages, container images, cluster software,
+and operator infrastructure are maintained by their respective projects. Report
+upstream vulnerabilities to the relevant vendor. A report is still welcome here
+when this repository integrates an external component unsafely.
 
-Standard responsible-disclosure: we aim to ship a PATCH release within 30 days of a confirmed vulnerability. If the vulnerability is actively exploited or has a high CVSS, we will expedite.
+## Credit
 
-## Acknowledgements
-
-We credit the reporter in the release notes for the fix release, with the reporter's permission.
-
-## Contact
-
-Security reports go through the repository's GitHub Security Advisories.
+With the reporter's permission, the project will credit the reporter in the
+release notes or security advisory for the fix.

@@ -1,4 +1,4 @@
-"""Tests for the kernel_reproducer_scaffold verb (perf_tune_report, v1.69.0)."""
+"""Tests for the perf_tune_report kernel_reproducer_scaffold verb."""
 from __future__ import annotations
 
 from pathlib import Path

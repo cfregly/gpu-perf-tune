@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(REPO_ROOT))
 
-DEFAULT_SPACE = REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"
+EXAMPLE_SPACE = REPO_ROOT / "tuning" / "examples" / "b200-offline.json"
 
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
@@ -45,24 +45,28 @@ from tools.ai_tuning.cmd_report import command_report
 from tools.ai_tuning.cmd_space import command_matrix, command_space
 from tools.ai_tuning.cmd_template_patch import command_template_patch_validate
 
-try:  # Preserve object identity for direct imports from tools/ai_tuning.
-    import safety as _safety  # type: ignore
-except ImportError:  # Package import path.
-    from tools.ai_tuning import safety as _safety
+from tools.ai_tuning import safety as _safety
+
+EXPERIMENT_LEDGER_SCHEMA_VERSION = _safety.EXPERIMENT_LEDGER_SCHEMA_VERSION
+EXPERIMENT_STATUSES = _safety.EXPERIMENT_STATUSES
+FORBIDDEN_PATCH_PATTERNS = _safety.FORBIDDEN_PATCH_PATTERNS
+PROPOSAL_SCHEMA_VERSION = _safety.PROPOSAL_SCHEMA_VERSION
+REPORT_SCHEMA_VERSION = _safety.REPORT_SCHEMA_VERSION
+TEMPLATE_PATCH_SCHEMA_VERSION = _safety.TEMPLATE_PATCH_SCHEMA_VERSION
 
 
-# Per CLAUDE.md, the canonical operator surface for AI-assisted tuning is
+# Per AGENTS.md, the canonical operator surface for AI-assisted tuning is
 # offline: every CLI verb here either prints to stdout, or writes its own
 # `--output` / per-verb output path. Slurm submission only happens through
 # the `experiment submit` subverb, which carries its own
 # `--i-understand-this-submits-jobs` ack flag at the subparser level
-# (mirroring `launcher launch`). The MCP top-level CONTRACT entry for
+# through the CLI and MCP contracts. The MCP top-level CONTRACT entry for
 # `experiment` therefore stays at `writes_artifacts` rather than escalating
 # the whole umbrella to `submits_jobs` (which would auto-append the ack flag
 # to all subverbs and break read-only callers like `experiment summary`).
 CONTRACT: dict[str, dict[str, object]] = {
     "space": {
-        "safety": "read_only",
+        "safety": "writes_artifacts",
         "required": (),
         "optional": ("--space", "--names-only", "--output"),
         "json": True,
@@ -70,8 +74,8 @@ CONTRACT: dict[str, dict[str, object]] = {
     },
     "matrix": {
         "safety": "writes_artifacts",
-        "required": ("--parameter",),
-        "optional": ("--space", "--limit", "--output"),
+        "required": ("--space", "--parameter"),
+        "optional": ("--limit", "--output"),
         "json": True,
         "ack": None,
     },
@@ -85,10 +89,10 @@ CONTRACT: dict[str, dict[str, object]] = {
         "ack": None,
     },
     "report": {
-        "safety": "read_only",
-        "required": (),
+        "safety": "writes_artifacts",
+        "required": ("--space",),
         "optional": (
-            "--space", "--raw-results-dir", "--raw-benchmark", "--min-runs",
+            "--raw-results-dir", "--raw-benchmark", "--min-runs",
             "--objective", "--gb300-fabric-dir", "--gb300-fabric-require-clean",
             "--gb300-node-selection-dir", "--gb300-fabric-localization-dir",
             "--ledger", "--remaining-limit", "--template-hint-file",
@@ -105,7 +109,7 @@ CONTRACT: dict[str, dict[str, object]] = {
         "ack": None,
     },
     "proposal": {
-        "safety": "read_only",
+        "safety": "writes_artifacts",
         "required": ("subverb",),
         "optional": (),
         "json": True,
@@ -124,29 +128,42 @@ CONTRACT: dict[str, dict[str, object]] = {
     "experiment": {
         "safety": "writes_artifacts",
         "required": ("subverb",),
-        # `experiment submit` requires --i-understand-this-submits-jobs at
-        # the subverb level; pass it through `args` when actually
-        # submitting. The umbrella stays writes_artifacts so the MCP
-        # runtime does not auto-append the ack flag to read-only subverbs.
+        # `experiment submit --execute` requires the structured MCP field
+        # i_understand_this_submits_jobs=true. The runtime appends the CLI
+        # flag only for that leaf. Other experiment subverbs stay local.
         "optional": (),
         "json": True,
         "ack": None,
     },
 }
 
+# The public MCP tool is an umbrella around the experiment subcommands. Most
+# subcommands only write local artifacts. The submit leaf can invoke sbatch,
+# so the MCP boundary inspects this declaration and requires a structured
+# current-call acknowledgement whenever --execute is present.
+MCP_DYNAMIC_ACKS: dict[str, dict[str, dict[str, str]]] = {
+    "experiment": {
+        "submit": {
+            "ack": "--i-understand-this-submits-jobs",
+            "required_with": "--execute",
+            "safety": "submits_jobs",
+        }
+    }
+}
+
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     space = subparsers.add_parser("space", help="Print a tuning space manifest")
-    space.add_argument("--space", type=Path, default=DEFAULT_SPACE)
+    space.add_argument("--space", type=Path, default=EXAMPLE_SPACE)
     space.add_argument("--names-only", action="store_true")
     space.add_argument("--output", type=Path)
     space.set_defaults(func=command_space)
 
     matrix = subparsers.add_parser("matrix", help="Generate a bounded proposal matrix")
-    matrix.add_argument("--space", type=Path, default=DEFAULT_SPACE)
+    matrix.add_argument("--space", type=Path, required=True)
     matrix.add_argument(
         "--parameter",
         action="append",
@@ -162,7 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
     optimizer_propose = optimizer_subparsers.add_parser(
         "propose", help="Generate candidates with recorded optimizer state"
     )
-    optimizer_propose.add_argument("--space", type=Path, default=DEFAULT_SPACE)
+    optimizer_propose.add_argument("--space", type=Path, required=True)
     optimizer_propose.add_argument(
         "--strategy",
         choices=["deterministic_matrix", "random", "bayesian", "multifidelity"],
@@ -189,7 +206,7 @@ def build_parser() -> argparse.ArgumentParser:
     optimizer_status = optimizer_subparsers.add_parser(
         "status", help="Print which serious-tuner contracts and strategies are available for a tuning space"
     )
-    optimizer_status.add_argument("--space", type=Path, default=DEFAULT_SPACE)
+    optimizer_status.add_argument("--space", type=Path, default=EXAMPLE_SPACE)
     optimizer_status.add_argument("--output", type=Path)
     optimizer_status.set_defaults(func=command_optimizer_status)
 
@@ -228,7 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
     optimizer_import_hyp.set_defaults(func=command_optimizer_import_hyp)
 
     report = subparsers.add_parser("report", help="Build a bounded JSON tuning report")
-    report.add_argument("--space", type=Path, default=DEFAULT_SPACE)
+    report.add_argument("--space", type=Path, required=True)
     report.add_argument("--raw-results-dir", action="append", default=[])
     report.add_argument("--raw-benchmark", default="llama31_8b")
     report.add_argument("--min-runs", type=int)
@@ -261,7 +278,7 @@ def build_parser() -> argparse.ArgumentParser:
     proposal_subparsers = proposal.add_subparsers(dest="proposal_command", required=True)
     proposal_validate = proposal_subparsers.add_parser("validate", help="Validate an LLM proposal")
     proposal_validate.add_argument("proposal", type=Path)
-    proposal_validate.add_argument("--space", type=Path, default=DEFAULT_SPACE)
+    proposal_validate.add_argument("--space", type=Path, required=True)
     proposal_validate.add_argument("--history", action="append", default=[])
     proposal_validate.add_argument("--ledger", type=Path)
     proposal_validate.add_argument("--require-complete", action="store_true")
@@ -272,8 +289,8 @@ def build_parser() -> argparse.ArgumentParser:
     proposal_diff = proposal_subparsers.add_parser(
         "diff",
         help=(
-            "v3.7 W10: diff two proposal.json files (added/removed/"
-            "changed candidates by experiment_id_prefix)."
+            "Diff two proposal.json files by added, removed, or changed "
+            "experiment_id_prefix candidates."
         ),
     )
     proposal_diff.add_argument("before", type=Path, help="earlier proposal.json")
@@ -312,9 +329,9 @@ def build_parser() -> argparse.ArgumentParser:
         "create", help="Create planned experiment records from a proposal"
     )
     experiment_create.add_argument("proposal", type=Path)
-    experiment_create.add_argument("--space", type=Path, default=DEFAULT_SPACE)
+    experiment_create.add_argument("--space", type=Path, required=True)
     experiment_create.add_argument("--ledger", type=Path, required=True)
-    experiment_create.add_argument("--owner", default="cursor-session")
+    experiment_create.add_argument("--owner", default="agent-session")
     experiment_create.add_argument("--artifact-root", type=Path)
     experiment_create.add_argument("--notes")
     experiment_create.add_argument("--output", type=Path)
@@ -411,9 +428,13 @@ def _ensure_json_flag_on_leaves(parser: argparse.ArgumentParser) -> None:
     """Add a no-op `--json` flag to every leaf subparser that lacks one."""
 
     def visit(node: argparse.ArgumentParser) -> None:
+        # Every parser in the tree must require exact long option names.
+        # In particular, argparse must not accept abbreviated execution or
+        # acknowledgement flags on the Slurm submission leaf.
+        node.allow_abbrev = False
         nested_action: argparse._SubParsersAction | None = None
-        for action in node._actions:  # noqa: SLF001
-            if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+        for action in node._actions:
+            if isinstance(action, argparse._SubParsersAction):
                 nested_action = action
                 break
         if nested_action is not None:
@@ -421,7 +442,7 @@ def _ensure_json_flag_on_leaves(parser: argparse.ArgumentParser) -> None:
                 visit(child)
             return
         existing_options = {
-            opt for action in node._actions for opt in action.option_strings  # noqa: SLF001
+            opt for action in node._actions for opt in action.option_strings
         }
         if "--json" not in existing_options:
             node.add_argument(

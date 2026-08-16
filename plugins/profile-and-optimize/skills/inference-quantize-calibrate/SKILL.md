@@ -1,6 +1,9 @@
 ---
 name: inference-quantize-calibrate
-last_validated: 2026-06-07
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-06-07"
 description: >-
   Produce quantized inference weights from a BF16/FP8 base checkpoint via a
   post-training-quantization (PTQ) pipeline -- instead of only ever pulling
@@ -16,20 +19,7 @@ description: >-
   "quantize <model> to NVFP4/FP8", or any combination of "quantize / calibrate /
   PTQ / modelopt / llm-compressor" with "nvfp4 / fp8 / weights / model /
   inference".
-allowed-tools:
-  - mcp__profile_and_optimize__evidence_init
-  - mcp__profile_and_optimize__perf_baseline_record
-  - mcp__profile_and_optimize__perf_baseline_diff
-  - mcp__profile_and_optimize__perf_tune_report_campaign_init
-  - mcp__profile_and_optimize__perf_tune_report_cell_run
-  - mcp__profile_and_optimize__perf_tune_report_report_render
-  - mcp__profile_and_optimize__perf_tune_report_publish_to_lake
-  - mcp__profile_and_optimize__search_runbooks
-  - Bash(kubectl:*)
-  - Bash(sinfo:*)
-  - Bash(squeue:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__evidence_init mcp__profile_and_optimize__perf_baseline_record mcp__profile_and_optimize__perf_baseline_diff mcp__profile_and_optimize__perf_tune_report_campaign_init mcp__profile_and_optimize__perf_tune_report_cell_run mcp__profile_and_optimize__perf_tune_report_report_render mcp__profile_and_optimize__perf_tune_report_publish_to_lake mcp__profile_and_optimize__search_runbooks Bash(kubectl:*) Bash(sinfo:*) Bash(squeue:*) Read Write"
 ---
 
 # inference-quantize-calibrate
@@ -73,7 +63,7 @@ Do **not** use this skill for:
   pull the vendor checkpoint (cheaper, byte-for-byte vendor recipe).
 - KV-cache dtype selection at serve time (`--kv-cache-dtype=fp8_e4m3`) -- that is
   a `vllm.extraArgs` lever, not weight PTQ. Tune it with
-  [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md).
+  [`inference-tune-sweep`](../inference-tune-sweep/SKILL.md).
 - Runtime activation-quant kernel work --
   that is custom-kernel territory, not this PTQ pipeline.
 
@@ -128,8 +118,10 @@ the requested sample count.
 ### Phase 2: run the quantize Job (ack-gated)
 
 ```text
-# gate the manifest first:
-verify-experiment-labels.sh <id-slug> quantize/02-quantize-job.yaml
+# render the manifest and verify that both lines equal <id-slug>:
+kubectl -n <slurm-namespace> apply --dry-run=server \
+  -f quantize/02-quantize-job.yaml \
+  -o jsonpath='{.metadata.labels.experiment}{"\n"}{.spec.template.metadata.labels.experiment}{"\n"}'
 # then apply (the Job carries the ack/intent in an env flag the entrypoint checks):
 kubectl -n <slurm-namespace> apply -f quantize/02-quantize-job.yaml
 ```
@@ -153,11 +145,11 @@ Complete + the output `config.json`'s quant method is the expected one
 Deploy the quantized weights (the parent orchestrator's Phase 5, or a standalone
 deploy off the experiment PVC) and run:
 
-- [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md) (GPQA + MMLU-Pro)
+- [`inference-model-eval`](../inference-model-eval/SKILL.md) (GPQA + MMLU-Pro)
   vs the **base** model's scores.
 - A perf A/B (throughput + median TPOT) vs the base via
-  [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md) /
-  [`inference-perf-bench`](/plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md).
+  [`inference-tune-sweep`](../inference-tune-sweep/SKILL.md) /
+  [`inference-perf-bench`](../inference-perf-bench/SKILL.md).
 
 Gate: accuracy delta within tolerance (default: no metric drops > 1.0 absolute
 point) **AND** a perf win. A quant that wins perf but fails accuracy is a
@@ -179,12 +171,12 @@ three variants on one pinned node:
 
 Compare on three axes, each artifact-cited:
 
-1. **Accuracy** -- [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md)
+1. **Accuracy** -- [`inference-model-eval`](../inference-model-eval/SKILL.md)
    (GPQA + MMLU-Pro) for all three. Report `ours` and `nvidia` as deltas vs
    `base`.
 2. **Perf** -- median TPOT + throughput, same-node + >=3 trials
-   ([`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md) controlled A/B).
-3. **Per-kernel** -- [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)
+   ([`inference-tune-sweep`](../inference-tune-sweep/SKILL.md) controlled A/B).
+3. **Per-kernel** -- [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md)
    on the dominant decode kernel of each, to explain *why* one wins (tensor-core
    engagement, achieved roofline %) rather than asserting it.
 
@@ -332,7 +324,7 @@ perf win paper over an accuracy regression.
 
 - **Ack-gated** -- the quantize Job consumes a GPU node. It fails closed without
   the explicit intent flag (`safety=submits_jobs`), per
-  [`server/docs/mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md).
+  [`server/docs/mcp-tool-io-contract.md`](../../server/docs/mcp-tool-io-contract.md).
 - **Experiment isolation** -- the output PVC + both Jobs are experiment-prefixed
   and carry `experiment=<id-slug>`. Never reuse a standing `*-cache` PVC. Tear
   down by label, PV last.
@@ -347,10 +339,10 @@ perf win paper over an accuracy regression.
 
 - The vendor-checkpoint assertion (`quant_method in {modelopt, modelopt_fp4,
   NVFP4}`) this skill's output must satisfy.
-- [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md) -- the accuracy gate.
+- [`inference-model-eval`](../inference-model-eval/SKILL.md) -- the accuracy gate.
 - NVIDIA TensorRT Model Optimizer (`modelopt`) PTQ + llm-compressor `oneshot`
   upstream docs (pinned in `quantize/README.md` of the generated bundle).
-- `server/CLAUDE.md` "All performance numbers..." + "Verdict rigor" +
+- `server/AGENTS.md` "All performance numbers..." + "Verdict rigor" +
   "Experiment Isolation & Traceability".
 
 ## Full-context reporting (no bare numbers)
@@ -371,15 +363,15 @@ default, ship a config, or appear in a report.
 
 If this skill produces a measurement (tok/s, latency, %SoL, speedup), follow the
 rigor discipline: capture L1 zymtrace + L3 DCGM (L4 ncu where feasible)
-Speed-of-Light and publish `--strict`. Canonical map: `server/CLAUDE.md`
+Speed-of-Light and publish `--strict`. Canonical map: `server/AGENTS.md`
 "Rigor discipline index" / `docs/METHODOLOGY.md`. Skills that
-do not produce measurements are exempt (`server/CLAUDE.md` "Speed-of-light framing").
+do not produce measurements are exempt (`server/AGENTS.md` "Speed-of-light framing").
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.

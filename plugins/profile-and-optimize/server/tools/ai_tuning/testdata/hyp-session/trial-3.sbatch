@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+export TENSOR_MODEL_PARALLEL=8
+export PIPELINE_MODEL_PARALLEL=2
+export MICRO_BATCH_SIZE=1
+export INTERLEAVED_PIPELINE=True
+export LR=0.0002

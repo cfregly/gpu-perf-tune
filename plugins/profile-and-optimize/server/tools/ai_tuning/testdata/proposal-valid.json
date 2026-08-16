@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "candidates": [
+    {
+      "objective": "mlperf_submission_readiness",
+      "parameters": {
+        "RUN_MODE": "smoke",
+        "EXPERIMENT_NODES": "1"
+      },
+      "priority": 1,
+      "rationale": "Exercise a small offline example.",
+      "risk": "Example values are not production recommendations."
+    }
+  ]
+}

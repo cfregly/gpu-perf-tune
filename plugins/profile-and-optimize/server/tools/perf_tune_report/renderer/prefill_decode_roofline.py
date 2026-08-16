@@ -3,7 +3,7 @@
 Implements ``ROOFLINE-METHODOLOGY.md``. The phase-separated roofline the
 per-category SoL page (page 4) and the workload-level DCGM page (page 6) do NOT
 provide. Consumes ``cells/<id>/roofline_sweep.json`` (from
-``profiling/roofline-sweep.sh`` -> ``importers/roofline_sweep.py``): a decode
+the serving-side capture producer and ``importers/roofline_sweep.py``): a decode
 concurrency sweep + a prefill ISL sweep, each with MEASURED bench throughput +
 in-pod DCGM PROF active fractions.
 

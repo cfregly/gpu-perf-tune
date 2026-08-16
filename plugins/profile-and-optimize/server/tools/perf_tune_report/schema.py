@@ -31,7 +31,7 @@ STATUSES = frozenset({STATUS_FULL, STATUS_PARTIAL, STATUS_FAILED, STATUS_EVICTED
 BACKEND_VLLM_SWEEP = "vllm-sweep"
 BACKEND_SGLANG_SWEEP = "sglang-sweep"   # cross-engine A/B (SGLang arm), same client/parser as vllm-sweep
 BACKEND_AIPERF = "aiperf"
-BACKEND_TRTLLM = "trtllm"   # Added v1.20.0 as stub (not yet implemented)
+BACKEND_TRTLLM = "trtllm"   # Stub backend, not yet implemented
 BACKENDS = frozenset({BACKEND_VLLM_SWEEP, BACKEND_SGLANG_SWEEP, BACKEND_AIPERF, BACKEND_TRTLLM})
 
 # serving_engine is the normalized serving engine the bench exercised. The
@@ -55,7 +55,7 @@ def engine_for_backend(backend: str) -> str:
 
 
 # Full-context descriptor: string fields that MUST be populated (not "unknown") on a
-# MEASURED atlas row, per CLAUDE.md "Every performance number carries its full context
+# MEASURED atlas row, per AGENTS.md "Benchmark methodology hygiene
 # (no bare numbers)" (rule docs/METHODOLOGY.md). The methodology gate
 # (``lake_writer.methodology_problems``) flags any field still at "unknown"; publish/render
 # ``--strict`` fails closed. ``gpu_memory_utilization`` (None sentinel) is checked alongside.
@@ -100,14 +100,14 @@ class AtlasCell:
     request_throughput_avg: float | None = None
     output_tps_per_user: float | None = None
     output_tps_per_gpu: float | None = None
-    # Total (input+output) token throughput per GPU (added v1.35.0): the
+    # Total (input+output) token throughput per GPU: the
     # "Total token throughput (tok/s)" bench line divided by tensor_parallel.
     # Persisted so the TPM-across-hardware rollup can report total-TPM (the
     # OpenAI/Azure TPM convention) alongside output-only TPM. None for backends
     # that do not emit a total-token line (aiperf/aa/drive_load) -> total-TPM
     # renders n/a downstream.
     total_tps_per_gpu: float | None = None
-    # Decode-latency metrics (added v1.33.0) so a consistent schema is recorded
+    # Decode-latency metrics so a consistent schema is recorded
     # every run regardless of focus. TPOT is the decode-latency headline (the
     # importer already parses it); persisting it makes latency-focused runs
     # first-class in the atlas/lake (not derivable-only via output_tps_per_user).
@@ -129,7 +129,7 @@ class AtlasCell:
     # low-coverage TTFO is an answered-subset stat, not typical answer latency.
     ttfo_coverage: float | None = None
 
-    # Analysis-carry-through fields (added v1.42.0). All nullable/defaulted so
+    # Analysis-carry-through fields. All nullable/defaulted so
     # older JSONL still parses.
     # Mean per-request input / output sequence length (ISL/OSL) -- the dominant
     # pricing/capacity analysis dimension. vllm-sweep derives these from the
@@ -145,8 +145,8 @@ class AtlasCell:
     # signal); set via the importer --cache-mode override or bundle metadata.
     cache_mode: str = "unknown"
 
-    # Full-context descriptor fields (added 2026-06-07, CLAUDE.md "Every performance
-    # number carries its full context (no bare numbers)" / rule docs/METHODOLOGY.md).
+    # Full-context descriptor fields follow AGENTS.md "Benchmark methodology hygiene"
+    # and docs/METHODOLOGY.md.
     # All defaulted so older JSONL still parses; the methodology gate flags any
     # "unknown"/None on a MEASURED row (fail-closed under publish/render --strict).
     dataset: str = "unknown"            # random | sharegpt | sonnet | aa | code | ...
@@ -157,7 +157,7 @@ class AtlasCell:
     data_parallel: int = 1              # DP replica count (1 = single instance)
     pipeline_parallel: int = 1          # PP size (1 = none)
 
-    # Serving-variant descriptor (added 2026-06-07): the per-variant knobs needed to answer
+    # Serving-variant descriptor: the per-variant knobs needed to answer
     # "which variant + why" and to build a stable cross-campaign variant_key. All
     # nullable/optional so older JSONL still parses AND so they never fail-close the
     # methodology gate (they are not always known/applicable on every run).
@@ -167,10 +167,9 @@ class AtlasCell:
     enable_prefix_caching: bool | None = None   # prefix-caching on/off (distinct from prefix_cache_hit_rate)
     bench_backend: str = ""                      # bench CLIENT (vllm | openai), distinct from `backend` (the sweep runner)
     variant_key: str = ""                        # stable serving-variant hash (capture_signature); populated at publish/aggregate
-    # Ledger-to-atlas data-capture gaps (added 2026-06-07; nullable/defaulted so older
-    # JSONL parses). First-class capture for value-findings dimensions the atlas otherwise
-    # only carried in ``extra`` -- see perf-tune-report/UPSTREAM-REQUEST-atlas-ledger-
-    # datacapture-gaps.md. None/"" on rows where the lever does not apply.
+    # Ledger-to-atlas fields are nullable/defaulted so older JSONL parses. They
+    # provide first-class capture for value-findings dimensions previously
+    # carried only in ``extra``. None/"" means the lever does not apply.
     # Routing / load-balancer A/B descriptor (the KV-router findings).
     router_policy: str = ""             # round-robin | prefix-affinity | cache_aware | hybrid | adaptive | ""
     prefix_reuse: float | None = None   # prefix-reuse level swept in a routing A/B

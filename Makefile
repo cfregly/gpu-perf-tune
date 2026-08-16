@@ -9,87 +9,125 @@ PLUGIN_DIR := plugins/profile-and-optimize
 SERVER_DIR := $(PLUGIN_DIR)/server
 SCRIPTS_DIR := scripts
 SERVER_PY := $(SERVER_DIR)/.venv/bin/python
+PYTHON ?= $(if $(wildcard $(SERVER_PY)),$(SERVER_PY),python3)
 
 # Default VERSION for `make release-notes`. Override on the command line:
-#   make release-notes VERSION=v0.4.0
+#   make release-notes VERSION=v0.3.0
 VERSION ?=
 
-.PHONY: help demo check validate validate-uncached smoke-test smoke-mcp-runtime check-doc-links workload-proof-check lint-skill-mcp-args lint-skill-counts lint-tool-counts lint-versions pytest pytest-xdist all freshness bootstrap print-mcp-snippet doctor install-into-cursor refresh-symlinks release-notes mcp-surface clean-pycache
+.PHONY: help demo check validate validate-agent-skills validate-claude-plugin validate-claude-plugin-uncached validate-uncached smoke-test smoke-mcp-runtime check-doc-links workload-proof-check lint-skill-mcp-args lint-skill-counts lint-tool-counts lint-versions check-version-transition test-release-gates pytest pytest-mcp pytest-xdist all freshness bootstrap print-mcp-snippet doctor install-mcp install-skills install-into-codex install-into-cursor refresh-symlinks release release-notes mcp-surface clean-pycache
 
 help:
 	@printf 'profile-and-optimize operator commands\n\n'
 	@printf 'Common targets:\n'
-	@printf '  make demo                     Print the tool + skill surface (no GPU); a real perf run needs the bundled server + hardware\n'
-	@printf '  make check                    Run the doc-correctness gate + skill/tool/version count lints (the CI doc gates)\n'
-	@printf '  make all                     Run smoke-test + smoke-mcp-runtime + check-doc-links + lint-skill-mcp-args + pytest in series; use `make -j5 all` to run in parallel (target ~3s wall-clock)\n'
-	@printf '  make validate                Run claude plugin validate on the plugin manifest (cached by manifest SHA; ~0.05s on a cache hit)\n'
-	@printf '  make validate-uncached       Bypass the cache and re-run claude plugin validate unconditionally\n'
-	@printf '  make smoke-test              Validate + frontmatter lint + canonical-counts verify (libraries / contract tools) + skill-count lint + tool-count lint (<2s)\n'
+	@printf '  make demo                     List all skills and a sample of the MCP surface. No GPU required\n'
+	@printf '  make check                    Run the public static gates, including Agent Skills and all Markdown links\n'
+	@printf '  make all                      Run the full client-neutral local test suite. Use `make -j4 all` for parallel execution\n'
+	@printf '  make validate-agent-skills    Validate every skill with the official Agent Skills reference validator\n'
+	@printf '  make validate-claude-plugin   Run the optional Claude Code package validator\n'
+	@printf '  make smoke-test               Validate skills, canonical counts, versions, and MCP argument references\n'
 	@printf '  make smoke-mcp-runtime       End-to-end: spawn the bundled MCP server over stdio + verify the canonical MCP tool count (<2s)\n'
-	@printf '  make check-doc-links         Verify every [text](path|url) link in profile-and-optimize-authored docs resolves; HTTP checks run in parallel\n'
-	@printf '  make lint-skill-mcp-args     Cross-check SKILL.md `with:` arg blocks against MCP tool descriptors (catches the v0.8.1 filter/regex class of bug)\n'
+	@printf '  make check-doc-links         Verify every Markdown link in the repository. HTTP checks run in parallel\n'
+	@printf '  make lint-skill-mcp-args     Cross-check SKILL.md `with:` arg blocks against MCP tool descriptors\n'
 	@printf '  make lint-skill-counts       Assert every doc that names the skill count agrees with the on-disk plugins/profile-and-optimize/skills/ tree\n'
 	@printf '  make lint-tool-counts        Assert every doc that names a tool / library / aux-tool count agrees with the canonical constants in mcp_surface.py\n'
-	@printf '  make lint-versions           Assert README + plugin-README version headers match plugin.json version\n'
+	@printf '  make lint-versions           Assert public version surfaces match the root VERSION file\n'
+	@printf '  make check-version-transition Reject release version regressions against the current base\n'
 	@printf '  make workload-proof-check    Validate every checked-in workload-proof-packet.json against the neocloud packet and workflow handoff gates\n'
-	@printf '  make release                 Tag the current release commit vX.Y.Z (read from plugin.json) + push main + tag atomically (tagging rigidity)\n'
-	@printf '  make pytest                  Run the bundled pytest suite sequentially (~700 profile-and-optimize-native tests in <1s; requires `bash server/install.sh --with-dev` first)\n'
-	@printf '  make pytest-xdist            Same as `make pytest` but with `-n auto` (pytest-xdist parallel); slower for the ~700-test set due to worker-startup overhead; use only if you specifically want xdist semantics\n'
-	@printf '  make freshness               Per-skill freshness report based on last_validated frontmatter; YELLOW > 90d, RED > 180d\n'
-	@printf '  make bootstrap               One-shot Cursor/dev-clone setup: server venv + skill symlinks + ~/.cursor/mcp.json snippet (pass FULL=1 / DEV=1 to forward --full / --with-dev)\n'
-	@printf '  make print-mcp-snippet       Print the ~/.cursor/mcp.json `profile_and_optimize` block with the venv path resolved to this checkout (read-only)\n'
-	@printf '  make doctor                  Diagnose a stale/broken ~/.cursor/mcp.json profile_and_optimize entry after a version bump (read-only; FIX=1 repoints it with a backup)\n'
-	@printf '  make install-into-cursor     Symlink every skill into ~/.cursor/skills/ (alias of refresh-symlinks for back-compat with v0.7.x docs)\n'
-	@printf '  make refresh-symlinks        Re-symlink every plugins/profile-and-optimize/skills/<skill>/ into ~/.cursor/skills/<skill>/ — run this after every release\n'
+	@printf '  make release                 Recover a missing release from the current, already-green main version bump\n'
+	@printf '  make pytest                  Run the bundled tool tests. Requires `bash plugins/profile-and-optimize/server/install.sh --with-dev` first\n'
+	@printf '  make pytest-mcp              Rerun only the MCP server and client-configuration tests\n'
+	@printf '  make pytest-xdist            Run the full test set with `-n auto`. Use only when you need xdist semantics\n'
+	@printf '  make freshness               Per-skill freshness report based on metadata.last-validated\n'
+	@printf '  make install-mcp CLIENT=...  Install MCP for first-class claude or codex. Other client helpers are best effort\n'
+	@printf '  make install-skills CLIENT=codex|cursor  Link the Agent Skills into the selected client\n'
+	@printf '  make install-into-codex      Link every skill into ~/.agents/skills/\n'
 	@printf '  make mcp-surface             Print the canonical MCP tool surface derived by mcp_surface.py (counts subcommand verifies live derivation matches the constants)\n'
 	@printf '\n'
 	@printf 'Less common:\n'
-	@printf '  make release-notes VERSION=v0.4.0   Extract the CHANGELOG section for v0.4.0\n'
+	@printf '  make install-into-cursor     Link every skill into ~/.cursor/skills/ (best-effort adapter)\n'
+	@printf '  make refresh-symlinks        Compatibility alias for install-into-cursor\n'
+	@printf '  make bootstrap               Set up the best-effort Cursor adapter from a clone\n'
+	@printf '  make print-mcp-snippet       Print a Cursor MCP config block without writing it\n'
+	@printf '  make doctor                  Diagnose a Cursor MCP entry. Read-only unless FIX=1\n'
+	@printf '  make release-notes VERSION=v0.3.0   Extract the CHANGELOG section for v0.3.0\n'
 	@printf '  make clean-pycache           Remove __pycache__ + *.pyc under server/\n'
 	@printf '\n'
 	@printf 'Variables (override on command line):\n'
-	@printf '  VERSION                      Version tag for release-notes (e.g. v0.4.0)\n'
+	@printf '  VERSION                      Version tag for release-notes (e.g. v0.3.0)\n'
 
-validate:
+validate: validate-agent-skills
+
+validate-agent-skills:
+	@if command -v skills-ref >/dev/null 2>&1; then \
+		validator=$$(command -v skills-ref); \
+	elif [ -x "$(SERVER_DIR)/.venv/bin/skills-ref" ]; then \
+		validator="$(SERVER_DIR)/.venv/bin/skills-ref"; \
+	else \
+		echo '[FAIL] skills-ref is not installed. Run: bash $(SERVER_DIR)/install.sh --with-dev'; \
+		exit 2; \
+	fi; \
+	for skill in $(PLUGIN_DIR)/skills/*; do "$$validator" validate "$$skill" || exit; done
+
+validate-claude-plugin:
 	bash $(SCRIPTS_DIR)/validate-cached.sh
 
-validate-uncached:
+validate-claude-plugin-uncached:
 	claude plugin validate $(PLUGIN_DIR)
 
-smoke-test: validate
-	@echo '--- frontmatter lint ---'
-	@if [ -x "$(SERVER_PY)" ]; then \
-	  "$(SERVER_PY)" -c "$$FRONTMATTER_LINT_PY"; \
-	else \
-	  python3 -c "$$FRONTMATTER_LINT_PY"; \
-	fi
-	@echo '--- mcp_surface canonical counts ---'
-	@python3 $(SERVER_DIR)/mcp_surface.py counts
-	@echo '--- skill / tool count lints ---'
-	@python3 $(SCRIPTS_DIR)/lint-skill-counts.py
-	@python3 $(SCRIPTS_DIR)/lint-tool-counts.py
-	@echo '--- version-header lint ---'
-	@python3 $(SCRIPTS_DIR)/lint-versions.py
+validate-uncached: validate-claude-plugin-uncached
 
-check:
-	@python3 scripts/check_docs.py
-	@python3 scripts/lint-skill-counts.py
-	@python3 scripts/lint-tool-counts.py
-	@python3 scripts/lint-versions.py
-	@python3 scripts/check_workload_proof_packets.py --self-test --require-workflow-handoff
+smoke-test: validate-agent-skills
+	@echo '--- mcp_surface canonical counts ---'
+	@$(PYTHON) $(SERVER_DIR)/mcp_surface.py counts
+	@echo '--- skill / tool count lints ---'
+	@$(PYTHON) $(SCRIPTS_DIR)/lint-skill-counts.py
+	@$(PYTHON) $(SCRIPTS_DIR)/lint-tool-counts.py
+	@echo '--- version-header lint ---'
+	@$(PYTHON) $(SCRIPTS_DIR)/lint-versions.py
+	@echo '--- skill MCP argument lint ---'
+	@$(PYTHON) $(SCRIPTS_DIR)/lint-skill-mcp-args.py
+
+check: smoke-test
+	@$(PYTHON) scripts/check-version-transition.py
+	@$(PYTHON) scripts/test_release_gates.py
+	@$(PYTHON) scripts/check_docs.py
+	@$(PYTHON) scripts/check_workload_proof_packets.py --self-test --require-workflow-handoff
+	@bash scripts/check-doc-links.sh --no-network --quiet
 
 demo:
-	@printf '== profile-and-optimize: the tool and skill surface (no GPU needed) ==\n'
-	@python3 $(SERVER_DIR)/mcp_surface.py counts
-	@printf '\nRun `make help` for all targets. A real perf run needs the bundled server (server/install.sh) and GPU hardware.\n'
+	@printf '== gpu-perf-tune: 32 Agent Skills ==\n'
+	@find $(PLUGIN_DIR)/skills -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort | sed 's/^/  /'
+	@printf '\n== MCP surface ==\n'
+	@$(PYTHON) $(SERVER_DIR)/mcp_surface.py counts
+	@printf '\nRepresentative tools:\n'
+	@$(PYTHON) $(SERVER_DIR)/mcp_surface.py list | sed -n '3,14p'
+	@printf '\nRun `make mcp-surface` for all tools. A performance run needs the target workload and suitable GPU hardware.\n'
 
 mcp-surface:
-	python3 $(SERVER_DIR)/mcp_surface.py list
+	$(PYTHON) $(SERVER_DIR)/mcp_surface.py list
 
-install-into-cursor: refresh-symlinks
+install-skills:
+	@if [ -z "$(CLIENT)" ]; then \
+		echo 'usage: make install-skills CLIENT=codex|cursor'; \
+		exit 2; \
+	fi
+	bash $(SCRIPTS_DIR)/install-agent-skills.sh --client "$(CLIENT)"
 
-refresh-symlinks:
-	bash $(SCRIPTS_DIR)/install-skills-into-cursor.sh
+install-into-codex:
+	bash $(SCRIPTS_DIR)/install-agent-skills.sh --client codex
+
+install-into-cursor:
+	bash $(SCRIPTS_DIR)/install-agent-skills.sh --client cursor
+
+install-mcp:
+	@if [ -z "$(CLIENT)" ]; then \
+		echo 'usage: make install-mcp CLIENT=claude|cursor|codex|gemini|antigravity'; \
+		exit 2; \
+	fi
+	bash $(SERVER_DIR)/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client "$(CLIENT)"
+
+refresh-symlinks: install-into-cursor
 
 # One-shot Cursor/dev-clone setup. Forward --full / --with-dev via FULL=1 / DEV=1:
 #   make bootstrap FULL=1 DEV=1
@@ -112,7 +150,7 @@ check-doc-links:
 	bash $(SCRIPTS_DIR)/check-doc-links.sh
 
 workload-proof-check:
-	@python3 $(SCRIPTS_DIR)/check_workload_proof_packets.py --self-test --require-workflow-handoff
+	@$(PYTHON) $(SCRIPTS_DIR)/check_workload_proof_packets.py --self-test --require-workflow-handoff
 
 
 pytest:
@@ -120,12 +158,17 @@ pytest:
 	  echo '[FAIL] pytest not installed; run: bash $(SERVER_DIR)/install.sh --with-dev'; \
 	  exit 2; \
 	fi
-	# Sequential pytest. The 700 profile-and-optimize-native tests average ~2ms each;
-	# pytest-xdist worker-process startup makes `-n auto` ~3.5x slower than
-	# sequential for this test set (1.58s xdist vs 0.45s sequential). The
-	# xdist dep stays in the `dev` extras for ad-hoc parallel runs against
-	# larger selections via `make pytest-xdist`.
+	# Keep the default run deterministic. Use pytest-xdist for an explicit
+	# parallel run when its worker startup cost is worthwhile.
 	cd $(SERVER_DIR) && .venv/bin/python -m pytest -q
+	bash $(SERVER_DIR)/tools/shared/test_capture_cmd.sh
+
+pytest-mcp:
+	@if [ ! -x "$(SERVER_DIR)/.venv/bin/pytest" ]; then \
+		echo '[FAIL] pytest not installed. Run: bash $(SERVER_DIR)/install.sh --with-dev'; \
+		exit 2; \
+	fi
+	cd $(SERVER_DIR) && .venv/bin/python -m pytest -q tools/profile_and_optimize_mcp/tests
 
 pytest-xdist:
 	@if [ ! -x "$(SERVER_DIR)/.venv/bin/pytest" ]; then \
@@ -138,25 +181,31 @@ pytest-xdist:
 
 
 freshness:
-	@python3 $(SCRIPTS_DIR)/freshness-report.py
+	@$(PYTHON) $(SCRIPTS_DIR)/freshness-report.py
 
-# `make all` runs the four operator-facing gate checks. The four targets are
-# mutually independent (no shared mutable repo state) so `make -j4 all` runs
-# them concurrently for ~3s wall-clock instead of ~8s sequential.
-all: smoke-test smoke-mcp-runtime check-doc-links lint-skill-mcp-args pytest
-	@echo '[ok] all checks passed (smoke-test + smoke-mcp-runtime + check-doc-links + lint-skill-mcp-args + pytest)'
+# These targets are independent and can run in parallel with `make -j4 all`.
+# The static check includes offline Markdown links. Scheduled CI checks live
+# external URLs so local validation does not depend on network availability.
+all: check smoke-mcp-runtime pytest
+	@echo '[ok] all client-neutral checks passed'
 
 lint-skill-mcp-args:
-	@python3 $(SCRIPTS_DIR)/lint-skill-mcp-args.py
+	@$(PYTHON) $(SCRIPTS_DIR)/lint-skill-mcp-args.py
 
 lint-skill-counts:
-	@python3 $(SCRIPTS_DIR)/lint-skill-counts.py
+	@$(PYTHON) $(SCRIPTS_DIR)/lint-skill-counts.py
 
 lint-tool-counts:
-	@python3 $(SCRIPTS_DIR)/lint-tool-counts.py
+	@$(PYTHON) $(SCRIPTS_DIR)/lint-tool-counts.py
 
 lint-versions:
-	@python3 $(SCRIPTS_DIR)/lint-versions.py
+	@$(PYTHON) $(SCRIPTS_DIR)/lint-versions.py
+
+check-version-transition:
+	@$(PYTHON) $(SCRIPTS_DIR)/check-version-transition.py
+
+test-release-gates:
+	@$(PYTHON) $(SCRIPTS_DIR)/test_release_gates.py
 
 release:
 	@bash $(SCRIPTS_DIR)/release.sh
@@ -166,40 +215,8 @@ release-notes:
 	  echo 'usage: make release-notes VERSION=v0.X.Y'; \
 	  exit 2; \
 	fi
-	@awk '/^## \[$(VERSION:v%=%)\]/{flag=1; print; next} /^## \[/ && flag{exit} flag' CHANGELOG.md
+	@$(PYTHON) $(SCRIPTS_DIR)/extract-release-notes.py "$(VERSION)" CHANGELOG.md
 
 clean-pycache:
 	find $(SERVER_DIR) -type d -name __pycache__ -prune -exec rm -rf {} +
 	find $(SERVER_DIR) -type f -name '*.pyc' -delete
-
-# Frontmatter-lint program. Embedded here so `make smoke-test` is single-command.
-define FRONTMATTER_LINT_PY
-import yaml, glob, sys
-ok = True
-for f in sorted(glob.glob('$(PLUGIN_DIR)/skills/*/SKILL.md')):
-    body = open(f).read()
-    if not body.startswith('---\n'):
-        print(f, '-> NO FRONTMATTER'); ok = False; continue
-    end = body.find('\n---\n', 4)
-    if end < 0:
-        print(f, '-> NO FRONTMATTER END'); ok = False; continue
-    try:
-        fm = yaml.safe_load(body[4:end])
-    except Exception as e:
-        print(f, '-> YAML ERROR:', e); ok = False; continue
-    dir_name = f.split('/')[-2]
-    name = fm.get('name')
-    desc = fm.get('description', '')
-    at = fm.get('allowed-tools', [])
-    if dir_name == '_template':
-        continue
-    if name != dir_name:
-        print(f, '-> NAME MISMATCH', name, 'vs', dir_name); ok = False; continue
-    if len(desc) > 1024:
-        print(f, '-> DESC TOO LONG', len(desc)); ok = False; continue
-    if not isinstance(at, list):
-        print(f, '-> allowed-tools not list'); ok = False; continue
-print('[ok] frontmatter lint clean' if ok else '[FAIL] frontmatter lint failed')
-sys.exit(0 if ok else 1)
-endef
-export FRONTMATTER_LINT_PY

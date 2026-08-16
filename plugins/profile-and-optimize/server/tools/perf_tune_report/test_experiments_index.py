@@ -145,6 +145,25 @@ def test_write_index_emits_jsonl_and_md(tmp_path: Path):
     assert "Experiments index" in Path(out["md"]).read_text()
 
 
+def test_render_index_hides_absolute_bundle_prefix(tmp_path: Path):
+    campaign = _stage(
+        tmp_path,
+        "x-20260531T030000Z",
+        family="deepep",
+        rows=[_row()],
+    )
+    private_prefix = "/Users/operator/private/workspace"
+    with (campaign / "SOURCE.md").open("a", encoding="utf-8") as source:
+        source.write(
+            f"- evidence_bundle_path: {private_prefix}/bundle-20260531T030000Z\n"
+        )
+
+    markdown = render_index_md(build_index(tmp_path))
+
+    assert private_prefix not in markdown
+    assert "`bundle-20260531T030000Z`" in markdown
+
+
 def test_cli_experiments_index_family_filter(tmp_path: Path, capsys):
     _stage(tmp_path, "kv-20260531T040000Z", family="nvfp4-kv", rows=[_row()])
     _stage(tmp_path, "ep-20260531T050000Z", family="deepep", rows=[_row()])

@@ -1,5 +1,5 @@
 """Unit tests for the loader auto-select resolver (the single source of truth for loader choice)."""
-from loader_advisor import mtp_from_serve_args, render_md, resolve
+from tools.loader_advisor import mtp_from_serve_args, render_md, resolve
 
 
 def test_glm_tput_nomtp_clean_win_runai():

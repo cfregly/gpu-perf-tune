@@ -7,7 +7,7 @@ that loops over a matrix YAML and, for each cell sequentially:
   2. helm upgrade        (per-variant values overlay)
   3. warmup              (1-shot small sweep to trigger cudagraph capture)
   4. cell_run            (vllm_sweep or aiperf)
-  5. zymtrace anchored   (per-kernel breakdown via the v1.19.0 importer)
+  5. zymtrace anchored   (per-kernel breakdown via the importer)
   6. import_perf_bench   (bridges raw sweep into normalized.json)
   7. atlas_aggregate     (per-campaign rollup)
   8. report_render       (re-rendered PDF after each cell — so the campaign
@@ -19,9 +19,9 @@ that loops over a matrix YAML and, for each cell sequentially:
 Always-resume contract: every cell's helm upgrade is paired with a
 ``try/finally`` block that ensures the Slurm-on-K8s drain is RESUMED even on
 Ctrl-C / exception / non-zero inner-cmd exit. This is the same contract
-the bundled ``slurm_quiet_window`` MCP verb honors (v1.17.0).
+the bundled ``slurm_quiet_window`` MCP verb honors.
 
-Added in v1.20.0. Backs the ``perf_tune_report_campaign_run`` MCP verb.
+Backs the ``perf_tune_report_campaign_run`` MCP verb.
 """
 
 from tools.perf_tune_report.orchestrator.campaign_run import (

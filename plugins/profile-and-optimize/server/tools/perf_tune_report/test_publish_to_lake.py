@@ -610,7 +610,7 @@ def test_publish_reads_tpm_config_block(tmp_path: Path):
 
 
 def test_publish_default_cost_populates_without_config_block(tmp_path: Path):
-    """No cost: block -> the v1.49.0 default public-list table still populates
+    """No cost: block -> the default public-list table still populates
     $/1M for a default-rate hardware (B200), and no spurious unmatched-hardware
     warning fires for the default H100/H200 keys."""
     import pyarrow.parquet as pq
@@ -680,21 +680,53 @@ def test_s3_key_uses_hive_layout():
 # ---------------------------------------------------------------------------
 
 
+class _FakeS3Error(RuntimeError):
+    def __init__(self, code: str, status: int):
+        super().__init__(code)
+        self.response = {
+            "Error": {"Code": code},
+            "ResponseMetadata": {"HTTPStatusCode": status},
+        }
+
+
 class _FakeS3Client:
     """Minimal boto3 S3 client stub usable as ``s3_client_factory`` injection."""
 
-    def __init__(self, *, existing_keys: set[str] | None = None):
+    def __init__(
+        self,
+        *,
+        existing_keys: set[str] | None = None,
+        head_error: Exception | None = None,
+        put_error: Exception | None = None,
+    ):
         self.existing_keys = set(existing_keys or ())
+        self.head_error = head_error
+        self.put_error = put_error
         self.put_calls: list[dict[str, Any]] = []
+        self.put_attempts: list[dict[str, Any]] = []
         self.head_calls: list[str] = []
 
     def head_object(self, *, Bucket: str, Key: str) -> dict[str, Any]:
         self.head_calls.append(Key)
+        if self.head_error is not None:
+            raise self.head_error
         if Key not in self.existing_keys:
             raise FileNotFoundError(f"NoSuchKey: {Key}")
         return {"ContentLength": 0}
 
-    def put_object(self, *, Bucket: str, Key: str, Body: Any) -> dict[str, Any]:
+    def put_object(
+        self,
+        *,
+        Bucket: str,
+        Key: str,
+        Body: Any,
+        IfNoneMatch: str | None = None,
+    ) -> dict[str, Any]:
+        self.put_attempts.append(
+            {"bucket": Bucket, "key": Key, "if_none_match": IfNoneMatch}
+        )
+        if self.put_error is not None:
+            raise self.put_error
         self.put_calls.append({"bucket": Bucket, "key": Key})
         self.existing_keys.add(Key)
         return {"ETag": '"deadbeef"'}
@@ -765,6 +797,80 @@ def test_upload_writes_when_key_missing(tmp_path: Path):
     )
     assert out["skipped"] is False
     assert fake.put_calls == [{"bucket": "perf-lake", "key": "a/b/part-0.parquet"}]
+    assert fake.put_attempts[0]["if_none_match"] == "*"
+
+
+def test_upload_writes_after_explicit_s3_not_found(tmp_path: Path) -> None:
+    local = tmp_path / "f.parquet"
+    local.write_bytes(b"first write")
+    fake = _FakeS3Client(head_error=_FakeS3Error("NoSuchKey", 404))
+
+    out = upload_to_s3(
+        local,
+        bucket="perf-lake",
+        key="a/b/part-0.parquet",
+        cfg=_stub_cfg(),
+        if_exists=IF_EXISTS_FAIL,
+        s3_client_factory=lambda _cfg: fake,
+    )
+
+    assert out["skipped"] is False
+    assert fake.put_calls == [{"bucket": "perf-lake", "key": "a/b/part-0.parquet"}]
+
+
+@pytest.mark.parametrize(
+    "head_error",
+    [
+        _FakeS3Error("AccessDenied", 403),
+        _FakeS3Error("SlowDown", 503),
+        TimeoutError("request timed out"),
+    ],
+)
+def test_upload_propagates_head_errors_without_writing(
+    tmp_path: Path,
+    head_error: Exception,
+) -> None:
+    local = tmp_path / "f.parquet"
+    local.write_bytes(b"must not upload")
+    fake = _FakeS3Client(head_error=head_error)
+
+    with pytest.raises(type(head_error)):
+        upload_to_s3(
+            local,
+            bucket="perf-lake",
+            key="a/b/part-0.parquet",
+            cfg=_stub_cfg(),
+            if_exists=IF_EXISTS_FAIL,
+            s3_client_factory=lambda _cfg: fake,
+        )
+
+    assert fake.put_calls == []
+    assert fake.put_attempts == []
+
+
+def test_upload_maps_conditional_create_race_to_file_exists(tmp_path: Path) -> None:
+    local = tmp_path / "f.parquet"
+    local.write_bytes(b"must not clobber")
+    fake = _FakeS3Client(put_error=_FakeS3Error("PreconditionFailed", 412))
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        upload_to_s3(
+            local,
+            bucket="perf-lake",
+            key="a/b/part-0.parquet",
+            cfg=_stub_cfg(),
+            if_exists=IF_EXISTS_FAIL,
+            s3_client_factory=lambda _cfg: fake,
+        )
+
+    assert fake.put_calls == []
+    assert fake.put_attempts == [
+        {
+            "bucket": "perf-lake",
+            "key": "a/b/part-0.parquet",
+            "if_none_match": "*",
+        }
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -864,7 +970,7 @@ def _write_status(campaign_dir: Path, **overrides) -> None:
 
 
 def test_publish_lands_incomplete_campaign_and_records_gap(tmp_path: Path):
-    """Always-publish policy (v1.33.0): an incomplete (no-SoL) campaign LANDS by
+    """Always-publish policy: an incomplete (no-SoL) campaign LANDS by
     default (no refusal) and records the gap on the lake row; --strict refuses."""
     campaign_dir = _stage_campaign(tmp_path)
     _write_status(
@@ -986,7 +1092,7 @@ def test_campaign_row_records_partial_pages(tmp_path: Path):
 
 
 def test_campaign_row_defaults_experiment_id_to_campaign_id(tmp_path: Path):
-    """A pre-v1.34.0 SOURCE.md (no experiment_id:) still yields a non-empty join
+    """A legacy SOURCE.md (no experiment_id:) still yields a non-empty join
     key: experiment_id defaults to campaign_id, family/bundle default to ''."""
     campaign_dir = _stage_campaign(tmp_path)
     table = build_campaign_row(campaign_dir, _read_atlas_rows(campaign_dir))
@@ -1165,8 +1271,8 @@ def test_resolve_s3_config_missing_keys_exits(monkeypatch):
 def test_cli_dry_run_succeeds_without_s3(monkeypatch, tmp_path: Path, capsys):
     campaign_dir = _stage_campaign(tmp_path)
     monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(tmp_path))
-    monkeypatch.setenv("PERFLAKE_LAKE_S3_ACCESS_KEY", "envAK")
-    monkeypatch.setenv("PERFLAKE_LAKE_S3_SECRET_KEY", "envSK")
+    monkeypatch.delenv("PERFLAKE_LAKE_S3_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("PERFLAKE_LAKE_S3_SECRET_KEY", raising=False)
     # --no-strict: this fixture is intentionally SoL-incomplete (no cells/*/ SoL
     # artifacts -> sol_v1 empty); publish defaults strict now, so opt out to
     # exercise the first-class intentional-gap publish path.
@@ -1197,7 +1303,7 @@ def test_cli_dry_run_succeeds_without_s3(monkeypatch, tmp_path: Path, capsys):
     # identity -> 1 group; publish emits the peak point x 3 bases = 3 rows.
     assert envelope["tables"]["tpm_v1"]["row_count"] == 3
     assert envelope["tables"]["tpm_v1"]["s3_key"].startswith(f"{S3_PREFIX}/tpm_v1/dt=")
-    # cost_v1: 1 group x peak = 1 row ($/1M now non-null via the v1.49.0 default
+    # cost_v1: 1 group x peak = 1 row ($/1M now non-null via the default
     # public-list rate for B200; tokens-per-watt still null without DCGM power).
     assert envelope["tables"]["cost_v1"]["row_count"] == 1
     assert envelope["tables"]["cost_v1"]["s3_key"].startswith(f"{S3_PREFIX}/cost_v1/dt=")
@@ -1227,14 +1333,27 @@ def test_publish_appends_lake_provenance_to_evidence_bundle(monkeypatch, tmp_pat
 
     monkeypatch.setattr(lw, "_make_s3_client", lambda cfg: _FakeS3Client())
     # --no-strict: SoL-incomplete fixture (intentional-gap publish path).
-    rc = main(["publish_to_lake", "--campaign", campaign_dir.name, "--no-strict", "--json"])
+    rc = main([
+        "publish_to_lake",
+        "--campaign", campaign_dir.name,
+        "--no-strict",
+        "--i-understand-this-publishes-externally",
+        "--json",
+    ])
     assert rc == 0
     updated = (bundle / "SOURCE.md").read_text()
     assert f"campaign={campaign_dir.name}" in updated
     assert "atlas_v1: s3://perf-lake/" in updated
     assert "campaign_v1: s3://perf-lake/" in updated
     # Idempotent: a second publish does not duplicate the block.
-    rc2 = main(["publish_to_lake", "--campaign", campaign_dir.name, "--if-exists", "overwrite", "--no-strict", "--json"])
+    rc2 = main([
+        "publish_to_lake",
+        "--campaign", campaign_dir.name,
+        "--if-exists", "overwrite",
+        "--no-strict",
+        "--i-understand-this-publishes-externally",
+        "--json",
+    ])
     assert rc2 == 0
     assert (bundle / "SOURCE.md").read_text().count(
         "## Perf-lake publish (auto-appended") == 1
@@ -1250,6 +1369,14 @@ def test_cli_strict_is_default_refuses_incomplete(monkeypatch, tmp_path: Path, c
     # No --no-strict -> strict is the default now -> refuse.
     rc = main(["publish_to_lake", "--campaign", campaign_dir.name, "--dry-run", "--json"])
     assert rc == 2
+
+
+def test_cli_real_publish_requires_current_command_ack(monkeypatch, tmp_path: Path, capsys):
+    campaign_dir = _stage_campaign(tmp_path)
+    monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(tmp_path))
+    rc = main(["publish_to_lake", "--campaign", campaign_dir.name, "--json"])
+    assert rc == 2
+    assert "--i-understand-this-publishes-externally" in capsys.readouterr().err
 
 
 def test_cli_missing_atlas_fails_with_clear_message(monkeypatch, tmp_path: Path, capsys):

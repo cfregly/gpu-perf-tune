@@ -1,25 +1,20 @@
 Status: Active
-Audience: operators who need direct commands now that the Makefile is intentionally small.
+Audience: operators who need direct shell commands.
 
-# Operator Commands
+# Operator commands
 
-The Makefile keeps a deliberately small target surface. Run `make help` at the
-repo root for the current list. Use the direct commands below for operator
-workflows that are not Make targets.
+Run `make help` at the repository root for the supported project commands. The direct commands below expose the eight parser-backed libraries.
 
-| Task | Direct command |
+| Task | Command |
 | --- | --- |
-| Repo audits | `python3 tools/shared/audit/audit_repo.py` |
-| Pick a cohort | `mlperf-selector pick --bench <id> --nodes <N> --json` |
-| Explain a pick | `mlperf-selector explain --cohort <pick-artifact> --json` |
-| Check the 256N+ pre-launch gate | `mlperf-selector gate-256n --reservation <name> --json` |
-| Summarize fabric/NCCL evidence | `mlperf-selector check-fabric --cohort <path> --json` |
-| Look up structured drain reasons | `mlperf-selector node-lookup --comment-prefix '<prefix>' --json` |
+| List the MCP surface | `python3 plugins/profile-and-optimize/server/mcp_surface.py list` |
+| Inspect tuning commands | `python3 -m ai_tuning --help` |
+| Compare profiler captures | `python3 -m profile profile-diff --help` |
+| Record or compare a baseline | `python3 -m perf_baseline --help` |
+| Create an evidence bundle | `python3 -m evidence --help` |
+| Triage or guard Slurm work | `python3 -m slurm --help` |
+| Record and render findings | `python3 -m findings --help` |
+| Build an inference report | `perftunereport --help` |
+| Check a known configuration | `python3 -m known_good_config --help` |
 
-Every contract-bearing library is also invokable as `python -m <library>`
-(for example `python -m contention snapshot --json` or
-`python -m evidence --help`). The full verb matrix, safety classes, and
-required/optional flags live in
-[`docs/cli-contract.md`](/plugins/profile-and-optimize/server/docs/cli-contract.md),
-the MCP server derives its tool surface from the same parsers, so a verb
-documented there is callable both from the shell and as an MCP tool.
+Run these commands from `plugins/profile-and-optimize/server` after installing the development environment. The full verb matrix, safety classes, and acknowledgement flags live in [`cli-contract.md`](cli-contract.md).

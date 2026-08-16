@@ -9,7 +9,7 @@
 #     writing partial artifacts.
 #   - Wrapped command stdout/stderr land in the right files.
 #
-# Per CLAUDE.md "Fail Fast, No Silent Fallbacks", the test file fails
+# Per AGENTS.md safety guidance, the test file fails
 # loudly on any unmet assertion.
 
 set -euo pipefail
@@ -17,8 +17,8 @@ set -euo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 HELPER="${HERE}/capture_cmd.sh"
 
-if [[ ! -x "${HELPER}" ]]; then
-  echo "FATAL: helper missing or not executable: ${HELPER}" >&2
+if [[ ! -f "${HELPER}" ]]; then
+  echo "FATAL: helper missing: ${HELPER}" >&2
   exit 2
 fi
 

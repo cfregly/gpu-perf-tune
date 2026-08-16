@@ -1,6 +1,6 @@
 """Tests for the verdict-rigor publish gate.
 
-Enforces CLAUDE.md "Verdict rigor: DRAFT vs VERDICT": a campaign published with
+Enforces AGENTS.md "Verdict rigor: DRAFT vs VERDICT": a campaign published with
 ``verdict.json`` ``tier=verdict`` must carry the controlled+metric+baseline
 provenance, else the publish gate fails loud (CampaignIncompleteError). A
 ``draft`` tier (or absent verdict.json) is ungated.
@@ -85,7 +85,7 @@ def test_publish_draft_is_ungated(tmp_path: Path):
 
 
 def test_publish_verdict_incomplete_lands_as_draft(tmp_path: Path):
-    """Always-publish policy (v1.33.0): an unsupported verdict claim is
+    """Always-publish policy: an unsupported verdict claim is
     auto-DOWNGRADED to draft + lands (not refused). --strict still raises."""
     cd = _stage_campaign(tmp_path)
     _write_verdict(cd, tier="verdict", trials=1, same_node=False, baseline_named=False)

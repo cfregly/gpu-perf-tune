@@ -1,166 +1,197 @@
-# Installing profile_and_optimize MCP
+# Install `profile_and_optimize` MCP
 
-From the repo root:
+The bundled server uses MCP over standard input and output. Claude Code and
+Codex are the first-class client paths. Cursor, Gemini CLI, and Google
+Antigravity configuration helpers are best effort. Any local MCP client that
+can launch a command with environment variables can use the manual stdio form.
 
-```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client cursor
-```
+## Prerequisites
 
-The installer creates `~/.local/share/profile-and-optimize-mcp-venv`, installs this
-package editable, and merges a `profile_and_optimize` server block into the chosen
-client config. Use `--client all` to configure every supported local
-client.
+- Python 3.11 or newer with `venv` support.
+- Bash and network access for the Python package install.
+- A clone of this repository.
+- `rg` for the two read-only MCP search tools.
+- GPU, cluster, profiler, and credential access only for workflows that need
+  them. The local install and MCP handshake do not need a GPU.
 
-## Cursor
+## Install from the repository root
 
-Config path: `~/.cursor/mcp.json`.
-
-```json
-{
-  "mcpServers": {
-    "profile_and_optimize": {
-      "command": "~/.local/share/profile-and-optimize-mcp-venv/bin/python",
-      "args": ["-m", "profile_and_optimize_mcp", "serve"],
-      "env": {
-        "PROFILE_AND_OPTIMIZE_REPO_ROOT": "/path/to/profile-and-optimize",
-        "PROFILE_AND_OPTIMIZE_LOGIN_HOST": "${USER}@192.0.2.10"
-      }
-    }
-  }
-}
-```
-
-Install/update:
+Run one command from the root of this repository:
 
 ```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client cursor
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client codex
 ```
 
-Restart Cursor after saving. `PROFILE_AND_OPTIMIZE_REPO_ROOT` is optional when
-Cursor starts inside the repo, but setting it makes the server
-independent of the IDE working directory.
+The installer creates
+`~/.local/share/profile-and-optimize-mcp-venv`, installs the complete bundled
+server, and registers one `profile_and_optimize` MCP entry. Select another
+first-class client with `--client claude` or `--client codex`. The installer
+also accepts the best-effort `cursor`, `gemini`, and `antigravity` helpers.
+Pass `--client` more than once or use `--client all`.
 
-The installed package also provides `profile-and-optimize-mcp serve`. The installer
-uses the explicit venv Python above so Cursor does not accidentally start
-the server with a Python that lacks the editable `profile_and_optimize_mcp` package.
+Claude and Codex use their official MCP commands for a new registration when
+the matching CLI is available. A missing CLI, failed CLI command, or existing
+registration uses an atomic config-file update. Cursor, Gemini, and Antigravity
+use the atomic updater directly.
+
+Repeat installs replace the existing `profile_and_optimize` entry and preserve
+unrelated client settings.
+
+## Preview without changing anything
+
+```bash
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client all \
+  --dry-run
+```
+
+Dry run creates no venv, installs no package, runs no client registration
+command, and writes no config. It prints only the proposed server entry or
+official CLI command. It never prints an existing client config.
+
+Use `--registration file` to preview the config-file fallback even when Claude
+or Codex is installed:
+
+```bash
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client codex \
+  --registration file \
+  --dry-run
+```
 
 ## Claude Code
 
-Preferred CLI install:
+Install and register through the repository installer:
 
 ```bash
-claude mcp add --transport stdio \
-  --env PROFILE_AND_OPTIMIZE_REPO_ROOT="$PWD" \
-  --env PROFILE_AND_OPTIMIZE_LOGIN_HOST="${PROFILE_AND_OPTIMIZE_LOGIN_HOST:-$USER@192.0.2.10}" \
-  profile_and_optimize -- "$HOME/.local/share/profile-and-optimize-mcp-venv/bin/python" -m profile_and_optimize_mcp serve
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client claude
+claude mcp get profile_and_optimize
 ```
 
-Equivalent JSON lives in `~/.claude/settings.json` under
-`mcpServers.profile_and_optimize`. The repo installer can merge that block:
+To register an already installed venv yourself with the official CLI:
 
 ```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client claude
+SERVER_ROOT="$(pwd)/plugins/profile-and-optimize/server"
+MCP_PY="$HOME/.local/share/profile-and-optimize-mcp-venv/bin/python"
+
+claude mcp add --scope user --transport stdio \
+  profile_and_optimize \
+  --env PROFILE_AND_OPTIMIZE_REPO_ROOT="$SERVER_ROOT" \
+  -- \
+  "$MCP_PY" -m profile_and_optimize_mcp serve
 ```
 
-Verify with:
+The file fallback updates `~/.claude.json`.
+
+## Codex
 
 ```bash
-claude mcp list
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client codex
+codex mcp get profile_and_optimize
 ```
 
-## Codex CLI
-
-Config path: `~/.codex/config.toml`.
-
-```toml
-[mcp_servers.profile_and_optimize]
-command = "~/.local/share/profile-and-optimize-mcp-venv/bin/python"
-args = ["-m", "profile_and_optimize_mcp", "serve"]
-enabled = true
-startup_timeout_sec = 30
-tool_timeout_sec = 300
-
-[mcp_servers.profile_and_optimize.env]
-PROFILE_AND_OPTIMIZE_REPO_ROOT = "/path/to/profile-and-optimize"
-PROFILE_AND_OPTIMIZE_LOGIN_HOST = "<user>@192.0.2.10"
-```
-
-Install/update:
+To register an already installed venv yourself with the official CLI:
 
 ```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client codex
+SERVER_ROOT="$(pwd)/plugins/profile-and-optimize/server"
+MCP_PY="$HOME/.local/share/profile-and-optimize-mcp-venv/bin/python"
+
+codex mcp add \
+  --env PROFILE_AND_OPTIMIZE_REPO_ROOT="$SERVER_ROOT" \
+  profile_and_optimize -- \
+  "$MCP_PY" -m profile_and_optimize_mcp serve
 ```
 
-## Gemini CLI
+The file fallback updates `~/.codex/config.toml`. It removes every prior
+`profile_and_optimize` table before adding one replacement, so repeat installs
+do not create duplicate TOML tables. Codex CLI, the IDE extension, and the
+desktop app share this configuration.
 
-Config path: `~/.gemini/settings.json`.
-
-```json
-{
-  "mcpServers": {
-    "profile_and_optimize": {
-      "command": "~/.local/share/profile-and-optimize-mcp-venv/bin/python",
-      "args": ["-m", "profile_and_optimize_mcp", "serve"],
-      "env": {
-        "PROFILE_AND_OPTIMIZE_REPO_ROOT": "/path/to/profile-and-optimize",
-        "PROFILE_AND_OPTIMIZE_LOGIN_HOST": "<user>@192.0.2.10"
-      }
-    }
-  }
-}
-```
-
-Install/update:
+Install the Agent Skills separately:
 
 ```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client gemini
+make install-skills CLIENT=codex
 ```
 
-## Google Antigravity
-
-Open Antigravity, use `Agent window -> Manage MCP Servers -> View raw
-config`, and confirm the raw config path. By default the installer
-writes `~/.config/antigravity/mcp_config.json`. Pass
-`--antigravity-config PATH` to `configure_clients.py` if your install
-uses a different path.
-
-```json
-{
-  "mcpServers": {
-    "profile_and_optimize": {
-      "command": "~/.local/share/profile-and-optimize-mcp-venv/bin/python",
-      "args": ["-m", "profile_and_optimize_mcp", "serve"],
-      "env": {
-        "PROFILE_AND_OPTIMIZE_REPO_ROOT": "/path/to/profile-and-optimize",
-        "PROFILE_AND_OPTIMIZE_LOGIN_HOST": "<user>@192.0.2.10"
-      }
-    }
-  }
-}
-```
-
-Install/update:
+## Cursor, best effort
 
 ```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client antigravity
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client cursor
 ```
 
-Then refresh MCP servers in the Antigravity UI.
+This updates `~/.cursor/mcp.json` with an absolute venv Python path. Restart
+Cursor or reload its MCP servers. The helper is tested for safe config writes,
+but Cursor behavior is not a release gate.
 
-## All local clients
+## Gemini CLI, best effort
 
 ```bash
-tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh --client all
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client gemini
 ```
 
-Use `--dry-run` to print merged configs without writing them.
+The installer updates `~/.gemini/settings.json` with an absolute executable
+path. Restart Gemini CLI after the update.
+
+## Google Antigravity, best effort
+
+```bash
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client antigravity
+```
+
+The default global config path is `~/.gemini/config/mcp_config.json`. A
+workspace can instead use `.agents/mcp_config.json`. Override the path when
+you want workspace-scoped configuration:
+
+```bash
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client antigravity \
+  --antigravity-config /absolute/path/to/workspace/.agents/mcp_config.json
+```
+
+## Other local MCP clients
+
+Install the server and write a JSON entry for another client that uses the
+Cursor config shape:
+
+```bash
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client cursor \
+  --cursor-config /absolute/path/to/client-mcp.json
+```
+
+The generated entry launches an absolute Python path with these arguments:
+
+```text
+-m profile_and_optimize_mcp serve
+```
+
+It also sets `PROFILE_AND_OPTIMIZE_REPO_ROOT` to the absolute bundled server
+directory.
+
+## Optional install sets
+
+Add `--full` for report-renderer and leaderboard dependencies. Add
+`--with-dev` for pytest, Ruff, Pyright, pre-commit, and pytest-xdist.
+
+```bash
+bash plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/scripts/install_profile_and_optimize_mcp.sh \
+  --client codex \
+  --full \
+  --with-dev
+```
 
 ## Troubleshooting
 
-- A `cannot locate ... repo root` error: set
-  `PROFILE_AND_OPTIMIZE_REPO_ROOT` to the absolute repo path.
-- `ssh: Permission denied`: load the operator SSH key or set
-  `PROFILE_AND_OPTIMIZE_LOGIN_HOST` to a reachable login host.
-- A mutating tool says `i_understand_this_* is required`: retry only
-  after reading the relevant runbook and pass the named ack field with
-  value `true`.
+- `bundled server root is incomplete`: run the installer from a clone of this
+  repository, or pass the absolute `plugins/profile-and-optimize/server` path
+  with `--repo-root`.
+- `i_understand_this_* is required`: read the named tool's safety class, then
+  retry only when the requested action is intended.
+- A client still shows the old command: restart the client or reload its MCP
+  servers after installation.

@@ -1,110 +1,197 @@
 # gpu-perf-tune
 
-[![ci](https://github.com/cfregly/gpu-perf-tune/actions/workflows/ci.yml/badge.svg)](https://github.com/cfregly/gpu-perf-tune/actions/workflows/ci.yml)
+[![ci](https://github.com/cfregly/gpu-perf-tune/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/cfregly/gpu-perf-tune/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GPU inference profiling and optimization skills backed by a bundled MCP server: shipped as the `profile-and-optimize` plugin. 32 task-oriented workflows covering back-of-the-envelope performance triage, benchmark sweeps, kernel-level profiling (nsys / ncu / DCGM / zymtrace), speed-of-light roofline analysis, quantization and speculative-decode tuning, and a multi-page PDF perf-tune report renderer. Each skill is a `SKILL.md` following the open [Agent Skills standard](https://agentskills.io/).
+GPU performance engineering for agents and MCP clients, with an
+inference-focused skills package and reusable cluster utilities. The project
+ships 32 task-oriented [Agent Skills](https://agentskills.io/), a bundled MCP
+server, safety guards, workload proof schemas, and local validation tools.
+Together they cover first estimates, benchmark sweeps, kernel profiling,
+speed-of-light analysis, optimization, and evidence-backed reports.
 
-Born from real GPU-fleet performance engineering work, genericized so any team running GPU inference can use it. This is the cost-of-intelligence work: make inference faster and cheaper, measured not asserted.
+The work comes from GPU fleet performance practice. Every result stays a
+candidate until the workload, baseline, hardware, precision, parallelism, and
+engine version are recorded and the result survives a skeptical check.
 
-- **Problem it solves:** GPU inference cost and latency are set by hardware, precision, parallelism, and engine version, and most teams argue about those instead of measuring them.
-- **See the surface in under a minute:** `make demo` prints the tool and skill surface, no GPU needed. A real perf run needs the bundled server and hardware.
-- **Production lesson it encodes:** measure against speed-of-light, label every result DRAFT until it is variance-controlled and profiled, and record the hardware, precision, and engine version next to every number.
-- **Workload proof contract:** [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md) defines the GPU/inference packet shape for neocloud buyers and workflow handoffs. `make workload-proof-check` validates every checked-in `workload-proof-packet.json` for completeness and local handoff metadata.
+## Names and boundaries
 
-## Value bar
+| Name | Meaning |
+| --- | --- |
+| `gpu-perf-tune` | The project and repository. It owns the skills, MCP server, guards, schemas, examples, and validation. |
+| `profile-and-optimize` | The skills package under `plugins/profile-and-optimize/`. Claude Code consumes it as a plugin. Codex installs the same skills from a clone. |
+| `profile_and_optimize` | The configured MCP server key. It is usable without the Claude Code plugin. |
+| `profile_and_optimize_mcp` | The Python module that serves the MCP tools and resources. |
 
-Every benchmark result, optimization claim, and generated report starts as a candidate. It becomes
-shippable only when it is adversarially-confirmed to add value: the workload is named, the baseline is
-fair, a skeptic has tried to break the finding, and the receipt maps to lower cost, faster runtime,
-higher throughput, better reliability, or a clearer operator action.
+Claude Code is one supported client, not the project boundary. Client support
+depends on the surface being installed.
 
-## Root concept
+## Client support
 
-`gpu-perf-tune` is the standalone GPU inference profiling and
-optimization plugin. It ships the skills, bundled MCP server, workload proof
-schema, synthetic fixture, and validation gates in this repository. A fresh
-clone has the repo-owned code and docs needed to inspect the contract, run the
-local checks, and install the plugin.
+| Client | Agent Skills | MCP server | Safety guards |
+| --- | --- | --- | --- |
+| Claude Code | First-class marketplace plugin | Plugin or repo installer | Provenance hook is installed. Enforcement is opt-in |
+| Codex | First-class repo installer into `~/.agents/skills` | Repo installer | No client hook adapter. MCP acknowledgement gates still apply |
+| Cursor, Gemini CLI, and Antigravity | Best-effort helpers | Best-effort repo installer | No release-tested adapter |
+| Other stdio MCP clients | Client-owned discovery | Documented stdio command | No packaged adapter |
 
-## What this is
+The `SKILL.md` sources follow the open Agent Skills standard. This repository
+maintains and tests the Claude Code and Codex paths. The MCP protocol remains
+client-neutral. Configuration helpers for other clients are available, but
+they are not part of the release bar.
 
-1. **Estimate, benchmark & sweep**: `inference-performance-hints` back-of-the-envelope triage, `inference-perf-bench` load sweeps, `inference-tune-sweep` engine-knob exploration, `inference-model-eval` quality gates, `perf-baseline-record` / `perf-baseline-diff` regression tracking.
-2. **Profile**: `inference-workload-profile`, `inference-kernel-profile` (nsys), `inference-kernel-ncu-profile` (per-kernel roofline), `inference-dcgm-correlate`, `analyze-zymtrace-workload`, `inference-graph-diff` (compile-graph diffs), `mirage-graph-coverage`.
-3. **Optimize**: `inference-model-optimize` (cross-engine bring-up orchestrator), `inference-quantize-calibrate`, `inference-spec-decode-train` / `-tune` / `-service`, `inference-decode-step-budget`, `inference-capacity-sizing`, `inference-known-good-config`.
-4. **Report & track**: `inference-perf-tune-report` (multi-page PDF renderer), `inference-perf-synthesize`, `inference-fleet-leaderboard`, `inference-value-ledger`, `evidence-bundle-init` provenance bundles, `prometheus-anchored-query` / `zymtrace-anchored-query` anchored observability queries.
+## What it covers
 
-The 32 skills and the bundled MCP server (`plugins/profile-and-optimize/server/`) are how AI coding assistants drive the cost work, loading a skill when your prompt matches its triggers and calling the MCP tools to estimate, sweep, profile, and report. The documented bash-tool path is the fallback wherever an external observability server is missing.
+1. **Estimate, benchmark, and sweep:** `inference-performance-hints` for rough
+   performance bounds, `inference-perf-bench` for load sweeps,
+   `inference-tune-sweep` for engine knobs, `inference-model-eval` for quality
+   gates, and `perf-baseline-record` with `perf-baseline-diff` for regressions.
+2. **Profile:** `inference-workload-profile`, `inference-kernel-profile` for
+   nsys, `inference-kernel-ncu-profile` for per-kernel roofline work,
+   `inference-dcgm-correlate`, `analyze-zymtrace-workload`,
+   `inference-graph-diff`, and `mirage-graph-coverage`.
+3. **Optimize:** `inference-model-optimize`, `inference-quantize-calibrate`,
+   the speculative decode train, tune, and service skills,
+   `inference-decode-step-budget`, `inference-capacity-sizing`, and
+   `inference-known-good-config`.
+4. **Report and track:** `inference-perf-tune-report`,
+   `inference-perf-synthesize`, `inference-fleet-leaderboard`,
+   `inference-value-ledger`, `evidence-bundle-init`, and the anchored
+   Prometheus and zymtrace query skills.
+
+The documented command-line path remains available when an external
+observability MCP server is absent.
 
 ## Quickstart
 
+### Inspect the project without a GPU
+
 ```bash
-# 1. Add the marketplace.
+git clone https://github.com/cfregly/gpu-perf-tune.git
+cd gpu-perf-tune
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements/check.txt
+make demo
+make check
+make workload-proof-check
+```
+
+`make demo` prints the skill and MCP tool surface. A real performance run needs
+the bundled server, the target workload, and suitable GPU hardware.
+
+### Codex: skills and MCP
+
+From a clone of this repository:
+
+```bash
+make install-skills CLIENT=codex
+make install-mcp CLIENT=codex
+```
+
+Restart Codex after installation. Codex discovers the linked skills under
+`~/.agents/skills`. Use `/skills`, invoke a skill with `$skill-name`, or
+describe the task and let Codex select one. The MCP configuration is shared by
+Codex CLI, the IDE extension, and the desktop app. See the official Codex
+[Skills](https://developers.openai.com/codex/skills/) and
+[MCP](https://developers.openai.com/codex/mcp/) references for the client-side
+contracts.
+
+### Claude Code: skills, MCP, and optional provenance enforcement
+
+```bash
 claude plugin marketplace add cfregly/gpu-perf-tune
+claude plugin install --scope user \
+  profile-and-optimize@profile-and-optimize-plugins
 
-# 2. Install the plugin.
-claude plugin install --scope user profile-and-optimize@profile-and-optimize-plugins
-
-# 3. Install the bundled MCP server (one-time; creates a venv in the plugin cache).
-#    Add --full for the report-renderer deps (matplotlib / pandas / pyarrow).
+# Install the bundled MCP server inside the current plugin cache entry.
+# Add --full when you need the PDF report dependencies.
 bash "$(ls -dt ~/.claude/plugins/cache/profile-and-optimize-plugins/profile-and-optimize/*/server/install.sh | head -1)"
 ```
 
-Restart, then invoke any skill (e.g. `/inference-perf-bench`) or just describe the task: Claude loads a skill automatically when your prompt matches its triggers.
+Restart Claude Code. Invoke a skill such as `/inference-perf-bench`, or describe
+the task and let Claude Code select a matching skill. The plugin installs its
+provenance hook, but the hook remains inactive until
+`PROVENANCE_COMMIT_GATE=ask` or `PROVENANCE_COMMIT_GATE=deny` is present in the
+Claude hook environment. Install `jq` on `PATH` before enabling either mode.
 
-## Verify it
+### Other clients: best-effort helpers
+
+The repository keeps configuration helpers for Cursor, Gemini CLI, and Google
+Antigravity. They are useful starting points, but changes to those clients do
+not block a release. The full command list and generic stdio form live in the
+[MCP installation reference](plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/INSTALL.md).
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install pyyaml
-make demo    # prints the skill and MCP tool surface, no GPU needed
-make check   # doc, skill-count, tool-count, and version gates
-make workload-proof-check
+make install-skills CLIENT=cursor
+make install-mcp CLIENT=cursor
 ```
+
+## Value bar
+
+Every benchmark result, optimization claim, and generated report starts as a
+candidate. It must be adversarially-confirmed to add value before it ships. The
+workload is named, the baseline is fair, a skeptic has tried to break the
+finding, and the receipt maps to lower cost, faster runtime, higher throughput,
+better reliability, or a clearer operator action.
+
+## Workload proof contract
+
+[`docs/workload-proof-packet.md`](docs/workload-proof-packet.md) defines the
+GPU inference packet shape for neocloud buyers and workflow handoffs.
+`make workload-proof-check` validates checked-in packets for completeness and
+local handoff metadata.
 
 ## Repository layout
 
 | Path | What it is |
 | --- | --- |
-| `plugins/profile-and-optimize/skills/` | The 32 skills (one dir per skill, `SKILL.md` + assets) |
-| `plugins/profile-and-optimize/server/` | Bundled MCP server: tool libraries, contract docs, report renderer |
-| `plugins/profile-and-optimize/hooks/` | Runtime-agnostic safety gates (Claude Code + Cursor wiring) |
-| `configs/sol-ceilings.yaml` | Speed-of-light hardware ceilings (datasheet-sourced) used by roofline pages |
-| `campaigns/` | Default output root for perf-tune report campaigns |
-| `examples/workload-proof-packet/` | Synthetic packet fixture that exercises the neocloud workload proof and workflow handoff gates |
-| `schemas/workload-proof-packet-v1.json` | Public JSON shape for buyer-facing workload proof packets |
-| `scripts/` | Capture-hygiene helpers (`nsys-validate-capture.sh`, `zymtrace-ingest-wait.sh`) |
-| `docs/METHODOLOGY.md` | The measurement-rigor methodology the skills enforce |
-| `plugins/profile-and-optimize/server/docs/performance-hints.md` | Dean-Ghemawat performance guidance adapted to GPU inference and exposed through the MCP |
+| `plugins/profile-and-optimize/skills/` | The Agent Skills, one directory per installed skill |
+| `plugins/profile-and-optimize/templates/skill/` | Starting point for a new skill |
+| `plugins/profile-and-optimize/server/` | MCP server, tool libraries, contract docs, and report renderer |
+| `plugins/profile-and-optimize/hooks/` | Runtime-neutral provenance guard plus the Claude Code adapter |
+| `configs/sol-ceilings.yaml` | Datasheet-sourced hardware ceilings used by roofline reports |
+| `examples/workload-proof-packet/` | Synthetic fixture for packet and handoff validation |
+| `schemas/workload-proof-packet-v1.json` | Public JSON Schema for workload proof packets |
+| `docs/METHODOLOGY.md` | Measurement and reporting rules shared by the skills |
 | `mcp-descriptors/` | Offline MCP tool-schema snapshots used by skill lint |
 
 ## Methodology
 
-The skills share a common rigor discipline: DRAFT-vs-VERDICT result labeling, full-context perf reporting (hardware, precision, parallelism, engine version alongside every number), validation of every generated asset, and explicit next-lever framing. See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). The [`performance-hints adaptation`](plugins/profile-and-optimize/server/docs/performance-hints.md) adds estimate-then-measure triage, with a [synthetic worked example](examples/performance-hints/README.md). For neocloud buyer proof and workflow handoffs, use the workload packet contract in [`docs/workload-proof-packet.md`](docs/workload-proof-packet.md).
+The skills enforce DRAFT and VERDICT labels, full performance context, asset
+validation, and a clear next action. Read
+[`docs/METHODOLOGY.md`](docs/METHODOLOGY.md) for the shared rules. The
+[`performance hints adaptation`](plugins/profile-and-optimize/server/docs/performance-hints.md)
+adds estimate-first triage, with a
+[synthetic example](examples/performance-hints/README.md).
 
 ## Optional integrations
 
 A workflow system can consume `workflow_handoff` blocks when GPU workload
-evidence needs to attach to a broader customer workflow record. ProofPlane is
-one possible consumer. That integration does not change this repo's local
-contract, validation gates, or runtime dependencies.
+evidence needs to attach to a broader customer record. ProofPlane is one
+possible consumer. It does not change this project's local contract,
+validation gates, or runtime dependencies.
 
 ## Development
 
-- Add a skill: copy [`plugins/profile-and-optimize/skills/_template/SKILL.md`](plugins/profile-and-optimize/skills/_template/SKILL.md).
-- Add an MCP verb: add a CLI library under [`plugins/profile-and-optimize/server/`](plugins/profile-and-optimize/server) and update `mcp_surface.py` `LIBRARIES`.
-- Common commands: `make help`.
+- Add a skill from
+  [`plugins/profile-and-optimize/templates/skill/SKILL.md`](plugins/profile-and-optimize/templates/skill/SKILL.md).
+- Add an MCP verb under
+  [`plugins/profile-and-optimize/server/`](plugins/profile-and-optimize/server)
+  and update `mcp_surface.py`.
+- Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request.
+- Run `make help` for the local command reference.
 
 ## Limitations
 
-AI assistants operate the skills to measure and report. They do not tune the cluster
-for you. Every number depends on hardware, precision, and engine version, which
-the skills record next to the result. The speed-of-light ceilings are datasheet
-values, an upper bound rather than a promise. Within the plugin, the bundled MCP
-server backs the tool surface and the documented bash-tool path is the fallback
-wherever an external observability server is missing.
+The project helps agents measure and report. It does not tune a cluster by
+itself. Every number depends on the workload and runtime context. Datasheet
+speed-of-light ceilings are upper bounds, not promises. External systems such
+as Grafana, Prometheus, GitHub, and zymtrace still need operator credentials and
+their own client configuration.
 
 ## License
 
-[MIT](LICENSE)
+Project-authored material is [MIT licensed](LICENSE). Third-party adaptations
+retain their own terms and attribution in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`LICENSES/`](LICENSES/).

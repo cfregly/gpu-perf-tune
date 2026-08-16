@@ -2,7 +2,6 @@
 ``summary.json`` (the GLM-5.1 LWS-baseline-vs-champions layout).
 
 Sibling to ``inference_perf_bench.py`` and ``inference_drive_load.py``.
-Added in profile-and-optimize v1.23.1.
 
 Source format
 -------------
@@ -203,7 +202,7 @@ def import_lws_summary_bundle(
     stamp = captured_at or overrides.get("captured_at", "")
     # Full-context descriptor (2026-06-09): apply the importer overrides so lws-summary
     # cells carry the same descriptor the perf-bench path does (the methodology_problems
-    # --strict gate, CLAUDE.md 'Every performance number carries its full context').
+    # --strict gate, AGENTS.md 'Benchmark methodology hygiene').
     cache_mode = overrides.get("cache_mode", "unknown")
     dataset = overrides.get("dataset", "unknown")
     cudagraph_mode = overrides.get("cudagraph_mode", "unknown")

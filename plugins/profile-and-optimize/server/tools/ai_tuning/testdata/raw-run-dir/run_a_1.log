@@ -1,0 +1,4 @@
+:::MLLOG {"key":"submission_benchmark","value":"llama31_8b","time_ms":0}
+:::MLLOG {"key":"run_start","value":null,"time_ms":1000}
+:::MLLOG {"key":"eval_accuracy","value":3.2,"time_ms":2000}
+:::MLLOG {"key":"run_stop","value":null,"metadata":{"status":"success"},"time_ms":61000}

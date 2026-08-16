@@ -4,8 +4,8 @@ Re-exports `CONTRACT`, `build_parser`, `main`, and `parse_args` from the
 canonical implementation at
 [`tools/perf_tune_report/perf_tune_report_cli.py`](../tools/perf_tune_report/perf_tune_report_cli.py).
 
-Added in profile-and-optimize v1.10.0. Backs the
-[`inference-perf-tune-report`](../skills/inference-perf-tune-report/SKILL.md) skill.
+Backs the
+[`inference-perf-tune-report`](../../skills/inference-perf-tune-report/SKILL.md) skill.
 """
 
 from __future__ import annotations

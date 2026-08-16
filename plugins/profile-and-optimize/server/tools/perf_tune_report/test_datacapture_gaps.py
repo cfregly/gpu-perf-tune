@@ -1,9 +1,9 @@
-"""Tests for the ledger-to-atlas data-capture gap fields (added 2026-06-07).
+"""Tests for first-class atlas capture fields.
 
-Covers the 5 gaps -- routing descriptor, spec-decode acceptance length, KV-cache
-token capacity, DeepEP/EP mode, and per-row DCGM utilization -- verifying they
-default safely, round-trip through write_jsonl/read_jsonl, and surface as first-class
-atlas_v1 columns. See perf-tune-report/UPSTREAM-REQUEST-atlas-ledger-datacapture-gaps.md.
+Covers the routing descriptor, spec-decode acceptance length, KV-cache token
+capacity, DeepEP/EP mode, and per-row DCGM utilization. The tests verify that
+these fields default safely, round-trip through write_jsonl/read_jsonl, and
+surface as first-class atlas_v1 columns.
 """
 
 from __future__ import annotations

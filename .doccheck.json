@@ -1,6 +1,21 @@
 {
   "owner": "cfregly",
-  "repo": "claude-gpu-perf-tune",
-  "old_names": ["claude-code-profile-and-optimize", "claude-perf-tune"],
-  "docs": ["README.md"]
+  "repo": "gpu-perf-tune",
+  "old_names": [
+    "claude-gpu-perf-tune",
+    "claude-code-profile-and-optimize",
+    "claude-perf-tune"
+  ],
+  "dash_exclude": [
+    "LICENSES/**"
+  ],
+  "docs": [
+    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "schemas/workload-proof-packet-v1.json",
+    "plugins/profile-and-optimize/server/docs/agent-onboarding.md",
+    "plugins/profile-and-optimize/.claude-plugin/plugin.json"
+  ]
 }

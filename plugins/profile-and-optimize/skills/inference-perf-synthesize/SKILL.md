@@ -1,6 +1,9 @@
 ---
 name: inference-perf-synthesize
-last_validated: 2026-06-01
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-06-01"
 description: >-
   Fuse the four profilers -- nsys (timeline + kernel durations), ncu (roofline /
   occupancy / arithmetic intensity), zymtrace (CPU+GPU flamegraph), and DCGM
@@ -16,17 +19,7 @@ description: >-
   with data", or any combination of
   "synthesize / fuse / recommend / holistic / explain" with "profile / nsys / ncu
   / zymtrace / dcgm / roofline / bottleneck / vllm".
-allowed-tools:
-  - mcp__profile_and_optimize__findings_record
-  - mcp__profile_and_optimize__evidence_init
-  - mcp__profile_and_optimize__perf_tune_report_dcgm_correlate
-  - mcp__profile_and_optimize__perf_tune_report_report_render
-  - mcp__profile_and_optimize__perf_tune_report_publish_to_lake
-  - mcp__profile_and_optimize__perf_baseline_diff
-  - mcp__profile_and_optimize__search_runbooks
-  - mcp__profile_and_optimize__search_evidence
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__findings_record mcp__profile_and_optimize__evidence_init mcp__profile_and_optimize__perf_tune_report_dcgm_correlate mcp__profile_and_optimize__perf_tune_report_report_render mcp__profile_and_optimize__perf_tune_report_publish_to_lake mcp__profile_and_optimize__perf_baseline_diff mcp__profile_and_optimize__search_runbooks mcp__profile_and_optimize__search_evidence Read Write"
 ---
 
 # inference-perf-synthesize
@@ -38,17 +31,17 @@ go and why":
 
 | Profiler | Skill | Answers | Rigor tier |
 | --- | --- | --- | --- |
-| nsys | [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md) | timeline + absolute kernel durations + host-gap structure | L2-ish |
-| ncu | [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) | per-kernel occupancy / regs / DRAM BW / arithmetic intensity / tensor-core engagement | **L4** |
-| zymtrace | [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md) | CPU+GPU flamegraph cross-view (sample-share) | L1 |
-| DCGM | [`inference-dcgm-correlate`](/plugins/profile-and-optimize/skills/inference-dcgm-correlate/SKILL.md) | byte-grounded workload-level %SoL over the bench window | L3 |
+| nsys | [`inference-kernel-profile`](../inference-kernel-profile/SKILL.md) | timeline + absolute kernel durations + host-gap structure | L2-ish |
+| ncu | [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md) | per-kernel occupancy / regs / DRAM BW / arithmetic intensity / tensor-core engagement | **L4** |
+| zymtrace | [`analyze-zymtrace-workload`](../analyze-zymtrace-workload/SKILL.md) | CPU+GPU flamegraph cross-view (sample-share) | L1 |
+| DCGM | [`inference-dcgm-correlate`](../inference-dcgm-correlate/SKILL.md) | byte-grounded workload-level %SoL over the bench window | L3 |
 
 **Do NOT conclude "kernel at-roof / no lever" from SM-busy% (ncu `--set basic` or DCGM SM-active).**
 An 88-92% SM-busy can hide a kernel at <15% of its FLOP-roofline (persistent/split-K spin). Decide
 at-roof vs headroom only from ncu `--set full` achieved-TFLOPS vs the FLOP ceiling. Worked example:
 a DeepSeek-V4-Flash FP8 GEMM read 88-92% SM but was 1-14.5% of FP8 FLOP-SoL -> the synthesized
 recommendation was "throughput tier", not "kernel rewrite". (Canon: the ncu capture-hygiene section of
-[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md).)
+[`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md).)
 
 Run in isolation they produce four disconnected artifacts. This skill **fuses
 them into one ranked recommendation ledger**: it reconciles the four views
@@ -59,7 +52,7 @@ AND concrete vLLM source changes), and **stages each lever as an A/B experiment*
 so the recommendation is proven on this exact workload before it is believed.
 
 It does NOT replace the four skills -- it consumes their outputs. Run the
-profilers first (or let [`inference-model-optimize`](/plugins/profile-and-optimize/skills/inference-model-optimize/SKILL.md)
+profilers first (or let [`inference-model-optimize`](../inference-model-optimize/SKILL.md)
 Phase 2 drive them), then run this to synthesize.
 
 ## When to use
@@ -76,7 +69,7 @@ Do **not** use this skill for:
 
 - Capturing a profile -- that is the four profiler skills. This skill reads what
   they captured.
-- A which-config sweep -- that is [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md)
+- A which-config sweep -- that is [`inference-tune-sweep`](../inference-tune-sweep/SKILL.md)
   (this skill *feeds* it the candidate levers).
 - A single-profiler reading where no cross-view is needed -- just use that
   profiler's skill.
@@ -116,7 +109,7 @@ hard-won. Encode them so a capture is right the first time:
   (C) a SEPARATE `ncu` sister pod (`--set basic`, `--kernel-name` scoped). DCGM is
   correlated POST-HOC over the bench window (no in-pod agent).
 - **Use a submit-and-queue self-driving Job on a contended cluster** (per
-  `server/CLAUDE.md`): the capture pod embeds serve + bench + window-stamp, writes to the
+  `server/AGENTS.md`): the capture pod embeds serve + bench + window-stamp, writes to the
   RWX PVC, and EXITS to free the GPU, `backoffLimit` re-queues through preemption,
   guard idempotency on the **result file** (not a marker that could be touched on
   failure). Make the bench **variance-controlled** (>=3 trials/concurrency, same pod
@@ -170,9 +163,9 @@ provenance `delivery`+`commit` matches the recommendation's `source_refs[]` -- a
 cross-tier DRAFT defect (even when the kernels match). Cite the patch's own run.
 
 - **type=config**: a `vllm.extraArgs` / cudagraph / kv-cache-dtype change ->
-  hand to [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md).
+  hand to [`inference-tune-sweep`](../inference-tune-sweep/SKILL.md).
 - **type=vllm-src**: a concrete vLLM code change, staged as a runtime overlay per the
-  delivery ladder (`server/CLAUDE.md` "Experiment delivery ladder"): a `subPath` ConfigMap
+  delivery ladder (`server/AGENTS.md` "Experiment delivery ladder"): a `subPath` ConfigMap
   (`overlay_mode: subpath`) for a few files,
   or the initContainer patch-set (`overlay_mode: patchset-initcontainer`)
   for a whole patch
@@ -193,7 +186,7 @@ Take the top-ranked levers and stage each as an experiment:
 - vllm-src -> an overlay deploy (experiment-prefixed) + a same-node controlled
   A/B vs the unpatched arm, **both under matching cudagraph_mode**.
 
-Gate each with [`perf-baseline-diff`](/plugins/profile-and-optimize/skills/perf-baseline-diff/SKILL.md) (or
+Gate each with [`perf-baseline-diff`](../perf-baseline-diff/SKILL.md) (or
 `perf_baseline_diff`). A lever is promoted from DRAFT (predicted) to VERDICT
 (proven) only after a same-node + >=3-trial + metric-isolated A/B confirms it.
 A lever whose A/B comes back within noise is recorded as "tried, null" -- kept in
@@ -211,7 +204,7 @@ the ledger so the next operator does not re-explore it.
 
 ## Explainability contract (mandatory)
 
-Per `server/CLAUDE.md` "All attribution claims must be matched with collected
+Per `server/AGENTS.md` "All attribution claims must be matched with collected
 profile data", **every** recommendation and every where/why verdict this skill
 emits carries:
 
@@ -225,7 +218,7 @@ A claim missing any of the three is not emitted. An empty/failed capture is a
 capture bug to fix, never evidence of "unprofilable" -- clear the capture-
 validation gate first, then conclude. (For zymtrace specifically, an empty-now
 right after the bench is usually ClickHouse INGEST LAG, not a bug -- wait + requery
-for the freshest data. See [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md).)
+for the freshest data. See [`server/docs/zymtrace-query-hygiene.md`](../../server/docs/zymtrace-query-hygiene.md).)
 (One genuine environmental exception seen on
 GB300: a CUDA 12.x image on a CUDA 13.x driver skews CUPTI ->
 `CUPTI_ERROR_INVALID_DEVICE` -> 0 kernels for ALL CUPTI clients regardless of
@@ -241,7 +234,7 @@ production-representative baseline). Never report a predicted speedup as achieve
 ## Kernel rubric (K/R/H/P/A)
 
 Any `type=kernel` recommendation records the candidate AND the named production
-baseline's `(K,R,H,P,A)` coordinates per `server/CLAUDE.md` "Kernel rubric".
+baseline's `(K,R,H,P,A)` coordinates per `server/AGENTS.md` "Kernel rubric".
 The H + P proof (tensor-core engagement + roofline %) comes from the ncu artifact,
 a win over a strictly-lower-H/R baseline is a DRAFT, never a VERDICT.
 
@@ -261,16 +254,16 @@ a win over a strictly-lower-H/R baseline is a DRAFT, never a VERDICT.
 ## Source-of-truth references
 
 - The four profiler skills (inputs):
-  [`inference-kernel-profile`](/plugins/profile-and-optimize/skills/inference-kernel-profile/SKILL.md),
-  [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md),
-  [`analyze-zymtrace-workload`](/plugins/profile-and-optimize/skills/analyze-zymtrace-workload/SKILL.md),
-  [`inference-dcgm-correlate`](/plugins/profile-and-optimize/skills/inference-dcgm-correlate/SKILL.md).
-- [`inference-tune-sweep`](/plugins/profile-and-optimize/skills/inference-tune-sweep/SKILL.md) +
-  [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md) -- where the
+  [`inference-kernel-profile`](../inference-kernel-profile/SKILL.md),
+  [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md),
+  [`analyze-zymtrace-workload`](../analyze-zymtrace-workload/SKILL.md),
+  [`inference-dcgm-correlate`](../inference-dcgm-correlate/SKILL.md).
+- [`inference-tune-sweep`](../inference-tune-sweep/SKILL.md) +
+  [`inference-perf-tune-report`](../inference-perf-tune-report/SKILL.md) -- where the
   staged A/Bs run and the recommendations get published. The ranked levers here
   become the cross-engine variant arms. The proven survivors flow to
   `perftunereport champion_select` (the baseline-vs-top-X production pick + page 8).
-- `server/CLAUDE.md` -- attribution-must-be-profiled, speed-of-light framing,
+- `server/AGENTS.md` -- attribution-must-be-profiled, speed-of-light framing,
   DRAFT-vs-VERDICT, kernel rubric.
 
 ## Full-context reporting (no bare numbers)
@@ -291,14 +284,14 @@ default, ship a config, or appear in a report.
 
 If this skill produces a measurement (tok/s, latency, %SoL, speedup), follow the
 rigor discipline: capture L1 zymtrace + L3 DCGM (L4 ncu where feasible)
-Speed-of-Light and publish `--strict`. Canonical map: `server/CLAUDE.md`
+Speed-of-Light and publish `--strict`. Canonical map: `server/AGENTS.md`
 "Rigor discipline index" / `docs/METHODOLOGY.md`. Skills that
-do not produce measurements are exempt (`server/CLAUDE.md` "Speed-of-light framing").
+do not produce measurements are exempt (`server/AGENTS.md` "Speed-of-light framing").
 
 ## Asset validation (review + FAIL LOUD)
 
 Every asset this skill emits (findings doc / recommendation ledger / perfreport view) is held to
-`server/CLAUDE.md` "Validate every generated asset"
+`server/AGENTS.md` "Validate every generated asset"
 (`docs/METHODOLOGY.md`): the generator **FAILS LOUDLY** on missing/bad data (a recommendation with no backing
 profile artifact, an empty/degenerate fused view, `unknown`/null where a value is required) ->
 raise / flag loudly, never a silent placeholder or an unbacked recommendation, and the agent
@@ -310,7 +303,7 @@ never ships a wrong/confusing synthesis with a caveat.
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.

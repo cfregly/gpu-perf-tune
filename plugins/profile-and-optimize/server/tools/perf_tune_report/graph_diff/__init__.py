@@ -1,4 +1,4 @@
-"""perf_tune_report_graph_diff verb (v1.21.0).
+"""perf_tune_report_graph_diff verb.
 
 Diff two ``torch.compile`` dynamo+inductor log dumps captured from
 side-A vs side-B vLLM configs and emit a structured ``graph_diff.json``

@@ -1,4 +1,4 @@
-"""Unit tests for the graph_diff verb (v1.21.0)."""
+"""Unit tests for the graph_diff verb."""
 
 from __future__ import annotations
 

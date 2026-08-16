@@ -16,18 +16,18 @@ shape the aggregator expects, so the rest of the pipeline (aggregate -> render
 Importer surface
 ----------------
 
-- ``import_perf_bench_bundle`` (v1.18.0): vLLM ``bench serve`` text output
+- ``import_perf_bench_bundle``: vLLM ``bench serve`` text output
   (one ``raw/sweep-c<N>.txt`` per concurrency, optionally K-suffixed).
   GLM-5.1 + DSv4 bundle layout.
-- ``import_drive_load_bundle`` (v1.21.0): ``drive_load.py`` JSONL load-driver
+- ``import_drive_load_bundle``: ``drive_load.py`` JSONL load-driver
   output (``bench-c<NNN>/raw/load.jsonl`` or ``raw/load.jsonl``). Kimi K2.6
   bundle layout.
-- ``import_lws_summary_bundle`` (v1.23.1): pre-aggregated multi-variant
+- ``import_lws_summary_bundle``: pre-aggregated multi-variant
   ``summary.json`` (GLM-5.1 LWS-baseline-vs-champions layout). Emits
   AtlasCell rows directly to ``<campaign_dir>/atlas.jsonl`` (bypasses
   the cells/<id>/normalized.json -> atlas_aggregate path because the
   upstream variant-runner already aggregated).
-- ``import_bundle_auto`` (v1.21.0; v1.23.1: + lws_summary arm): inspects
+- ``import_bundle_auto``: inspects
   the bundle and dispatches to the correct importer. The CLI
   ``perf_tune_report_import_perf_bench`` verb calls this so a single command
   handles all three layouts without the operator having to remember
@@ -102,7 +102,7 @@ def import_bundle_auto(
             captured_at=captured_at,
         )
 
-    # variant-A/B layout: <bundle>/<arm>/c<C>-t<T>.txt (run-variant-ab.sh). Unique
+    # Variant A/B layout: <bundle>/<arm>/c<C>-t<T>.txt. Unique
     # subdir/c<C>-t<T>.txt signature; emits one cell per arm (trial-averaged).
     if detect_variant_ab(bundle):
         return import_variant_ab_bundle(

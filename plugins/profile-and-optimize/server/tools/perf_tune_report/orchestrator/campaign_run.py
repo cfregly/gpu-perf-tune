@@ -12,13 +12,14 @@ The CLI surface accepts a matrix YAML of the form::
       comparator_baseline: <path>           # optional; default = previous cell
 
     cells:
-      - id: <cell-id>
+      - cell_id: <cell-id>
         # per-cell helm value overrides (merged on top of base_values; can be
         # a path to an overlay yaml OR an inline dict)
         helm_overrides: <path-or-dict>
         # standard cell knobs (concurrencies, traffic shape, dataset, ...)
         concurrencies: [<int>, ...]
         backend: vllm-sweep | aiperf | aa | trtllm (stub)
+        vllm_sweep: {serve_cmd, bench_cmd}
         # endpoint-only backends (aiperf / aa) carry their config block here;
         # they target an already-running endpoint URL and skip helm + warmup
         aa: {model, url, shape, mode, request_count, api_key_env, ...}
@@ -34,9 +35,9 @@ unit tests can stub them out individually.
 
 Safety contract:
 
-- ``submits_jobs`` (highest tier; the orchestrator submits real benchmark
-  jobs to the cluster).
-- Ack-gated via ``--i-understand-this-submits-jobs``.
+- ``mutates_cluster`` because the production path cordons nodes, changes a
+  Helm release, and runs benchmark work on the cluster.
+- Ack-gated via ``--i-understand-this-mutates-cluster``.
 - Always-resume on Ctrl-C / exception:
   * Slurm-on-K8s drains are paired with ``try/finally`` resume
   * Helm upgrades carry NO automatic rollback (operator decides via the
@@ -73,8 +74,12 @@ class CellPlan:
     helm_overrides: dict[str, Any] = field(default_factory=dict)
     profile: dict[str, str] = field(default_factory=dict)
     notes: str = ""
+    # Canonical top-level cell fields used to build runners.common.CellConfig.
+    # Keep these separate from Helm overrides so deployment flags and benchmark
+    # identity cannot accidentally overwrite each other.
+    runner_config: dict[str, Any] = field(default_factory=dict)
     # Endpoint-only backend config (the cell YAML's ``aa:`` / ``aiperf:`` block).
-    # Carries the per-cell endpoint/shape knobs step_bench passes to the runner.
+    # For vLLM this is the ``vllm_sweep:`` command block.
     backend_config: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -324,9 +329,17 @@ def run_one_cell(
             baseline_record_ok = step_fns.baseline_record(campaign_dir, cell.id)
 
             # Step 10: baseline_diff (returns verdict string).
-            verdict = step_fns.baseline_diff(
-                campaign_dir, cell.id, comparator_baseline
-            )
+            if not baseline_record_ok:
+                notes.append(
+                    "baseline_record could not materialize a directional scalar "
+                    "headline. Set focus to throughput or latency, or set a "
+                    "supported baseline_metric."
+                )
+                verdict = "RED"
+            else:
+                verdict = step_fns.baseline_diff(
+                    campaign_dir, cell.id, comparator_baseline
+                )
 
     finally:
         # CRITICAL: always-resume on Slurm-on-K8s drain. This runs even on Ctrl-C

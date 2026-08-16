@@ -1,29 +1,31 @@
 Status: Active
-Audience: contributors implementing or reviewing any of the 12 contract-bearing libraries. The MCP server that auto-derives its tool surface from these CLIs.
+Audience: contributors implementing or reviewing the 8 contract-bearing libraries and the MCP server derived from them.
 
-# CLI Contract for the 12 contract-bearing libraries
+# CLI contract for the 8 libraries
 
-This document is the single source of truth for the operator-facing CLI verbs the active surface exposes. The CLIs under [`selector/`](/plugins/profile-and-optimize/server/selector), [`contention/`](/plugins/profile-and-optimize/server/contention), [`ai_tuning/`](/plugins/profile-and-optimize/server/ai_tuning), [`profile/`](/plugins/profile-and-optimize/server/profile), [`perf_baseline/`](/plugins/profile-and-optimize/server/perf_baseline), [`evidence/`](/plugins/profile-and-optimize/server/evidence), [`slurm/`](/plugins/profile-and-optimize/server/slurm), [`experiments/`](/plugins/profile-and-optimize/server/experiments), [`findings/`](/plugins/profile-and-optimize/server/findings), [`k8s_launch/`](/plugins/profile-and-optimize/server/k8s_launch), [`perf_tune_report/`](/plugins/profile-and-optimize/server/perf_tune_report), and [`known_good_config/`](/plugins/profile-and-optimize/server/known_good_config) implement every verb listed below. The MCP server in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) introspects the same parsers and registers one MCP tool per verb (76 in total).
+This document describes the operator-facing CLI verbs exposed by [`ai_tuning/`](../ai_tuning), [`profile/`](../profile), [`perf_baseline/`](../perf_baseline), [`evidence/`](../evidence), [`slurm/`](../slurm), [`findings/`](../findings), [`perf_tune_report/`](../perf_tune_report), and [`known_good_config/`](../known_good_config). The MCP server in [`mcp_surface.py`](../mcp_surface.py) derives 51 contract tools from these parsers. It adds 2 search tools for a total of 53.
 
-The 4 cluster-performance libraries inherited from the original seed (`selector`, `contention`, `ai_tuning`, `profile`) account for 27 verbs. The 8 profile-and-optimize-native libraries (`perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`, `k8s_launch`, `perf_tune_report`, `known_good_config`) account for the remaining 49 verbs, with `perf_tune_report` - the inference perf-tuning campaign engine - carrying 29 of them.
-
-Three of the seed libraries are shim packages: [`contention/`](/plugins/profile-and-optimize/server/contention), [`ai_tuning/`](/plugins/profile-and-optimize/server/ai_tuning), and [`profile/`](/plugins/profile-and-optimize/server/profile) re-export the canonical implementations from `tools/pipeline/gb300/contention/contention_cli.py`, `tools/ai_tuning/ai_tuning.py`, and `tools/pipeline/submission/profile/profile_cli.py` respectively. The profile-and-optimize-native libraries follow the same pattern: each ships a thin `<library>/cli.py` that re-exports from `tools/<library>/<library>_cli.py`. Only `selector` carries its implementation in the package itself. The shims exist so the MCP surface can resolve `<repo_root>/<library>/cli.py` the same way for every library.
+Each top-level library is a thin package over its implementation under `tools/`. This stable package boundary lets the shell, Python callers, and MCP server use the same parser and safety contract.
 
 The contract is small on purpose. Every verb fits the same schema, every safety class derives from a single flag, and every verb exposes a JSON output mode. New operator-grade workflows add a verb here. Lower-level helpers stay as importable Python and do not get a CLI surface unless an operator workflow needs them.
 
 ## Conventions
 
-- **Library names**: `selector`, `contention`, `ai_tuning`, `profile`, `perf_baseline`, `evidence`, `slurm`, `experiments`, `findings`, `k8s_launch`, `perf_tune_report`, `known_good_config`. Each is invokable as `python -m <library>`. The `selector` package additionally ships the `mlperf-selector` console script and `perf_tune_report` ships the `perftunereport` console script. The remaining ten packages are invoked through `python -m <library>` only.
-- **MCP tool names**: `<library>_<verb>` with hyphenated verbs converted to underscores (`gate-256n` -> `selector_gate_256n`).
+- **Library names**: `ai_tuning`, `profile`, `perf_baseline`, `evidence`, `slurm`, `findings`, `perf_tune_report`, and `known_good_config`. Each is invokable as `python -m <library>`. The `perf_tune_report` package also ships the `perftunereport` console script.
+- **MCP tool names**: `<library>_<verb>` with hyphenated verbs converted to underscores (`quiet-window` becomes `slurm_quiet_window`).
 - **Safety classes** derive from the verb's flag set:
   - `read_only` - no `--i-understand-*` flag and no `--out-dir`-by-default writes.
   - `writes_artifacts` - takes `--out-dir` and writes there (no ack flag), or carries `--i-understand-this-stages-artifacts`.
   - `submits_jobs` - carries `--i-understand-this-submits-jobs`.
   - `pulls_data` - carries `--i-understand-this-pulls-license-gated-data`. Defined for license-gated dataset pulls. No active verb currently uses it.
   - `substitutes_nodes` - carries `--i-understand-this-substitutes-nodes`. Mutates Slurm cluster state (node drain/resume) without submitting new jobs. Used by `slurm drain`, `slurm resume`, and `slurm quiet_window`.
+  - `publishes_external` - carries `--i-understand-this-publishes-externally`. Publishes campaign data to operator-owned external storage. Used by `perf_tune_report publish_to_lake`.
+  - `mutates_cluster` - carries `--i-understand-this-mutates-cluster`. Covers a compound workflow that can cordon nodes, change a Helm release, and run benchmark work.
 - **Output mode**: every verb supports `--json` for machine-consumable output. Verbs that only print human text MUST still expose `--json` (return a single-key payload at minimum).
 - **Help line**: `--help` returns at least one paragraph. The first line is a single-sentence description that fits in the verb table below.
-- **Dry-run pattern**: every verb that can mutate state defaults to dry-run when no `--i-understand-*` flag is set. The `--dry-run` flag is also accepted explicitly for symmetry.
+- **Dry-run pattern**: every verb that submits jobs or changes cluster state
+  defaults to dry-run when its `--i-understand-*` flag is absent. Local
+  artifact writers use their declared output paths directly.
 
 ## Verb matrix
 
@@ -31,14 +33,14 @@ Every verb in this table has the columns shown, plus a "Required flags" and "Opt
 
 | Library | Verb | Safety | One-line description |
 | --- | --- | --- | --- |
-| `ai_tuning` | `space` | `read_only` | Print a tuning space manifest (parameters, ranges, defaults). |
+| `ai_tuning` | `space` | `writes_artifacts` | Print a tuning space manifest or write it to `--output`. |
 | `ai_tuning` | `matrix` | `writes_artifacts` | Generate a bounded cartesian proposal matrix from a tuning space. |
 | `ai_tuning` | `optimizer` | `writes_artifacts` | Optimizer-backed proposal helpers (subverb: propose / status / history / compare / import-hyp). |
-| `ai_tuning` | `report` | `read_only` | Build a bounded JSON tuning report from raw results, ledger, and fabric evidence. |
+| `ai_tuning` | `report` | `writes_artifacts` | Build a bounded JSON tuning report and write it to `--output`. |
 | `ai_tuning` | `finalize` | `writes_artifacts` | Assemble or dry-run a benchmark result bundle from a tuned run. |
-| `ai_tuning` | `proposal` | `read_only` | Proposal helpers (subverb: validate / diff). |
+| `ai_tuning` | `proposal` | `writes_artifacts` | Proposal helpers that can write validation, diff, and audit artifacts. |
 | `ai_tuning` | `template-patch` | `writes_artifacts` | Template patch helpers (subverb: validate, --apply mutates files). |
-| `ai_tuning` | `experiment` | `writes_artifacts` | Experiment ledger helpers (subverb: create / update / summary / submit / poll / collect). The `submit` subverb takes its own `--i-understand-this-submits-jobs` ack flag. |
+| `ai_tuning` | `experiment` | `writes_artifacts` | Experiment ledger helpers (subverb: create / update / summary / submit / poll / collect). MCP calls to `submit --execute` require structured `i_understand_this_submits_jobs=true`. |
 | `profile` | `host-overhead` | `writes_artifacts` | py-spy CPU sampler for the rank-0 process (subverb: top / record / dump). |
 | `profile` | `profile-diff` | `writes_artifacts` | Diff two nsys-rep files (or pre-extracted nsys-stats CSV dirs) and emit per-area NVTX / kernel / CUDA-API / NCCL delta tables. |
 | `perf_baseline` | `record` | `writes_artifacts` | Register a new perf-baseline entry under `experiments/artifacts/perf-baselines/`. |
@@ -49,15 +51,15 @@ Every verb in this table has the columns shown, plus a "Required flags" and "Opt
 | `slurm` | `resume` | `substitutes_nodes` | Resume a comma-list of Slurm node names (`scontrol update State=RESUME`) on a Slurm-on-K8s cluster, with full evidence-bundle capture. |
 | `slurm` | `quiet_window` | `substitutes_nodes` | Drain Slurm nodes, run an operator-supplied inner command, and ALWAYS resume via try/finally even on failure or KeyboardInterrupt. |
 | `findings` | `record` | `writes_artifacts` | Append a structured finding (one row in findings.yaml) to a bundle. |
-| `findings` | `render` | `read_only` | Convert findings.yaml to a presentable findings.md table grouped by severity. |
-| `findings` | `diff` | `read_only` | Compare two findings.yaml files and emit a markdown drift report (new / resolved / status-changed). |
+| `findings` | `render` | `writes_artifacts` | Convert findings.yaml to a findings.md table at the requested output path. |
+| `findings` | `diff` | `writes_artifacts` | Compare two findings.yaml files and write a Markdown drift report. |
 | `perf_tune_report` | `campaign_init` | `writes_artifacts` | Scaffold a new campaign directory from a YAML config (`--experiment-id` makes campaign_id == the evidence-bundle run-id). |
 | `perf_tune_report` | `cell_run` | `submits_jobs` | Run one cell via vllm-sweep, aiperf, or aa backend (ack-gated). |
-| `perf_tune_report` | `campaign_run` | `submits_jobs` | Campaign-level orchestrator: loops a matrix YAML, running the full drain -> deploy -> bench -> aggregate -> render pipeline per cell (ack-gated). |
+| `perf_tune_report` | `campaign_run` | `mutates_cluster` | Campaign-level orchestrator that can cordon nodes, change a Helm release, and run benchmark work before aggregation and rendering. |
 | `perf_tune_report` | `atlas_aggregate` | `writes_artifacts` | Aggregate per-cell normalized.json into atlas.jsonl + coverage summary. |
 | `perf_tune_report` | `report_render` | `writes_artifacts` | Render the perf-report PDF from a campaign's atlas.jsonl. Omitted SoL/kernel/DCGM pages surfaced loudly. |
-| `perf_tune_report` | `report_smoke` | `read_only` | Render the PDF from the bundled synthetic fixture (no cluster needed). |
-| `perf_tune_report` | `publish_to_lake` | `writes_artifacts` | Publish a campaign's atlas + provenance as Parquet to the perf-lake object store. |
+| `perf_tune_report` | `report_smoke` | `writes_artifacts` | Render a PDF from the bundled synthetic fixture at the requested output path. |
+| `perf_tune_report` | `publish_to_lake` | `publishes_external` | Publish a campaign's atlas + provenance as Parquet to an external perf-lake object store. |
 | `perf_tune_report` | `import_perf_bench` | `writes_artifacts` | Import an existing inference-perf-bench bundle into a perf-report campaign as cells/<cell-id>/normalized.json. |
 | `perf_tune_report` | `import_nsys` | `writes_artifacts` | Import an nsys per-kernel bundle into a campaign cell as cells/<cell-id>/kernels.json. |
 | `perf_tune_report` | `import_ncu` | `writes_artifacts` | Import an ncu per-kernel bundle into a campaign cell as cells/<cell-id>/ncu_kernels.json (roofline scatter). |
@@ -106,8 +108,8 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `ai_tuning space`
 
-- Description: Print a tuning space manifest (parameters, ranges, defaults).
-- Safety: `read_only`
+- Description: Print a tuning space manifest or write it to `--output`.
+- Safety: `writes_artifacts`
 - Required flags: (none)
 - Optional flags: `--space`, `--names-only`, `--output`
 - Output mode: `--json`
@@ -117,8 +119,8 @@ Each block below documents one verb with its required flags, optional flags, out
 
 - Description: Generate a bounded cartesian proposal matrix from a tuning space.
 - Safety: `writes_artifacts`
-- Required flags: `--parameter`
-- Optional flags: `--space`, `--limit`, `--output`
+- Required flags: `--space`, `--parameter`
+- Optional flags: `--limit`, `--output`
 - Output mode: `--json`
 - Ack flag: none
 
@@ -127,16 +129,16 @@ Each block below documents one verb with its required flags, optional flags, out
 - Description: Optimizer-backed proposal helpers. Takes a subverb (`propose` | `status` | `history` | `compare` | `import-hyp`) plus subverb-specific flags. The subverb is a nested argparse subparser. All flags are on the subverb parsers, not on the optimizer parent.
 - Safety: `writes_artifacts`
 - Required flags: subverb (`propose` | `status` | `history` | `compare` | `import-hyp`)
-- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set. Every subverb accepts an output path).
+- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](../tools/ai_tuning/ai_tuning.py) for the per-subverb flag set. Every subverb accepts an output path).
 - Output mode: `--json`
 - Ack flag: none
 
 ### `ai_tuning report`
 
-- Description: Build a bounded JSON tuning report from raw results, ledger, and fabric evidence.
-- Safety: `read_only`
-- Required flags: (none)
-- Optional flags: `--space`, `--raw-results-dir`, `--raw-benchmark`, `--min-runs`, `--objective`, `--gb300-fabric-dir`, `--gb300-fabric-require-clean`, `--gb300-node-selection-dir`, `--gb300-fabric-localization-dir`, `--ledger`, `--remaining-limit`, `--template-hint-file`, `--template-hint-limit`, `--error-limit`, `--output`
+- Description: Build a bounded JSON tuning report from raw results, ledger, and fabric evidence, then write it to `--output`.
+- Safety: `writes_artifacts`
+- Required flags: `--space`
+- Optional flags: `--raw-results-dir`, `--raw-benchmark`, `--min-runs`, `--objective`, `--gb300-fabric-dir`, `--gb300-fabric-require-clean`, `--gb300-node-selection-dir`, `--gb300-fabric-localization-dir`, `--ledger`, `--remaining-limit`, `--template-hint-file`, `--template-hint-limit`, `--error-limit`, `--output`
 - Output mode: `--json`
 - Ack flag: none
 
@@ -152,9 +154,9 @@ Each block below documents one verb with its required flags, optional flags, out
 ### `ai_tuning proposal`
 
 - Description: Proposal helpers. Takes a subverb (`validate` | `diff`) plus subverb-specific flags. The subverb is a nested argparse subparser. All `--*` flags are on the subverb parsers, not on the `proposal` parent.
-- Safety: `read_only`
+- Safety: `writes_artifacts`
 - Required flags: subverb (`validate` | `diff`)
-- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set).
+- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](../tools/ai_tuning/ai_tuning.py) for the per-subverb flag set).
 - Output mode: `--json`
 - Ack flag: none
 
@@ -163,25 +165,25 @@ Each block below documents one verb with its required flags, optional flags, out
 - Description: Template patch helpers. Takes a subverb (`validate`) plus subverb-specific flags. The validate subverb has an apply mode that mutates files, so the umbrella safety class is `writes_artifacts`.
 - Safety: `writes_artifacts`
 - Required flags: subverb (`validate`)
-- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set).
+- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](../tools/ai_tuning/ai_tuning.py) for the per-subverb flag set).
 - Output mode: `--json`
 - Ack flag: none
 
 ### `ai_tuning experiment`
 
-- Description: Experiment ledger helpers. Takes a subverb (`create` | `update` | `summary` | `submit` | `poll` | `collect`) plus subverb-specific flags. The submit subverb carries its own ack flag at the subparser level. Pass it through `args` when actually submitting. The umbrella stays `writes_artifacts` so the MCP runtime does not auto-append the ack flag to read-only subverbs (summary, poll).
+- Description: Experiment ledger helpers. Takes a subverb (`create` | `update` | `summary` | `submit` | `poll` | `collect`) plus subverb-specific flags. Direct CLI submission uses the subparser ack flag. An MCP call with `submit --execute` must pass structured `i_understand_this_submits_jobs=true`, and raw ack flags in `args` are rejected. Other subverbs keep the umbrella `writes_artifacts` classification.
 - Safety: `writes_artifacts`
 - Required flags: subverb (`create` | `update` | `summary` | `submit` | `poll` | `collect`)
-- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](/plugins/profile-and-optimize/server/tools/ai_tuning/ai_tuning.py) for the per-subverb flag set. The submit subverb requires its own ack flag for actual submission).
+- Optional flags: subverb-specific (see [`tools/ai_tuning/ai_tuning.py`](../tools/ai_tuning/ai_tuning.py) for the per-subverb flag set. Direct CLI submission requires its ack flag).
 - Output mode: `--json`
-- Ack flag: none (subverb-level only. The submit subverb owns its own ack flag).
+- Ack flag: dynamic for MCP. `submit --execute` requires `i_understand_this_submits_jobs=true` in the structured tool input.
 
 ### `profile host-overhead`
 
 - Description: py-spy CPU sampler for the rank-0 process. Takes a subverb (`top` | `record` | `dump`) plus subverb-specific flags.
 - Safety: `writes_artifacts`
 - Required flags: subverb (`top` | `record` | `dump`)
-- Optional flags: subverb-specific (see [`tools/pipeline/submission/profile/host_overhead.py`](/plugins/profile-and-optimize/server/tools/pipeline/submission/profile/host_overhead.py). Every subverb supports `--json`).
+- Optional flags: subverb-specific (see [`tools/pipeline/submission/profile/host_overhead.py`](../tools/pipeline/submission/profile/host_overhead.py). Every subverb supports `--json`).
 - Output mode: `--json`
 - Ack flag: none
 
@@ -275,7 +277,7 @@ Each block below documents one verb with its required flags, optional flags, out
 ### `findings render`
 
 - Description: Convert a findings.yaml file to a presentable findings.md table grouped by severity (RED / YELLOW / GREEN).
-- Safety: `read_only`
+- Safety: `writes_artifacts`
 - Required flags: `--findings-yaml`
 - Optional flags: `--out`, `--json`
 - Output mode: `--json`
@@ -284,7 +286,7 @@ Each block below documents one verb with its required flags, optional flags, out
 ### `findings diff`
 
 - Description: Compare two findings.yaml files and emit a markdown drift report (new / resolved / status-changed) for periodic re-runs of the same workflow.
-- Safety: `read_only`
+- Safety: `writes_artifacts`
 - Required flags: `--baseline`, `--current`
 - Optional flags: `--out`, `--json`
 - Output mode: `--json`
@@ -312,12 +314,12 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report campaign_run`
 
-- Description: Campaign-level orchestrator: loops over a matrix YAML and for each cell runs the full pipeline (drain -> deploy -> warmup -> bench -> profile-ingest -> import -> aggregate -> render -> baseline-record -> baseline-diff). Always-resume on Ctrl-C / exception via try/finally. Fail-fast on RED verdict unless `--continue-on-red` is passed.
-- Safety: `submits_jobs`
+- Description: Campaign-level orchestrator that can cordon nodes, change a Helm release, and run benchmark work before profile ingest, aggregation, rendering, and baseline checks. It attempts node resume in cleanup and fails fast on RED unless `--continue-on-red` is passed.
+- Safety: `mutates_cluster`
 - Required flags: `--config`, `--campaign`
 - Optional flags: `--continue-on-red`, `--dry-run`, `--campaigns-dir`, `--json`
 - Output mode: `--json`
-- Ack flag: `--i-understand-this-submits-jobs`
+- Ack flag: `--i-understand-this-mutates-cluster`
 
 ### `perf_tune_report atlas_aggregate`
 
@@ -339,8 +341,8 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report report_smoke`
 
-- Description: Render the PDF from the bundled synthetic fixture (no cluster needed).
-- Safety: `read_only`
+- Description: Render a PDF from the bundled synthetic fixture at the requested output path. No cluster is needed.
+- Safety: `writes_artifacts`
 - Required flags: (none)
 - Optional flags: `--out`, `--title`, `--json`
 - Output mode: `--json`
@@ -348,12 +350,12 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report publish_to_lake`
 
-- Description: Publish a campaign's atlas + provenance as Parquet to the perf-lake object store, ready for lakehouse registration. Under `--strict` the methodology gate enforces each measured row's full descriptor + its own ISL/OSL shape (see [`docs/mcp-tool-io-contract.md`](/plugins/profile-and-optimize/server/docs/mcp-tool-io-contract.md)).
-- Safety: `writes_artifacts`
+- Description: Publish a campaign's atlas + provenance as Parquet to the perf-lake object store, ready for lakehouse registration. Under `--strict` the methodology gate enforces each measured row's full descriptor + its own ISL/OSL shape (see [`docs/mcp-tool-io-contract.md`](mcp-tool-io-contract.md)).
+- Safety: `publishes_external`
 - Required flags: `--campaign`
 - Optional flags: `--s3-endpoint`, `--s3-bucket`, `--s3-access-key-file`, `--s3-secret-key-file`, `--if-exists`, `--strict`, `--no-strict`, `--allow-incomplete`, `--allow-ungrounded`, `--dry-run`, `--campaigns-dir`, `--json`
 - Output mode: `--json`
-- Ack flag: none
+- Ack flag: `--i-understand-this-publishes-externally` for a real publish. MCP `--dry-run` calls do not require the structured acknowledgement.
 
 ### `perf_tune_report import_perf_bench`
 
@@ -447,7 +449,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `perf_tune_report kernel_reproducer_scaffold`
 
-- Description: Scaffold a standalone CUDA/CUTLASS kernel reproducer (.cu + build script) for white-box kernel debugging - Track B of the [`inference-kernel-whitebox-debug`](/plugins/profile-and-optimize/skills/inference-kernel-whitebox-debug/SKILL.md) skill. Emits a self-contained harness parameterized by the GEMM dims + mirage tree + GPU arch: it instantiates the kernel template, feeds controlled inputs, and diffs against a host GEMM. The operator transcribes the exact template params from the codegen site into the marked block. Read-only on the cluster (writes local artifacts only).
+- Description: Scaffold a standalone CUDA/CUTLASS kernel reproducer (.cu + build script) for white-box kernel debugging - Track B of the [`inference-kernel-whitebox-debug`](../../skills/inference-kernel-whitebox-debug/SKILL.md) skill. Emits a self-contained harness parameterized by the GEMM dims + mirage tree + GPU arch: it instantiates the kernel template, feeds controlled inputs, and diffs against a host GEMM. The operator transcribes the exact template params from the codegen site into the marked block. Read-only on the cluster (writes local artifacts only).
 - Safety: `writes_artifacts`
 - Required flags: `--kernel-name`, `--header`, `--output-dir`
 - Optional flags: `--mma-m`, `--mma-n`, `--batch`, `--out-dim`, `--k`, `--mirage-tree`, `--arch`, `--dry-run`, `--json`
@@ -564,7 +566,7 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ### `known_good_config check`
 
-- Description: Check a deploy's serve args contain every required flag for a model. Fail-closed on a missing boot-blocker. Backs the [`inference-known-good-config`](/plugins/profile-and-optimize/skills/inference-known-good-config/SKILL.md) skill.
+- Description: Check a deploy's serve args contain every required flag for a model. Fail-closed on a missing boot-blocker. Backs the [`inference-known-good-config`](../../skills/inference-known-good-config/SKILL.md) skill.
 - Safety: `read_only`
 - Required flags: `--model`
 - Optional flags: `--registry`, `--serve-args`, `--deploy-file`, `--require-registered`, `--json`
@@ -573,16 +575,20 @@ Each block below documents one verb with its required flags, optional flags, out
 
 ## MCP-surface derivation
 
-The MCP server walks all 8 CLI parsers and registers one MCP tool per verb listed above (51 contract-derived tools total. Plus 2 auxiliary search tools registered separately by the FastMCP runtime = 53 MCP tools). The canonical counts live in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)'s `_TOTAL_*` constants. Tool naming and safety derivation:
+The MCP server walks all 8 CLI parsers and registers one MCP tool per verb listed
+above, for 51 contract-derived tools. The FastMCP runtime adds 2 auxiliary search
+tools, bringing the total to 53. The canonical counts live in
+[`mcp_surface.py`](../mcp_surface.py)'s
+`_TOTAL_*` constants. Tool naming and safety derivation:
 
-- Tool name: `<library>_<verb_with_underscores>` (e.g. `selector_gate_256n`, `perf_tune_report_report_render`).
+- Tool name: `<library>_<verb_with_underscores>` (for example, `slurm_quiet_window` and `perf_tune_report_report_render`).
 - Safety: copied from this contract's "Safety" column verbatim.
 - Ack required: `True` whenever the verb has a non-empty "Ack flag" entry above.
 - JSON parsing: `True` whenever the verb's "Output mode" is `--json`.
 
-Every safety class in this contract is one of the five allowed values (`read_only`, `writes_artifacts`, `submits_jobs`, `pulls_data`, `substitutes_nodes`), [`tools/profile_and_optimize_mcp/tests/test_server_smoke.py`](/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/tests/test_server_smoke.py) asserts the live MCP-derived surface matches the canonical counts and safety classes.
+Every safety class in this contract is one of the seven allowed values: `read_only`, `writes_artifacts`, `submits_jobs`, `pulls_data`, `substitutes_nodes`, `mutates_cluster`, and `publishes_external`. [`tools/profile_and_optimize_mcp/tests/test_server_smoke.py`](../tools/profile_and_optimize_mcp/tests/test_server_smoke.py) asserts that the live MCP-derived surface matches the canonical counts and safety classes.
 
 ## Out of scope
 
-- Lower-level Python helpers (e.g. `selector.scoring`) keep their import-only API and do not get CLI verbs.
-- Subverbs (e.g. `o11y print-queries` vs `o11y ingest`) are documented inside the parent verb spec. They do not appear as separate rows in the matrix.
+- Lower-level Python helpers such as `perf_tune_report.renderer` keep their import-only API and do not get CLI verbs.
+- Subverbs such as `ai_tuning optimizer propose` and `ai_tuning optimizer status` are documented inside the parent verb spec. They do not appear as separate rows in the matrix.

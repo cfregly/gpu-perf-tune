@@ -1,4 +1,4 @@
-"""Unit tests for the kernel_profile verb (v1.21.0)."""
+"""Unit tests for the kernel_profile verb."""
 
 from __future__ import annotations
 
@@ -348,7 +348,7 @@ def test_cli_kernel_profile_refuses_without_ack(tmp_path: Path, capsys) -> None:
         pod="basic-inference-abc",
         target_container="basic-inference",
         output_dir=str(tmp_path / "out"),
-        sidecar_image="ghcr.io/cfregly/nsys-sidecar:0.1.0",
+        sidecar_image="ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d",
         duration_seconds=120,
         sample="cpu",
         trace="cuda,nvtx,osrt",

@@ -101,7 +101,7 @@ def test_requires_model(tmp_path: Path) -> None:
         import_aiperf_bundle(v, campaign, overrides={})
 
 
-# v1.42.0 carry-through: AIPerf prompt-cache -> prefix_cache_hit_rate, ISL/OSL,
+# Carry-through: AIPerf prompt-cache -> prefix_cache_hit_rate, ISL/OSL,
 # total throughput, declared cache_mode.
 _CSV_SHAPE = """Metric,avg,min,max,sum,p1,p5,p10,p25,p50,p75,p90,p95,p99,std
 Time to First Token (ms),165.73,56.5,2506,11601,57,60,61,76,153,170,189,196,985,287

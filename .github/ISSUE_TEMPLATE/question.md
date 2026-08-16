@@ -5,6 +5,10 @@ title: "q: <one-line question>"
 labels: question
 ---
 
+This issue is public. Remove tokens, credentials, customer data, internal
+hostnames, private URLs, proprietary prompts, and unredacted logs. Report
+security concerns through the private process in [SECURITY.md](https://github.com/cfregly/gpu-perf-tune/blob/main/SECURITY.md).
+
 ## Question
 
 <!-- One paragraph. Be specific. -->
@@ -12,12 +16,12 @@ labels: question
 ## What you've already tried
 
 - [ ] Read the relevant skill's SKILL.md end-to-end.
-- [ ] Read [CONTRIBUTING.md](/CONTRIBUTING.md) and [REVIEWERS.md](/REVIEWERS.md).
+- [ ] Read the setup and limitations in [README.md](https://github.com/cfregly/gpu-perf-tune/blob/main/README.md).
 - [ ] Searched existing issues.
-- [ ] Checked the docs under [`docs/`](/docs) and the server docs under `plugins/profile-and-optimize/server/docs/`.
+- [ ] Checked the [project docs](https://github.com/cfregly/gpu-perf-tune/tree/main/docs) and the [server docs](https://github.com/cfregly/gpu-perf-tune/tree/main/plugins/profile-and-optimize/server/docs).
 
 ## Context
 
-- profile-and-optimize version: `0.X.Y`
-- Claude Code / Cursor version: `<version>`
+- Exact profile-and-optimize version or commit: `<version or commit>`
+- AI client and version: `Claude Code | Codex CLI | Cursor | Gemini CLI | other`
 - Skill(s) the question is about: `<name(s)>`

@@ -1,6 +1,9 @@
 ---
 name: inference-graph-diff
-last_validated: 2026-05-26
+license: MIT
+compatibility: Requires a skills-compatible agent and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-05-26"
 description: >-
   Diff the compiled FX / Inductor graphs across two vLLM versions or two
   helm configs to see exactly which fused kernels / passes / partitions
@@ -11,14 +14,7 @@ description: >-
   "dynamo explain", "fx graph", "compile graph", "torch.compile diff",
   "compilation pass change", or any combination of "graph / fx /
   inductor / dynamo" with "diff / compare / explain / dump".
-allowed-tools:
-  - Bash(kubectl:exec,*)
-  - Bash(kubectl:cp,*)
-  - Bash(jq:*)
-  - Bash(diff:*)
-  - Bash(python3:*)
-  - Read
-  - Write
+allowed-tools: "Bash(kubectl:exec,*) Bash(kubectl:cp,*) Bash(jq:*) Bash(diff:*) Bash(python3:*) Read Write"
 ---
 
 # inference-graph-diff
@@ -152,10 +148,10 @@ experiments/artifacts/inference-perf-bench/<bundle>/
 
 ## Skill maturity
 
-This skill is **research-grade** (v0.1 - same status as the
-nsys-sidecar approach). The recipe is documented but not yet wrapped in
+This skill is **research-grade**, with the same status as the nsys-sidecar
+approach. The recipe is documented but not yet wrapped in
 a dedicated MCP verb because the dump-format depends on torch version.
-A future v1.x of profile_and_optimize could add a `perf_tune_report_graph_diff` verb
+A future release could add a `perf_tune_report_graph_diff` verb
 that automates the recipe end-to-end.
 
 ## Kernel rubric (K/R/H/P/A)
@@ -169,11 +165,11 @@ When a graph diff backs a custom-kernel comparison, **note the R/H delta in
 `graph_diff.json` `notes`** and carry the candidate + baseline `(K,R,H,P,A)` coordinates
 into the bundle's `SOURCE.md`/`summary.md`. The graph diff shows R/H *changed*. It does
 NOT prove the new path engages tensor cores or hits its roofline - defer that H + P
-proof to [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md), the
+proof to [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md), the
 gate's enforcement point. A win over a strictly-lower-H/R baseline stays a **DRAFT, never
 a VERDICT**. If the comparison campaign reaches L4 (an ncu roofline renders), the
 candidate + baseline `(K,R,H,P,A)` must also be emitted as a structured `krhpa:` block
-in `config.yaml` (see [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)
+in `config.yaml` (see [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md)
 for the YAML) - `publish_to_lake` fails closed without it.
 
 ## Cross-references

@@ -79,9 +79,9 @@ zym_ingest_lag_hint() {
     echo "      ClickHouse asynchronously (~seconds-to-minutes of ingest lag), so a query run at"
     echo "      or just after the bench window can read empty before the data is queryable."
     [[ -n "$ctx" ]] && echo "      Context: ${ctx}"
-    echo "      First requery (capture polls automatically via zymtrace-ingest-wait.sh; tune"
-    echo "      ZYM_INGEST_WAIT_SEC / ZYM_INGEST_MAX_ATTEMPTS). Re-run capture-sol-window.sh after"
-    echo "      the flush interval before concluding empty; query by host=<node>+window (not the"
+    echo "      First requery with this checked-in helper and tune ZYM_INGEST_WAIT_SEC /"
+    echo "      ZYM_INGEST_MAX_ATTEMPTS. Re-run the source capture after the flush interval"
+    echo "      before concluding empty; query by host=<node>+window (not the"
     echo "      hash-suffixed pod name) and only --ack-telemetry-gap if it STAYS empty afterward."
   } >&2
 }

@@ -14,7 +14,6 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 SERVER_ROOT="${REPO_ROOT}/plugins/profile-and-optimize/server"
 VENV_PY="${SERVER_ROOT}/.venv/bin/python"
-LOGIN_HOST="${PROFILE_AND_OPTIMIZE_LOGIN_HOST:-${USER:-operator}@192.0.2.10}"
 
 if [[ ! -x "${VENV_PY}" ]]; then
   printf '[warn] %s not found; run `make bootstrap` (or `bash %s/install.sh`) first.\n' \
@@ -29,8 +28,7 @@ cat <<EOF
       "command": "${VENV_PY}",
       "args": ["-m", "profile_and_optimize_mcp", "serve"],
       "env": {
-        "PROFILE_AND_OPTIMIZE_REPO_ROOT": "${SERVER_ROOT}",
-        "PROFILE_AND_OPTIMIZE_LOGIN_HOST": "${LOGIN_HOST}"
+        "PROFILE_AND_OPTIMIZE_REPO_ROOT": "${SERVER_ROOT}"
       }
     }
 EOF

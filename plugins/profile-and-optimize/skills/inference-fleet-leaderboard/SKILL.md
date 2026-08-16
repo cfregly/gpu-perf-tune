@@ -1,6 +1,9 @@
 ---
 name: inference-fleet-leaderboard
-last_validated: 2026-06-07
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-06-07"
 description: >-
   Render cross-model fleet leaderboards from the local perf-report campaigns in ONE
   command (`perftunereport fleet_leaderboard`): a latency tier (aa-1k/10k/100k tok/s/user
@@ -15,14 +18,7 @@ description: >-
   frontier of models", "perftunereport fleet_leaderboard", or any combination of "fleet /
   cross-model / which-model / leaderboard / pareto" with "latency / throughput / cost
   / pick / rank / compare".
-allowed-tools:
-  - mcp__profile_and_optimize__perf_tune_report_fleet_leaderboard
-  - mcp__profile_and_optimize__perf_tune_report_experiments_index
-  - mcp__profile_and_optimize__search_runbooks
-  - mcp__profile_and_optimize__search_evidence
-  - Bash(perftunereport:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__perf_tune_report_fleet_leaderboard mcp__profile_and_optimize__perf_tune_report_experiments_index mcp__profile_and_optimize__search_runbooks mcp__profile_and_optimize__search_evidence Bash(perftunereport:*) Read Write"
 ---
 
 # inference-fleet-leaderboard

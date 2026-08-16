@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit a per-skill freshness report based on `last_validated` frontmatter.
+"""Emit a per-skill freshness report based on Agent Skills metadata.
 
 Output: one row per SKILL.md sorted by days-since-validation (oldest first).
 
@@ -41,6 +41,10 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
         m = re.match(r"^(\w[\w_-]*)\s*:\s*(.+?)\s*$", line)
         if m:
             fm[m.group(1)] = m.group(2)
+            continue
+        metadata_match = re.match(r'^\s{2}(last-validated)\s*:\s*(.+?)\s*$', line)
+        if metadata_match:
+            fm[metadata_match.group(1)] = metadata_match.group(2)
     return fm
 
 
@@ -48,17 +52,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Per-skill freshness report.")
     parser.add_argument("--yellow-days", type=int, default=90)
     parser.add_argument("--red-days", type=int, default=180)
-    parser.add_argument("--include-template", action="store_true", help="Also report on _template/SKILL.md (skip by default)")
     args = parser.parse_args()
 
     today = datetime.now(timezone.utc).date()
     rows: list[tuple[int, str, str, bool]] = []  # (days, skill, date_str, is_adapted)
     for skill_md in sorted(SKILLS_DIR.glob("*/SKILL.md")):
-        if skill_md.parent.name == "_template" and not args.include_template:
-            continue
         text = skill_md.read_text()
         fm = _parse_frontmatter(text)
-        lv = fm.get("last_validated", "")
+        lv = fm.get("last-validated", "").strip('"')
         try:
             lv_date = datetime.strptime(lv, "%Y-%m-%d").date()
         except ValueError:
@@ -71,7 +72,7 @@ def main() -> int:
     rows.sort(key=lambda r: -r[0])
 
     print(f"# SKILL.md freshness report (today: {today})\n")
-    print("| Days | Skill | last_validated | Adapted? | Bucket |")
+    print("| Days | Skill | last-validated | Adapted? | Bucket |")
     print("| --- | --- | --- | --- | --- |")
     red_count = 0
     yellow_count = 0

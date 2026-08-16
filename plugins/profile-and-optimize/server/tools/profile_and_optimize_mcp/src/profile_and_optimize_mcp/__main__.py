@@ -14,7 +14,7 @@ else:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="MLPerf and performance MCP server")
+    parser = argparse.ArgumentParser(description="GPU profiling and performance optimization MCP server")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("serve", help="run the stdio MCP server")
     args = parser.parse_args(argv)

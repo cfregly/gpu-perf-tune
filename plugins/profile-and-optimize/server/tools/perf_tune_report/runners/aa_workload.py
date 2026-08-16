@@ -53,9 +53,9 @@ AA_TOP_P = 1
 # same text is the same token count across model tokenizers.
 O200K_ENCODING = "o200k_base"
 
-# AIPerf custom-dataset-type for exact-text replay. The upstream
-# inference-tools perf-bench runner uses the hyphenated ``mooncake-trace``;
-# AIPerf accepts the underscore form in its docs. We default to the underscore
+# AIPerf custom-dataset-type for exact-text replay. The benchmark workflow uses
+# the hyphenated ``mooncake-trace``. AIPerf accepts the underscore form in its
+# docs. We default to the underscore
 # form here (the AA reproducer is a fresh path) but keep it overridable.
 DEFAULT_CUSTOM_DATASET_TYPE = "mooncake_trace"
 

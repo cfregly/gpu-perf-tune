@@ -2,8 +2,7 @@
 # Skill→prompt simulation: for each on-disk skill, take the canonical example
 # prompt from its SKILL.md description, follow the workflow's first MCP tool
 # call against synthetic / read-only inputs, and classify GREEN / YELLOW /
-# RED. As of v1.14.0 the script covers all 44 skills and ends with a
-# consistency check that asserts every SKILL.md under
+# RED. The script ends with a consistency check that asserts every SKILL.md under
 # plugins/profile-and-optimize/skills/ has a coverage entry.
 
 set -euo pipefail
@@ -79,7 +78,7 @@ def call_tool(name, arguments):
         return None, resp
 
 
-rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "profile-and-optimize-skill-validate", "version": "0.6.5"}})
+rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "profile-and-optimize-skill-validate", "version": "0.2.1"}})
 notify("notifications/initialized", {})
 
 
@@ -118,7 +117,7 @@ with tempfile.TemporaryDirectory(prefix="profile-and-optimize-skill-") as tmpdir
         "--source", str(tmp / "snap.json"),
         "--value", "47.5",
         "--unit", "GB/s",
-        "--notes", "v0.6.5 validation synthetic baseline",
+        "--notes", "validation synthetic baseline",
         "--repo-root", str(tmp),
         "--json",
     ], "allow_nonzero": True}})
@@ -166,7 +165,7 @@ with tempfile.TemporaryDirectory(prefix="profile-and-optimize-skill-") as tmpdir
     # 5. evidence-bundle-init: scaffold a learnings bundle.
     env, _ = call_tool("evidence_init", {"params": {"args": [
         "--family", "validation",
-        "--intent", "v0.6.5 validation synthetic evidence bundle",
+        "--intent", "validation synthetic evidence bundle",
         "--run-id", "demo-bundle",
         "--repo-root", str(tmp),
         "--json",
@@ -184,11 +183,11 @@ with tempfile.TemporaryDirectory(prefix="profile-and-optimize-skill-") as tmpdir
 print("\nTier B (contract-level only; cluster-side fully exercised separately):")
 
 TIER_B = [
-    # v1.13.0: inference perf-bench report renderer; contract-level smoke
-    # via report_smoke --help (the actual render needs matplotlib + bundle).
+    # The report renderer gets a contract-level smoke through report_smoke
+    # --help. A full render needs matplotlib and a bundle.
     ("inference-perf-tune-report", "perf_tune_report_report_smoke"),
-    # v1.10.0 inference bridge: cites the existing perf_baseline_record /
-    # _diff MCP verbs (no new verbs added).
+    # The inference bridge cites the existing perf_baseline_record and
+    # perf_baseline_diff MCP verbs.
     ("inference-perf-baseline-bridge", "perf_baseline_record"),
     # Inference skills whose primary workflow drives a bundled library verb.
     ("inference-fleet-leaderboard", "perf_tune_report_fleet_leaderboard"),
@@ -223,22 +222,20 @@ print("\nTier C (external MCP server; not agent-side testable):")
 TIER_C = [
     ("prometheus-anchored-query", "prometheus_mcp", "query_observability_knowledge_base"),
     ("k8s-troubleshooting", "prometheus_mcp", "query_prometheus"),
-    # v1.12.0: ClickHouse cousin of prometheus-anchored-query. Pure
-    # kubectl-port-forward + curl workflow; no MCP tool. Records GREEN
+    # ClickHouse cousin of prometheus-anchored-query. Pure kubectl port-forward
+    # plus curl workflow, with no MCP tool. Records GREEN
     # because the skill body's discipline (knowledge-base-first SQL +
     # provenance bundle) is the contract.
     ("zymtrace-anchored-query", "kubectl+curl", "manual zymtrace ClickHouse session (no MCP tool; skill body is the contract)"),
-    # v1.10.0 inference skills: thin aliases delegating to a vendored
-    # upstream SKILL.md at server/inference-tools/ (perf-bench, model-eval).
-    # No bundled MCP verb is invoked in the primary workflow.
-    ("inference-perf-bench", "vendored upstream", "server/inference-tools/perf-bench/SKILL.md (vendored at UPSTREAM_SHA)"),
-    ("inference-model-eval", "vendored upstream", "server/inference-tools/model-eval/SKILL.md (vendored at UPSTREAM_SHA)"),
-    # v1.15.0: external-MCP adaptation. Not agent-side testable, but the
-    # SKILL.md's allowed-tools + ## Origin section document the contract.
+    # These live-cluster workflows use operator tools directly. No bundled MCP
+    # verb is invoked in their primary path.
+    ("inference-perf-bench", "kubectl+AIPerf", "plugins/profile-and-optimize/skills/inference-perf-bench/SKILL.md"),
+    ("inference-model-eval", "kubectl+lm-eval-harness", "plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md"),
+    # External MCP adaptation. Not agent-side testable, but the SKILL.md
+    # allowed-tools and Origin section document the contract.
     ("analyze-zymtrace-workload", "zymtrace", "topfunctions / flamegraph / topentities (operator-side optional MCP; see plugin README \"Operator-side optional MCPs\")"),
-    # v1.40.0: closed-loop spec-dec-as-a-service orchestrator. Composes sibling
-    # skills (inference-workload-profile + inference-spec-decode-train) + bundled
-    # perf_tune_report verbs; not agent-side testable, contract is the SKILL.md phases.
+    # Closed-loop spec-decode service orchestrator. It composes sibling skills
+    # and bundled perf_tune_report verbs. The SKILL.md phases are the contract.
     ("inference-spec-decode-service", "profile_and_optimize", "perf_tune_report_* (orchestrator; composes inference-workload-profile + inference-spec-decode-train + the same-node acceptance A/B)"),
     # Pod-attach profiling skills: pure kubectl debug/exec/cp workflows
     # against a live inference pod; no MCP tool, the SKILL.md is the contract.
@@ -269,14 +266,12 @@ except Exception:  # noqa: BLE001
 
 # ============================================================================
 # Coverage consistency check: every SKILL.md under plugins/profile-and-optimize/skills/
-# (excluding `_template`) MUST have a coverage entry in the tiers above.
-# Added in v1.14.0: catches the v1.13.0 class of bug where new skills were
-# shipped without extending this validator.
+# MUST have a coverage entry in the tiers above.
+# Catch new skills that ship without a validator entry.
 # ============================================================================
 SKILLS_DIR = Path(SERVER).parent / "skills"
 on_disk = sorted(
     p.parent.name for p in SKILLS_DIR.glob("*/SKILL.md")
-    if p.parent.name != "_template"
 )
 covered = sorted({r["skill"] for r in results})
 missing = [s for s in on_disk if s not in covered]

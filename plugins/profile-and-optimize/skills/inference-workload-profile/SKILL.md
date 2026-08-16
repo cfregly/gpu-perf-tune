@@ -1,6 +1,9 @@
 ---
 name: inference-workload-profile
-last_validated: 2026-06-01
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-06-01"
 description: >-
   Profile live inference traffic into a token/shape distribution artifact that
   drives profile-matched speculative-decoding draft training -- an analog of
@@ -15,12 +18,7 @@ description: >-
   "fireoptimizer equivalent", "profile traffic for a draft model", or any combination
   of "profile / characterize / sample" with "workload / traffic / requests" and
   "spec-decode / draft / acceptance / hit-rate".
-allowed-tools:
-  - mcp__profile_and_optimize__evidence_init
-  - mcp__profile_and_optimize__search_runbooks
-  - Bash(python3:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__evidence_init mcp__profile_and_optimize__search_runbooks Bash(python3:*) Read Write"
 ---
 
 # inference-workload-profile
@@ -49,7 +47,7 @@ choosing serving hardware/quant (that is `inference-model-optimize` Phases 1-5).
 
 ## Workflow
 
-The two tools ship self-contained in this skill's [`tools/`](/plugins/profile-and-optimize/skills/inference-workload-profile/tools) dir
+The two tools ship self-contained in this skill's [`tools/`](tools) dir
 (`workload-profile.py`, `profile-to-corpus.py`).
 
 ### Phase 1: collect a representative profile source
@@ -104,9 +102,9 @@ nothing to train -- route to the Predicted Outputs path instead.
 
 ## Source-of-truth references
 
-- [`inference-spec-decode-train`](/plugins/profile-and-optimize/skills/inference-spec-decode-train/SKILL.md) -- the train
+- [`inference-spec-decode-train`](../inference-spec-decode-train/SKILL.md) -- the train
   loop the matched corpus feeds.
-- [`inference-model-optimize`](/plugins/profile-and-optimize/skills/inference-model-optimize/SKILL.md) -- the orchestrator
+- [`inference-model-optimize`](../inference-model-optimize/SKILL.md) -- the orchestrator
   whose Phase 6 (spec-decode) this profiling step front-runs.
 
 ## Full-context reporting (no bare numbers)

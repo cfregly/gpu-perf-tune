@@ -282,8 +282,8 @@ def compute_per_arm_coverage(
     prefill-decode roofline). Returns ``(arms_total, arms_with_roofline,
     sorted(arms_uncovered))``.
 
-    The definition is kept identical to ``perf-tune-glm51/sol-coverage-audit.py``
-    so the audit can defer to these renderer-recorded fields without drifting.
+    The renderer records these fields so downstream audits can use one
+    definition without reimplementing coverage logic.
     """
     cells_dir = campaign_dir / "cells"
     cell_dirs = (
@@ -469,7 +469,7 @@ def _render_completeness_page(fig: Any, status: RenderStatus) -> None:
         f"full-but-unplottable cells: {status.non_plot_ready_full_cells}"
     )
     lines.append("")
-    # Per-arm roofline coverage (v1.68.0): a multi-arm campaign is not complete
+    # Per-arm roofline coverage: a multi-arm campaign is not complete
     # until baseline AND every variant carries a roofline. Surface any gap loud.
     if status.arms_total:
         per_arm_state = "COMPLETE" if status.sol_per_arm_complete else "INCOMPLETE"
@@ -482,8 +482,9 @@ def _render_completeness_page(fig: Any, status: RenderStatus) -> None:
             for wrapped in textwrap.wrap("    " + ", ".join(status.arms_uncovered), width=100):
                 lines.append(wrapped)
             lines.append(
-                "  How to fix: run *-deploy/profiling/roofline-sweep.sh + perftunereport "
-                "import_roofline_sweep for each arm, then re-render -- or declare each "
+                "  How to fix: capture each arm's serving-side roofline bundle, run "
+                "perftunereport import_roofline_sweep for each arm, then re-render -- "
+                "or declare each "
                 "genuinely un-capturable arm in config.yaml roofline_gap_arms: "
                 "{<arm>: <reason>} (B200 / MTP-engine-blocked / overlay-gone)."
             )
@@ -551,7 +552,10 @@ def _render_source_page(fig: Any, links: "list[dict[str, str]]", ident: dict[str
                 lines.append(wrapped)
         lines.append("")
     if not links:
-        lines.append("(no experiment_provenance_v1 block -- run capture-provenance.sh on the bundle)")
+        lines.append(
+            "(no experiment_provenance_v1 block. Add source repository, "
+            "commit, delivery, and image details to SOURCE.md.)"
+        )
     fig.text(0.5, 0.95, "SOURCE UNDER TEST -- exact code each roofline ran",
              ha="center", va="top", fontsize=13, color="#1a5276", weight="bold")
     fig.text(0.04, 0.88, "\n".join(lines), ha="left", va="top", fontsize=9,
@@ -824,7 +828,7 @@ def render_report(
             if first_payload_hw and first_payload_hw in ceilings:
                 hw_key = first_payload_hw
             fig5 = plt.figure(figsize=page_size)
-            # v1.23.2: pass cell_dcgm as fallback so page 5 plots
+            # Pass cell_dcgm as fallback so page 5 plots
             # category-level points from DCGM per_category_attribution
             # when ncu kernels have all-null AI/tflops (e.g. --set=basic
             # capture).
@@ -929,7 +933,7 @@ def render_report(
             plt.close(fig_src)
             status.rendered_pages.append("source under test")
 
-        # Per-arm SoL coverage (v1.68.0): record which arms (baseline + each
+        # Per-arm SoL coverage: record which arms (baseline + each
         # variant) carry a RENDERED roofline page, computed here -- after every
         # page has been appended to rendered_pages -- so the page-4/6/7 flags
         # are accurate. The publish gate / teardown hook / audit key on these so
@@ -961,7 +965,7 @@ def render_report(
             pdf.savefig(fig_done)
             plt.close(fig_done)
 
-    # Degenerate-asset guard (asset-validation rule m / CLAUDE.md "Validate every generated
+    # Degenerate-asset guard from AGENTS.md "Validate every generated
     # asset"): a near-empty PDF means the render silently failed -- FAIL LOUD rather than
     # leaving a broken report on disk for publish_to_lake to land.
     _pdf_bytes = os.path.getsize(out_pdf) if os.path.exists(out_pdf) else 0
@@ -969,7 +973,7 @@ def render_report(
         raise RuntimeError(
             f"degenerate report: {out_pdf} is {_pdf_bytes} bytes -- the render produced no real "
             "content. Fix the campaign data and re-render; do not publish a broken report "
-            "(CLAUDE.md 'Validate every generated asset')."
+            "(AGENTS.md 'Validate every generated asset')."
         )
 
     # sol_complete = ANY Speed-of-Light evidence rendered (L1 zymtrace page4 OR

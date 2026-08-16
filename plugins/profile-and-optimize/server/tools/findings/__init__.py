@@ -1,4 +1,4 @@
-"""Findings library (v0.9.0+).
+"""Findings library.
 
 Structured findings YAML + record / render / diff verbs.
 Schema: docs/findings-schema.md.

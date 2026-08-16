@@ -1,25 +1,21 @@
 #!/usr/bin/env python3
-"""Assert the human-facing version headers agree with plugin.json's version.
+"""Assert public version surfaces agree with the root VERSION file.
 
-Background: the v1.29.0 rescan found plugin.json at v1.28.0 while
-README.md's "Status:" line still said v1.22.0, the plugin README's "Version"
-header said 1.15.0, and CATALOG.md's "Plugin version:" said v1.27.0. The
-count lints (`lint-tool-counts.py`, `lint-skill-counts.py`) never looked at
-the version headers, so the drift sailed through `make all`. This lint closes
-that gap: plugin.json is the single source of truth for the version, and every
-doc that prints a top-of-file version banner must match it.
+The root VERSION file is the release version source of truth. This lint keeps
+the adapter manifest, package metadata, public version banner, runtime version,
+and latest changelog entry aligned with it.
 
 How it works:
 
-1. Read ``plugins/profile-and-optimize/.claude-plugin/plugin.json`` -> ``version``.
-2. For each (doc, regex) below, extract the X.Y.Z it advertises and compare.
+1. Read and validate the numeric SemVer in ``VERSION``.
+2. For each (file, regex) below, extract the X.Y.Z it advertises and compare.
    The regex captures an optional ``v`` prefix; only the numeric triple is
-   compared, so "v1.29.0" and "1.29.0" are treated as equal.
+   compared, so "v0.3.0" and "0.3.0" are treated as equal.
 
 Exit codes:
-  0 - clean (every header matches plugin.json).
+  0 - clean (every surface matches VERSION).
   1 - >=1 header disagrees.
-  2 - fatal (cannot read plugin.json / version field).
+  2 - fatal (VERSION is missing or invalid).
 
 Run from the repo root:
 
@@ -28,45 +24,74 @@ Run from the repo root:
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PLUGIN_JSON = REPO_ROOT / "plugins" / "profile-and-optimize" / ".claude-plugin" / "plugin.json"
+VERSION_FILE = REPO_ROOT / "VERSION"
+NUMERIC_SEMVER = re.compile(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)")
 
 # (relative doc path, human label, compiled regex with one capture group for X.Y.Z).
 VERSION_HEADERS = (
+    (
+        "plugins/profile-and-optimize/.claude-plugin/plugin.json",
+        'Claude adapter manifest "version" field',
+        re.compile(r'"version"\s*:\s*"(\d+\.\d+\.\d+)"'),
+    ),
     (
         "plugins/profile-and-optimize/README.md",
         'plugin README "Version" banner',
         re.compile(r"\*\*Version\s+v?(\d+\.\d+\.\d+)\*\*"),
     ),
+    (
+        "plugins/profile-and-optimize/server/pyproject.toml",
+        'server package "version" field',
+        re.compile(r'^version\s*=\s*"(\d+\.\d+\.\d+)"', re.MULTILINE),
+    ),
+    (
+        "plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/pyproject.toml",
+        'MCP package "version" field',
+        re.compile(r'^version\s*=\s*"(\d+\.\d+\.\d+)"', re.MULTILINE),
+    ),
+    (
+        "plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src/profile_and_optimize_mcp/__init__.py",
+        'MCP package "__version__" field',
+        re.compile(r'^__version__\s*=\s*"(\d+\.\d+\.\d+)"', re.MULTILINE),
+    ),
+    (
+        "CHANGELOG.md",
+        "latest changelog release",
+        re.compile(r"^## \[(\d+\.\d+\.\d+)\]", re.MULTILINE),
+    ),
 )
 
 
-def plugin_version() -> str:
+def release_version() -> str:
     try:
-        data = json.loads(PLUGIN_JSON.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"FATAL: cannot read {PLUGIN_JSON}: {exc}", file=sys.stderr)
+        raw = VERSION_FILE.read_text()
+    except OSError as exc:
+        print(f"FATAL: cannot read {VERSION_FILE}: {exc}", file=sys.stderr)
         sys.exit(2)
-    version = data.get("version")
-    if not version:
-        print(f"FATAL: no `version` field in {PLUGIN_JSON}", file=sys.stderr)
+    version = raw.removesuffix("\n")
+    if not NUMERIC_SEMVER.fullmatch(version):
+        print(
+            f"FATAL: {VERSION_FILE} must contain numeric SemVer X.Y.Z "
+            "with at most one final newline",
+            file=sys.stderr,
+        )
         sys.exit(2)
-    return str(version)
+    return version
 
 
 def main() -> int:
-    expected = plugin_version()
-    print(f"[lint-versions] plugin.json version (source of truth): {expected}")
+    expected = release_version()
+    print(f"[lint-versions] VERSION source of truth: {expected}")
     findings: list[str] = []
     for rel, label, pattern in VERSION_HEADERS:
         path = REPO_ROOT / rel
         if not path.is_file():
-            findings.append(f"{rel}: NOT FOUND (still in VERSION_HEADERS — remove or fix path)")
+            findings.append(f"{rel}: NOT FOUND (still in VERSION_HEADERS, remove or fix path)")
             continue
         m = pattern.search(path.read_text())
         if not m:
@@ -76,7 +101,7 @@ def main() -> int:
         if found != expected:
             findings.append(f"{rel}: {label} says {found} (expected {expected})")
     if not findings:
-        print(f"[ok] every version banner matches plugin.json ({expected})")
+        print(f"[ok] every public version surface matches VERSION ({expected})")
         return 0
     print(f"[FAIL] {len(findings)} version drift(s) found:", file=sys.stderr)
     for finding in findings:

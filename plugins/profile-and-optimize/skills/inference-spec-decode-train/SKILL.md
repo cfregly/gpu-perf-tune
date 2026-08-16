@@ -1,6 +1,9 @@
 ---
 name: inference-spec-decode-train
-last_validated: 2026-06-01
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-06-01"
 description: >-
   Train + validate a speculative-decoding draft head (EAGLE3 or DFlash) for an
   ARBITRARY target LLM, generalizing the GLM-5.1-only SpecForge recipe so any new
@@ -16,18 +19,7 @@ description: >-
   acceptance", "SpecForge for <model>", "generalize eagle3-train", or any
   combination of "train / build / validate" with "eagle3 / dflash / draft /
   speculative / spec-decode".
-allowed-tools:
-  - mcp__profile_and_optimize__evidence_init
-  - mcp__profile_and_optimize__slurm_drain
-  - mcp__profile_and_optimize__slurm_resume
-  - mcp__profile_and_optimize__search_runbooks
-  - Bash(kubectl:*)
-  - Bash(sinfo:*)
-  - Bash(squeue:*)
-  - Bash(sbatch:*)
-  - Bash(sacct:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__evidence_init mcp__profile_and_optimize__slurm_drain mcp__profile_and_optimize__slurm_resume mcp__profile_and_optimize__search_runbooks Bash(kubectl:*) Bash(sinfo:*) Bash(squeue:*) Bash(sbatch:*) Bash(sacct:*) Read Write"
 ---
 
 # inference-spec-decode-train

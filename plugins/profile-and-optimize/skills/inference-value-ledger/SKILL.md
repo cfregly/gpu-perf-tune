@@ -1,6 +1,9 @@
 ---
 name: inference-value-ledger
-last_validated: 2026-06-05
+license: MIT
+compatibility: Requires a skills-compatible agent and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-06-05"
 description: >-
   Render the leadership value-prop ledger for the inference effort: the deployable
   wins vs the FlashInfer-TRTLLM + best-tuned-vLLM 0.21/0.22 baseline, grouped

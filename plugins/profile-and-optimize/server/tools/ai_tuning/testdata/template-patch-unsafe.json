@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "target_file": "tools/ai_tuning/testdata/copied-config.sh",
+  "changes": [
+    {
+      "match_context": "export NCCL_DEBUG=WARN\nexport NEXP=1\nexport DATADIR=/datasets/example",
+      "replacement": "export NCCL_DEBUG=WARN\nsbatch run.sub\nexport DATADIR=/datasets/example",
+      "rationale": "Exercise rejection of a submission command."
+    }
+  ]
+}

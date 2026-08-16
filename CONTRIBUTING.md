@@ -1,239 +1,204 @@
-# Contributing to `profile-and-optimize`
+# Contributing to `gpu-perf-tune`
 
-Thanks for considering a contribution. This repo ships **agent skills** - markdown files following the open [Agent Skills standard](https://agentskills.io/) - packaged as a Claude Code plugin marketplace. The same skills work in Claude Code and Cursor.
+`gpu-perf-tune` is a client-neutral GPU performance project. It ships Agent
+Skills, an MCP server, safety guards, schemas, and validation tools.
+`profile-and-optimize` is the skills package and Claude Code adapter. Claude
+Code and Codex are the first-class clients. Other client helpers are best
+effort and do not block a release.
 
-This document covers:
-
-- How to add a new skill.
-- How to add or change a bundled MCP server verb.
-- Version bump rules.
-- Validation checklist.
-- What gets reviewed.
-
-## TL,DR new contributor flow
+## Contributor setup
 
 ```bash
-git clone git@github.com:<your-org>/claude-gpu-perf-tune.git
-cd profile-and-optimize
-
-# Add a new skill.
-mkdir -p plugins/profile-and-optimize/skills/<your-skill-name>
-$EDITOR plugins/profile-and-optimize/skills/<your-skill-name>/SKILL.md
-
-# Bump the version (PATCH for fixes, MINOR for new skills, MAJOR for breaks).
-$EDITOR plugins/profile-and-optimize/.claude-plugin/plugin.json    # set version
-$EDITOR README.md                                       # add the skill to its family list
-
-# Validate.
-make all     # or: make -j4 all for the parallel ~1.5s wall-clock run
-
-# Open a PR.
-git checkout -b add-<skill-name>
-git commit -am "add <skill-name> skill"
-gh pr create
-```
-
-The PR template prompts you for the rest. Run `make -j4 all` locally before every push.
-
-## Local setup (one-time)
-
-The bundled MCP server ships as an editable Python package. To run the test suite or pre-commit hooks locally:
-
-```bash
-# Install the bundled server with the `dev` extras (pytest, ruff, pre-commit, pyright, pytest-xdist).
+git clone https://github.com/cfregly/gpu-perf-tune.git
+cd gpu-perf-tune
 bash plugins/profile-and-optimize/server/install.sh --with-dev
-
-# Wire pre-commit so `git commit` runs ruff + check-doc-links + a few file-hygiene
-# checks on staged files. Optional; skip if you'd rather run `make all` manually.
-plugins/profile-and-optimize/server/.venv/bin/pip install pre-commit  # if not already on PATH
-pre-commit install
-
-# Verify everything's healthy:
-make -j4 all   # smoke-test + smoke-mcp-runtime + check-doc-links + pytest (parallel; ~1.5s wall-clock)
+make all
 ```
 
-The pre-commit config (`.pre-commit-config.yaml`) intentionally scopes its ruff hooks to a subset of server subtrees (see the `files:` filters in the config) so it doesn't fight vendored upstream code style.
+The development install includes the official Agent Skills validator, test
+tools, and every dependency required by the default test suite. `make all`
+runs the client-neutral checks. Use `make -j4 all` to run independent targets
+in parallel.
 
-## Release ritual
-
-After every release (any version bump that lands on `main` + gets a `gh release create`), run the two-command refresh so both the Claude Code marketplace cache and the Cursor symlinks pick up the new version:
+Claude Code packaging has a separate optional check:
 
 ```bash
-# Refresh the Claude Code marketplace cache (~/.claude/plugins/cache/profile-and-optimize-plugins/profile-and-optimize/<new-version>/).
-claude plugin update profile-and-optimize@profile-and-optimize-plugins
-
-# Refresh the per-operator Cursor skill symlinks under ~/.cursor/skills/.
-make refresh-symlinks
+make validate-claude-plugin
 ```
 
-`make refresh-symlinks` wraps [`scripts/install-skills-into-cursor.sh`](/scripts/install-skills-into-cursor.sh). It is idempotent and prints a summary like `Summary: <N> linked, <M> already-linked (skipped), 0 refused`. The Cursor symlinks point at the in-repo `plugins/profile-and-optimize/skills/<skill>/` directories, so re-running after a `git pull` is enough to surface any SKILL.md changes that landed in the new version.
+Run it when a change affects the Claude marketplace manifest, plugin manifest,
+or Claude hook adapter. The core contributor path does not require Claude Code.
 
-`make refresh-symlinks` is deliberately **not** wired into `make all` - `make all` is the local gate you run before pushing, and it needs to stay portable across workstations where `~/.cursor/` may not exist.
+## Add a skill
 
-### Cursor upgrade sequence (one shot)
-
-If you run the bundled MCP server from a dev clone (not the Claude Code cache), there is one more thing to refresh after a version bump: the `profile_and_optimize` entry in `~/.cursor/mcp.json` points at the bundled venv, and a moved/rebuilt checkout can leave it stale (the recurring `spawn ... ENOENT` / `No module named profile_and_optimize_mcp` failure - see [`docs/cursor-mcp-troubleshooting.md`](/docs/cursor-mcp-troubleshooting.md)). The full sequence:
+Start from the maintained template:
 
 ```bash
-git pull origin main                 # refresh the dev clone
-claude plugin update profile-and-optimize@profile-and-optimize-plugins   # refresh the Claude Code cache
-make bootstrap                       # re-install the server venv + refresh symlinks + print the mcp.json snippet
-                                     # (add FULL=1 for the perf_tune_report renderer deps, DEV=1 for pytest)
-make doctor                          # read-only: is the ~/.cursor/mcp.json profile_and_optimize entry still valid?
-make doctor FIX=1                    # if STALE: repoint it to this checkout's venv (backs up mcp.json first)
+cp -R plugins/profile-and-optimize/templates/skill \
+  plugins/profile-and-optimize/skills/example-skill
 ```
 
-`make doctor` only ever inspects/edits the `profile_and_optimize` entry. Every other server in `~/.cursor/mcp.json` is left untouched, and `FIX=1` writes a timestamped `~/.cursor/mcp.json.bak-*` before changing anything. Then reload Cursor (toggle the `profile_and_optimize` MCP off/on, or restart) to pick up the repoint.
+Choose one clear task. Search the existing skills first. A new skill should not
+duplicate another workflow or bundle unrelated tasks.
 
-### Pre-tag safety check
+The directory name and frontmatter `name` must match. Names use lowercase
+letters, digits, and hyphens, with 64 characters or fewer. The official Agent
+Skills specification accepts these frontmatter fields:
 
-Before bumping `plugin.json` + tagging a new version, always run:
+- `name`
+- `description`
+- `license`
+- `compatibility`
+- `metadata`
+- `allowed-tools`
+
+`allowed-tools` is a space-delimited string, not a YAML list. Use the narrowest
+set of tools the workflow needs. A minimal header looks like this:
+
+```yaml
+---
+name: example-skill
+description: Profiles a named GPU workload when an operator asks for a bounded kernel analysis.
+license: MIT
+compatibility: Requires a skills-compatible agent and the tools named in allowed-tools.
+metadata:
+  last-validated: "2026-08-16"
+allowed-tools: "mcp__profile_and_optimize__search_runbooks Read Grep"
+---
+```
+
+Do not mark adapted third-party work as MIT by default. Preserve its license,
+identify the exact source revision, and update `THIRD_PARTY_NOTICES.md`.
+
+Every skill needs:
+
+- A specific `description` that says what it does and when to use it.
+- Prerequisites that fail closed when required inputs are missing.
+- A numbered workflow with clear report and ask checkpoints.
+- Safety rules for external writes, cluster changes, and acknowledgement flags.
+- Source references that link to shared docs instead of copying them.
+- A measured result format that records workload, baseline, hardware,
+  precision, parallelism, engine version, and evidence.
+
+Keep the main skill file focused. Put long reference material in sibling files.
+
+## Validate a skill change
+
+```bash
+make validate-agent-skills
+make smoke-test
+make check-doc-links
+```
+
+The first command uses the official reference validator. The smoke target also
+checks counts, versions, and MCP argument references. The link check covers all
+tracked Markdown files.
+
+If the change affects runtime code, run the full suite:
+
+```bash
+make all
+```
+
+## MCP tool naming
+
+Skills refer to MCP tools as `mcp__<server-key>__<tool-name>`.
+
+| Server | Key | Tool prefix |
+| --- | --- | --- |
+| Bundled server | `profile_and_optimize` | `mcp__profile_and_optimize__<tool>` |
+| Grafana | `grafana` | `mcp__grafana__<tool>` |
+| GitHub | `github` | `mcp__github__<tool>` |
+| Prometheus, optional | `prometheus_mcp` | `mcp__prometheus_mcp__<tool>` |
+| zymtrace, optional | `zymtrace` | `mcp__zymtrace__<tool>` |
+
+The bundled server exposes 51 contract tools and 2 auxiliary tools across 8
+libraries. `plugins/profile-and-optimize/server/mcp_surface.py` is the count
+and registration source of truth.
+
+Operator credentials belong in environment variables or private client
+configuration. Never commit tokens, internal hostnames, private URLs, customer
+data, or unredacted logs.
+
+## Add or change an MCP verb
+
+The server source lives under `plugins/profile-and-optimize/server/`.
+
+1. Add the verb to the relevant library contract and implementation.
+2. Add tests for success, invalid input, safety class, and acknowledgement
+   behavior where applicable.
+3. Update `mcp_surface.py` if the library or public tool surface changes.
+4. Update the canonical count constants and any docs that name the count.
+5. Run `make pytest` and `make smoke-mcp-runtime`. The pytest target includes
+   the MCP and installer tests.
+6. Run `make lint-tool-counts` and inspect `make mcp-surface`.
+
+Removing or renaming a public tool is a breaking change. Adding a public tool
+is a feature change.
+
+## Versions and changelog
+
+The root `VERSION` file is the release version source of truth. The Claude
+adapter manifest, two Python package versions, package README banner, and
+latest changelog entry must match it.
+
+| Change | Version bump |
+| --- | --- |
+| Documentation or behavior-preserving fix | PATCH |
+| New skill, tool, or supported workflow | MINOR |
+| Breaking public skill, tool, or contract change before 1.0.0 | MINOR plus migration notes |
+| Breaking public skill, tool, or contract change from 1.0.0 onward | MAJOR |
+
+Add a dated entry to `CHANGELOG.md`. Run `make lint-versions` and
+`make check-version-transition` before opening a pull request. A version may
+stay unchanged or increase. It may not decrease.
+
+Merging a new `VERSION` value into `main` triggers the release workflow. It
+waits for the full CI matrix on that exact `main` commit, then creates the
+annotated tag and GitHub Release from the matching changelog section. Keep the
+version bump in the final squash-merged commit. The workflow is idempotent when
+that version is already published.
+
+If the exact version-bump SHA fails because of a code defect, fix it under a
+new version and changelog entry. A transient CI failure may rerun the same SHA.
+Do not move the original version to a later source commit.
+
+`make release` is a manual recovery path for a missing publication. Use it only
+from a clean `main` that exactly matches `origin/main`, contains the version
+bump, and has passed the required push CI run:
 
 ```bash
 git fetch origin
-git status -sb              # if ahead != 0 OR behind != 0, STOP
-git ls-remote --tags origin <target-tag>   # if non-empty, the tag is already taken
+git status -sb
+git ls-remote --tags origin vX.Y.Z
+make release
 ```
 
-If `git status -sb` shows `behind > 0` or the target tag exists on origin (someone else pushed it first), DO NOT proceed with the same tag. Either rebase + bump the patch version, OR follow the recovery procedure in [`docs/release-tag-recovery.md`](/docs/release-tag-recovery.md).
+`make release` requires an authenticated `gh` CLI. It verifies the exact CI
+run and remote tag before creating any missing tag or stable GitHub Release.
+Do not reuse or move a published tag.
 
-## How to add a new skill
+The historical `v0.1.0` tag predates this policy and is lightweight. It is the
+only accepted exception. Release tags from `v0.2.0` onward are annotated and
+immutable after publication.
 
-### 1. Scope the skill
+## Open a pull request
 
-A good skill is:
+Create a focused branch, commit the smallest coherent change, and open a pull
+request. The pull request template lists the required evidence.
 
-- **One task** - a single coherent workflow with a clear start and end.
-- **Iterative** - pauses for operator input at every gate. Never auto-advances past a red.
-- **Trigger-discoverable** - the `description` frontmatter lists the phrases an operator would naturally type to invoke this skill.
-- **Read-only by default** - mutating actions require an explicit ack flag (fail fast, no silent fallbacks).
+Before requesting review:
 
-A bad skill is:
+- Run `make all`.
+- Confirm the version and changelog match the change.
+- Confirm public docs do not contain private data.
+- Explain any skipped check and why it cannot run in your environment.
+- Run `make validate-claude-plugin` when Claude packaging changed.
 
-- A vague "helper" - three different tasks bundled into one. Split into three skills.
-- A wrapper around a single tool with no value-add - just use the tool directly.
-- A skill that duplicates incident-triage or general ops tooling - this repo is scoped to inference profiling and optimization.
+Review guidance lives in [`REVIEWERS.md`](REVIEWERS.md).
 
-Before writing: search the [`plugins/profile-and-optimize/skills/`](/plugins/profile-and-optimize/skills) directory for overlap. If your task is incident-triage-shaped rather than perf-shaped, it probably belongs in a different plugin.
+## Code of conduct and security
 
-### 2. Pick a name
-
-- Lowercase, hyphens, max 64 chars. The directory name and the `name:` frontmatter field MUST match.
-- Verb-or-noun phrase, not a gerund. Good: `inference-perf-bench`, `perf-baseline-record`. Bad: `benching-inference-perf`, `recording-perf-baselines`.
-- Prefix with the workload family if the skill is family-specific. Good: `inference-perf-bench`. Bad: `perf-bench` (loses the inference-vs-generic discriminator).
-
-### 3. Write `SKILL.md`
-
-Start from the template at [`plugins/profile-and-optimize/skills/_template/SKILL.md`](/plugins/profile-and-optimize/skills/_template/SKILL.md). Every skill must include:
-
-- YAML frontmatter: `name` (matches dir), `description` (<=1024 chars, third-person, includes WHAT + WHEN trigger phrases), `allowed-tools` (YAML list of specific tool selectors).
-- `## Purpose` - what the skill does and why, in plain English.
-- `## When to use` and `## Example prompts` - trigger discoverability.
-- `## Prerequisites` - env vars, repo paths, Slurm reservations, etc. Fails closed.
-- `## Interaction style` - iterative pattern (one step, report, ask).
-- `## Workflow` - numbered phases. Each phase is a tool call sequence with a `report and ask` checkpoint.
-- `## Safety` - ack flags, fail-closed gates, forbidden actions.
-- `## Source-of-truth references` - cite repo docs by relative path. Never duplicate.
-
-Keep the body under 500 lines. Use progressive disclosure (link to sibling files for deep reference content).
-
-If the skill emits human-facing prose (a report, PR body, or summary), keep the template's "Keep it tight (no AI-slop)" block. The de-slop checklist is canon in [`docs/METHODOLOGY.md`](/docs/METHODOLOGY.md) ("De-slop").
-
-### 4. Update the README
-
-Add the skill to the appropriate family list in the root [`README.md`](/README.md) "What this is" section, and update the skill-count line if the total changed.
-
-### 5. Bump the plugin version
-
-| Change type | Bump | Example |
-| --- | --- | --- |
-| New skill, new MCP server in `.mcp.json`, expanded workflow in an existing skill | MINOR | `0.3.0` -> `0.4.0` |
-| Typo, link fix, clarification in a SKILL.md without behavior change | PATCH | `0.3.0` -> `0.3.1` |
-| Renamed skill, removed skill, renamed MCP server key, MCP envelope semantic change, ack-flag semantic change | MAJOR | `0.3.0` -> `1.0.0` |
-
-Edit the `version` field in [`plugins/profile-and-optimize/.claude-plugin/plugin.json`](/plugins/profile-and-optimize/.claude-plugin/plugin.json), then describe the change in your PR description and the release notes.
-
-### 6. Validate locally
-
-```bash
-claude plugin validate plugins/profile-and-optimize
-```
-
-Must return `Validation passed`. If it fails, the PR will fail review.
-
-Additionally, every SKILL.md in your PR should pass these checks:
-
-```bash
-python3 -c "
-import yaml, glob
-for f in glob.glob('plugins/profile-and-optimize/skills/*/SKILL.md'):
-    body = open(f).read()
-    assert body.startswith('---\n'), f'{f}: missing frontmatter'
-    end = body.find('\n---\n', 4)
-    assert end > 0, f'{f}: frontmatter not closed'
-    fm = yaml.safe_load(body[4:end])
-    assert fm['name'] == f.split('/')[-2], f'{f}: name mismatch'
-    assert len(fm['description']) <= 1024, f'{f}: description too long'
-    assert isinstance(fm.get('allowed-tools', []), list), f'{f}: allowed-tools must be list'
-print('all skills OK')
-"
-```
-
-And no Windows paths:
-
-```bash
-rg -l '\\\\' plugins/  # must be empty
-```
-
-### 7. Open a PR
-
-Push your branch and open a PR. The [`PULL_REQUEST_TEMPLATE.md`](/.github/PULL_REQUEST_TEMPLATE.md) checklist walks you through everything reviewers expect.
-
-## MCP tool naming convention
-
-Skills reference MCP tools via `mcp__<server-key>__<tool-name>` in the `allowed-tools` frontmatter. The server keys MUST match what's declared in [`plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json):
-
-| Server | Key in `.mcp.json` | Tool prefix in skill frontmatter |
-| --- | --- | --- |
-| Bundled `profile_and_optimize` MCP (8 libraries, 53 tools total = 51 contract-derived + 2 auxiliary. Canonical numbers in [`mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py)) | `profile_and_optimize` | `mcp__profile_and_optimize__<tool>` (e.g. `mcp__profile_and_optimize__slurm_triage`, `mcp__profile_and_optimize__perf_tune_report_report_render`, `mcp__profile_and_optimize__perf_tune_report_publish_to_lake`) |
-| Grafana | `grafana` | `mcp__grafana__<tool>` |
-| GitHub | `github` | `mcp__github__<tool>` |
-| Prometheus (optional) | `prometheus_mcp` | `mcp__prometheus_mcp__<tool>` |
-| zymtrace (optional) | `zymtrace` | `mcp__zymtrace__<tool>` |
-
-Only the first three (`profile_and_optimize`, `grafana`, `github`) are declared in [`plugins/profile-and-optimize/.mcp.json`](/plugins/profile-and-optimize/.mcp.json). The optional servers are configured per-operator - add them to your own `~/.cursor/mcp.json` or `~/.claude/settings.json` if you use them. Skills that reference an optional server fall back to the documented bash-tool path when it is absent.
-
-If you need a new MCP server not in this list, add it to `.mcp.json` first (with env-var placeholders for tokens / URLs - never check in real tokens) and update this table.
-
-## How to add or change a bundled MCP verb
-
-The `plugins/profile-and-optimize/server/` directory is the **source of truth** for the bundled MCP server. Adding a new verb is direct:
-
-1. Create a new library directory under `plugins/profile-and-optimize/server/<library-name>/` with `__init__.py`, `__main__.py`, and `cli.py`. The `cli.py` defines a `CONTRACT` dict keyed by verb name (see [`server/perf_baseline/cli.py`](/plugins/profile-and-optimize/server/perf_baseline/cli.py) for a minimal template).
-2. Implement the verbs under `plugins/profile-and-optimize/server/tools/<library-name>/` and have the stub `cli.py` import + delegate (matches the pattern used by every existing library).
-3. Add the new library to `LIBRARIES` in [`plugins/profile-and-optimize/server/mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py).
-4. Add the new library to `packages.find.include` in [`plugins/profile-and-optimize/server/pyproject.toml`](/plugins/profile-and-optimize/server/pyproject.toml).
-5. Add a row to the "What lives here" table in [`plugins/profile-and-optimize/server/CLAUDE.md`](/plugins/profile-and-optimize/server/CLAUDE.md) and to the corresponding library table in [`plugins/profile-and-optimize/server/README.md`](/plugins/profile-and-optimize/server/README.md).
-6. **Update the canonical-counts constants** in [`plugins/profile-and-optimize/server/mcp_surface.py`](/plugins/profile-and-optimize/server/mcp_surface.py) (`_TOTAL_LIBRARIES`, `_TOTAL_CONTRACT_TOOLS`, `_TOTAL_MCP_TOOLS`). The `lint-tool-counts` gate reads these constants and fails the build if any doc names a different number. Run `make lint-tool-counts` locally to see the current expected vs reported numbers.
-7. Bump version: PATCH if the verb is operator-internal, MINOR if it's a new tool surface, MAJOR if you removed or renamed an existing verb.
-8. Run `python3 plugins/profile-and-optimize/server/mcp_surface.py counts` to confirm the canonical-counts module agrees with the live derivation, and `python3 plugins/profile-and-optimize/server/mcp_surface.py list` to see the new tool name in the surface.
-
-
-## What gets reviewed
-
-[`REVIEWERS.md`](/REVIEWERS.md) covers the reviewer-side workflow in depth. Short version: reviewers check that
-
-- `claude plugin validate` passes locally,
-- the version bump matches the change scope,
-- the description triggers are specific and not vague,
-- the safety section enumerates ack flags and forbidden actions,
-- no source-of-truth duplication,
-- the skill is one task, not three.
-
-## Code of conduct
-
-Be respectful and constructive in issues and reviews. Contributions are credited through the git author line. Keep skill content impersonal - skills describe workflows, not individual ownership.
-
-## Contact
-
-Open an issue with the [`question.md`](/.github/ISSUE_TEMPLATE/question.md) template.
+Follow [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Report suspected
+vulnerabilities through the private process in [`SECURITY.md`](SECURITY.md).
+Do not place sensitive details in a public issue.

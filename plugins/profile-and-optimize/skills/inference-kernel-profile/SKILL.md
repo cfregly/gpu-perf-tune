@@ -1,6 +1,9 @@
 ---
 name: inference-kernel-profile
-last_validated: 2026-08-03
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-08-03"
 description: >-
   Capture per-kernel CUDA profile data from a live vLLM inference pod via an
   nsys debug sidecar (no production image rebuild). Outputs `.nsys-rep` +
@@ -10,17 +13,7 @@ description: >-
   "nsys profile", "what's in the native bucket", "per-kernel breakdown",
   "ncu", "Nsight Systems", "kernel-level analysis", or any combination of
   "profile / capture / nsys / ncu" with "vllm / kimi / glm / deepseek".
-allowed-tools:
-  - mcp__profile_and_optimize__search_runbooks
-  - Bash(kubectl:debug,*)
-  - Bash(kubectl:exec,*)
-  - Bash(kubectl:cp,*)
-  - Bash(kubectl:get,*)
-  - Bash(nsys:*)
-  - Bash(jq:*)
-  - Bash(sha256sum:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__search_runbooks Bash(kubectl:debug,*) Bash(kubectl:exec,*) Bash(kubectl:cp,*) Bash(kubectl:get,*) Bash(nsys:*) Bash(jq:*) Bash(sha256sum:*) Read Write"
 ---
 
 # inference-kernel-profile
@@ -45,7 +38,7 @@ emptyDir that the operator extracts via `kubectl cp`.
 
 **Fast path for the decode/latency tier (prefer over a restart):** if the
 question is "where does c=1 decode time go", use
-[`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md) - it
+[`inference-decode-step-budget`](../inference-decode-step-budget/SKILL.md) - it
 drives vLLM's `/start_profile` + `/stop_profile` HTTP endpoints so you capture
 restart-free in seconds, and it bakes in the correctness gates (clean
 single-stream driver. GPU-busy must include CUDA-graph execution. Reconcile
@@ -79,7 +72,7 @@ Do **not** use this skill for:
 ## Before attaching: bound the question
 
 Apply the
-[`Dean-Ghemawat performance-hints adaptation`](/plugins/profile-and-optimize/server/docs/performance-hints.md)
+[`Dean-Ghemawat performance-hints adaptation`](../../server/docs/performance-hints.md)
 before paying the capture overhead. Name the end-to-end metric, the suspected
 contributor, its current profile share if known, and the maximum win possible if it
 were removed. For c=1 decode, route to `inference-decode-step-budget` first. For a
@@ -94,7 +87,7 @@ question. Do not start with an untargeted "capture everything" request.
 Two paths:
 
 - **Path A (recommended)**: pre-built
-  `ghcr.io/cfregly/nsys-sidecar:0.1.0` (publicly
+  `ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d` (publicly
   readable. Manifest digest
   `sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d`).
 - **Path B (zero-build)**: `nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04`
@@ -115,7 +108,7 @@ echo "Target pod: $TARGET_POD"
 ```bash
 SIDECAR=nsys-debug-$(date +%s)
 kubectl -n $NS debug $TARGET_POD \
-  --image=ghcr.io/cfregly/nsys-sidecar:0.1.0 \
+  --image=ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d \
   --container=$SIDECAR \
   --share-processes --target=basic-inference \
   -- sleep 3600
@@ -160,7 +153,7 @@ Without that, either set `--profiler-config.profiler=cuda` (preferred - precise
 window, no restart per capture) or drop `--capture-range` and use a timed window
 (`--delay`/`--duration`) - but a fixed window is brittle (it can miss
 steady-state, and a long window can OOM at gpu-mem-util >= 0.85, truncating the
-report). See [`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md)
+report). See [`inference-decode-step-budget`](../inference-decode-step-budget/SKILL.md)
 for the endpoint-triggered recipe.
 
 **Gotcha 3 - `--attach-pid` caveats.** Attaching to a running PID for CUDA
@@ -183,10 +176,12 @@ fix it - it is a CUDA major-version toolkit-vs-driver skew (NOT permission: `RmP
 missing-lib: `libcupti.so.12` present + linked. NOT wrong-process). If you get 0 kernels on GB300,
 grep the kineto/nsys log for `CUDA versions. CUPTI/Runtime/Driver` FIRST: a 12.x-toolkit / 13.x-driver
 split needs a CUDA-13-aligned image or zymtrace (non-CUPTI), not more capture tuning.
-**SOLVED PATH (GB300 default):** use launch-wrap templates that copy a Blackwell-capable nsys
-2026.x (CUDA-13) from an NGC CUDA image into the serve container - the model-bringup template
-ships `nsys-ngc.yaml` for vLLM and `nsys-sglang.yaml` for SGLang
-(`sglang.launch_server`). These are the GB300 default. The in-image / apt nsys is superseded there.
+**GB300 path:** use an operator-owned launch wrapper that copies a
+Blackwell-capable Nsight Systems 2026.x build from an approved CUDA 13 image
+into the serving container. This repository does not ship deployment
+manifests for that wrapper. Record the source image digest, copied binary
+version, and launch change in the evidence bundle. Do not rely on an older
+in-image or apt-installed Nsight Systems build for this CUDA 13 path.
 
 **An EMPTY `cuda_gpu_kern_sum` is a CAPTURE-HYGIENE bug, NOT a "cudagraph blind
 spot" - DO NOT conclude the stack is unprofilable until you validate four
@@ -211,7 +206,7 @@ Mechanical gate: `scripts/nsys-validate-capture.sh`
 (checks the flag, rep-size, and KERNEL row count. PASS/RETRY).
 
 **Two launch-wrap gotchas that also hit nsys (canon: the ncu capture-hygiene section of
-[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) +
+[`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md) +
 `docs/METHODOLOGY.md`):** (1) `-- env VAR=v python3` makes the profiler
 target the `env` process not its python child - set the env on the profiler process itself
 (`VAR=v nsys … -- python3 …`), (2) profiler-start-based scoping is unreliable when the harness
@@ -245,7 +240,7 @@ ipb["kernel_profile"] = {
     "summary_csv_path": "profiles/gpu_kern_sum.csv",
     "duration_s": 120,
     "vllm_pid": $VLLM_PID,
-    "sidecar_image": "ghcr.io/cfregly/nsys-sidecar:0.1.0",
+    "sidecar_image": "ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d",
     "method": "kubectl-debug-share-processes",
     # populate top_kernels from the CSV's "name" + "samples" columns
 }
@@ -308,9 +303,9 @@ the start.
 
 ## Pairs with
 
-- [`inference-decode-step-budget`](/plugins/profile-and-optimize/skills/inference-decode-step-budget/SKILL.md) - FAST, restart-free c=1/low-concurrency decode-step budget via vLLM's `/start_profile` endpoint. Use it (not this skill) when the question is "where does decode time go / is it kernel- or host-bound".
-- [`zymtrace-anchored-query`](/plugins/profile-and-optimize/skills/zymtrace-anchored-query/SKILL.md) - kernel-name resolution + sample-share from ClickHouse, no cluster mutation. Run FIRST. An empty result right after a bench is usually ClickHouse ingest lag (async flush), not absence - wait + requery for the freshest data (see [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md)).
-- [`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md) - per-kernel hardware counters (occupancy, regs, smem, DRAM BW, roofline) using the SAME sidecar image, scoped via `--kernel-name` to avoid the 10-100x kernel-replay slowdown. Run AFTER nsys to interpret hot-kernel ROOT CAUSE (memory-bound vs compute-bound vs occupancy-limited).
+- [`inference-decode-step-budget`](../inference-decode-step-budget/SKILL.md) - FAST, restart-free c=1/low-concurrency decode-step budget via vLLM's `/start_profile` endpoint. Use it (not this skill) when the question is "where does decode time go / is it kernel- or host-bound".
+- [`zymtrace-anchored-query`](../zymtrace-anchored-query/SKILL.md) - kernel-name resolution + sample-share from ClickHouse, no cluster mutation. Run FIRST. An empty result right after a bench is usually ClickHouse ingest lag (async flush), not absence - wait + requery for the freshest data (see [`server/docs/zymtrace-query-hygiene.md`](../../server/docs/zymtrace-query-hygiene.md)).
+- [`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md) - per-kernel hardware counters (occupancy, regs, smem, DRAM BW, roofline) using the SAME sidecar image, scoped via `--kernel-name` to avoid the 10-100x kernel-replay slowdown. Run AFTER nsys to interpret hot-kernel ROOT CAUSE (memory-bound vs compute-bound vs occupancy-limited).
 
 ## Full-context reporting (no bare numbers)
 
@@ -342,7 +337,7 @@ nsys gpu_kern_sum gives wall-clock time per kernel. The %SoL conversion
 needs FLOPS / bytes per kernel which **ncu** captures, not nsys. When
 a nsys finding flags a hot kernel that needs proper %SoL interpretation,
 the next step is
-[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)
+[`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md)
 on that kernel name - see the "Pairs with" entry above.
 
 ## Next lever / BREAKTHROUGH (Grind Mandate)
@@ -368,11 +363,11 @@ kernel rubric (`docs/METHODOLOGY.md` "Kernel-work classification").
 vs Triton vs CUDA-graph-captured) and the absolute per-kernel duration that feeds the
 P-axis comparison - but it **cannot** prove the H axis (tensor-core engagement) or a
 true %SoL. Defer the H + P proof to
-[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md), which is
+[`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md), which is
 the gate's enforcement point. Reminder: a win over a strictly-lower-H/R baseline (e.g.
 beating generic Triton when production runs the `sm100f` tensor-core library) is a
 **DRAFT, never a VERDICT** - it fails the "Fair baseline" clause. When the campaign
 reaches L4 (an ncu roofline renders), the structured `krhpa:` block in `config.yaml`
 is **required** by `publish_to_lake` (see the YAML example in
-[`inference-kernel-ncu-profile`](/plugins/profile-and-optimize/skills/inference-kernel-ncu-profile/SKILL.md)). Prose in
+[`inference-kernel-ncu-profile`](../inference-kernel-ncu-profile/SKILL.md)). Prose in
 `SOURCE.md`/`summary.md` alone no longer satisfies the gate.

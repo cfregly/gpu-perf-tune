@@ -1,27 +1,41 @@
 #!/usr/bin/env bash
-# Tagging-rigidity pre-push gate (CLAUDE.md "Git identity + release tagging").
-#
-# Wired in .pre-commit-config.yaml as a `stages: [pre-push]` local hook; enable with
-#   pre-commit install --hook-type pre-push
-#
-# A release == a plugin.json version bump. This blocks a push when the current
-# plugin.json version has no matching annotated vX.Y.Z tag. Non-release commits
-# (version unchanged) pass, because the prior release's tag already exists.
+# Verify that one exact release commit has its matching annotated version tag.
+# This is an explicit release assertion. It is not a pre-push policy hook.
 set -euo pipefail
 
-PLUGIN_JSON="plugins/profile-and-optimize/.claude-plugin/plugin.json"
-[ -f "$PLUGIN_JSON" ] || { echo "check-release-tag: $PLUGIN_JSON not found" >&2; exit 1; }
-
-ver="$(python3 -c "import json,sys; print(json.load(open('$PLUGIN_JSON'))['version'])")"
-
-if git rev-parse -q --verify "refs/tags/v${ver}" >/dev/null 2>&1; then
-  exit 0
+if [[ "${1:-}" == "--require" && "$#" -eq 1 ]]; then
+  expected_ref="HEAD"
+elif [[ "${1:-}" == "--require-at" && "$#" -eq 2 ]]; then
+  expected_ref="$2"
+else
+  echo "usage: scripts/check-release-tag.sh --require | --require-at COMMIT" >&2
+  exit 2
 fi
 
-cat >&2 <<EOF
-RELEASE-TAG GATE: plugin.json version is ${ver} but no annotated tag v${ver} exists.
-Tagging rigidity (CLAUDE.md "Git identity + release tagging"): every release MUST be
-tagged. Create + push it (or run 'make release'):
-  git tag -a v${ver} -m "v${ver}: <summary>" && git push origin v${ver}
-EOF
-exit 1
+VERSION_FILE="VERSION"
+expected_commit="$(git rev-parse "${expected_ref}^{commit}")"
+ver="$(git show "${expected_commit}:${VERSION_FILE}")"
+tag="v${ver}"
+
+if ! git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
+  echo "RELEASE-TAG GATE: ${tag} is missing for ${expected_commit}." >&2
+  exit 1
+fi
+if [[ "$(git cat-file -t "refs/tags/${tag}")" != "tag" ]]; then
+  echo "RELEASE-TAG GATE: ${tag} exists but is not an annotated tag." >&2
+  exit 1
+fi
+
+tag_commit="$(git rev-parse "refs/tags/${tag}^{}")"
+if [[ "${tag_commit}" != "${expected_commit}" ]]; then
+  echo "RELEASE-TAG GATE: ${tag} points to ${tag_commit}, expected ${expected_commit}." >&2
+  exit 1
+fi
+
+tagged_ver="$(git show "${tag_commit}:${VERSION_FILE}")"
+if [[ "${tagged_ver}" != "${ver}" ]]; then
+  echo "RELEASE-TAG GATE: ${tag} contains VERSION ${tagged_ver}, expected ${ver}." >&2
+  exit 1
+fi
+
+echo "[ok] annotated ${tag} points to ${expected_commit}"

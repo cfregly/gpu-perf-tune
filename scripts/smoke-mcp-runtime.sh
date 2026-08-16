@@ -48,10 +48,19 @@ Options:
 EOF
 }
 
+require_value() {
+  local option="$1"
+  local value="${2-}"
+  if [[ -z "${value}" || "${value}" == -* ]]; then
+    printf 'FATAL: %s requires a value\n' "${option}" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --server) SERVER="$2"; shift 2 ;;
-    --expected-tools) EXPECTED_TOOLS="$2"; shift 2 ;;
+    --server) require_value "$1" "${2-}"; SERVER="$2"; shift 2 ;;
+    --expected-tools) require_value "$1" "${2-}"; EXPECTED_TOOLS="$2"; shift 2 ;;
     --quiet) QUIET=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'unknown arg: %s\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -73,11 +82,10 @@ if [[ -z "${SERVER}" ]]; then
   fi
 fi
 
-if [[ ! -f "${SERVER}/CLAUDE.md" || ! -d "${SERVER}/tools" ]]; then
+if [[ ! -f "${SERVER}/pyproject.toml" || ! -f "${SERVER}/mcp_surface.py" || ! -d "${SERVER}/tools" ]]; then
   printf 'FATAL: server directory does not look right: %s\n' "${SERVER}" >&2
   exit 2
 fi
-
 VENV_PY="${SERVER}/.venv/bin/python"
 if [[ ! -x "${VENV_PY}" ]]; then
   printf 'FATAL: bundled venv not installed at %s\n' "${VENV_PY}" >&2
@@ -98,6 +106,10 @@ if [[ -z "${EXPECTED_TOOLS}" ]]; then
     exit 2
   fi
 fi
+if [[ ! "${EXPECTED_TOOLS}" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'FATAL: --expected-tools must be a positive integer, got %s\n' "${EXPECTED_TOOLS}" >&2
+  exit 2
+fi
 
 log "[1/4] server:         ${SERVER}"
 log "[1/4] venv python:    ${VENV_PY}"
@@ -110,8 +122,6 @@ SMOKE_OUTPUT="$(PROFILE_AND_OPTIMIZE_REPO_ROOT="${SERVER}" "${VENV_PY}" - <<'PYE
 import json
 import os
 import subprocess
-import sys
-import time
 
 server_root = os.environ["PROFILE_AND_OPTIMIZE_REPO_ROOT"]
 venv_py = os.path.join(server_root, ".venv", "bin", "python")
@@ -153,7 +163,7 @@ try:
     init_resp = send_request("initialize", {
         "protocolVersion": "2024-11-05",
         "capabilities": {},
-        "clientInfo": {"name": "profile-and-optimize-smoke", "version": "0.6.0"},
+        "clientInfo": {"name": "profile-and-optimize-smoke", "version": "0.2.1"},
     }, req_id=1)
     if "error" in init_resp:
         result["errors"].append({"step": "initialize", "error": init_resp["error"]})
@@ -177,16 +187,32 @@ try:
     if result["start_ok"]:
         call_resp = send_request("tools/call", {
             "name": "search_runbooks",
-            "arguments": {"params": {"args": ["b200 8b", "--limit", "1"]}},
+            "arguments": {"query": "profile regression", "limit": 1},
         }, req_id=3)
         if "error" in call_resp:
             result["errors"].append({"step": "tools/call", "error": call_resp["error"]})
         else:
             content = call_resp.get("result", {}).get("content", [])
+            text_chunks = [
+                chunk.get("text", "")
+                for chunk in content
+                if chunk.get("type") == "text"
+            ]
+            try:
+                envelope = json.loads(text_chunks[0]) if text_chunks else None
+            except json.JSONDecodeError:
+                envelope = None
+            envelope_ok = (
+                isinstance(envelope, dict)
+                and envelope.get("tool") == "search_runbooks"
+                and envelope.get("library") == "mcp_aux"
+                and envelope.get("returncode") in (0, 1)
+            )
             result["tools_call"] = {
-                "ok": True,
+                "ok": envelope_ok,
                 "content_chunks": len(content),
                 "first_chunk_type": content[0].get("type") if content else None,
+                "envelope": envelope,
             }
 finally:
     try:
@@ -233,9 +259,13 @@ if [[ "${ASSERT_FAIL}" -eq 1 ]]; then
   exit 1
 fi
 
-log "[3/4] initialize handshake:      ok"
-log "[3/4] tools/list count:          ${TOOL_COUNT} (expected ${EXPECTED_TOOLS})"
-log "[3/4] tools/call search_runbooks: ok"
-log "[4/4] [ok] mcp-runtime smoke test passed"
+if [[ "${QUIET}" -eq 1 ]]; then
+  printf '[ok] mcp-runtime smoke test passed\n'
+else
+  log "[3/4] initialize handshake:      ok"
+  log "[3/4] tools/list count:          ${TOOL_COUNT} (expected ${EXPECTED_TOOLS})"
+  log "[3/4] tools/call search_runbooks: ok"
+  log "[4/4] [ok] mcp-runtime smoke test passed"
+fi
 
 exit 0

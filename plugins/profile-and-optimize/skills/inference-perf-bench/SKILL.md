@@ -1,6 +1,9 @@
 ---
 name: inference-perf-bench
-last_validated: 2026-08-03
+license: MIT
+compatibility: Requires a skills-compatible agent, configured MCP servers named in allowed-tools, and a POSIX shell with the commands named by the workflow.
+metadata:
+  last-validated: "2026-08-16"
 description: >-
   Canonical inference perf-bench skill (formal name. The colloquial alias
   is `ai-bench` - identical behaviour). Drives NVIDIA AIPerf + the
@@ -14,16 +17,7 @@ description: >-
   latency", "run aiperf", "performance test", or any combination of "perf /
   latency / throughput / tps / TTFT / ITL" with "inference / vllm /
   serverless / bench".
-allowed-tools:
-  - mcp__profile_and_optimize__search_runbooks
-  - mcp__profile_and_optimize__search_evidence
-  - Bash(kubectl:*)
-  - Bash(huggingface-cli:*)
-  - Bash(curl:*)
-  - Bash(jq:*)
-  - Bash(date:*)
-  - Read
-  - Write
+allowed-tools: "mcp__profile_and_optimize__search_runbooks mcp__profile_and_optimize__search_evidence Bash(kubectl:*) Bash(huggingface-cli:*) Bash(curl:*) Bash(jq:*) Bash(date:*) Read Write"
 ---
 
 # inference-perf-bench
@@ -47,9 +41,9 @@ capture.
 > sweeps use `num_prompts=2*c` (e.g. 128 @ c=64). See `docs/METHODOLOGY.md` trap 4.
 
 The core benchmark loop is a standard 9-phase AIPerf workflow (Phase B
-below). This file does not belabor the per-phase mechanics - it adds
-the cockpit-specific cross-references (perf-baseline registry, perf-lake
-export, evidence bundle scaffolding) that turn a bench run into a
+below). This file does not belabor the per-phase mechanics. It adds
+project cross-references for the perf-baseline registry, perf-lake export,
+and evidence bundle scaffolding that turn a bench run into a
 durable, comparable result.
 
 ## When to use
@@ -70,7 +64,7 @@ Do **not** use this skill for:
   `nccl-tests` suite.
 - Quality / accuracy evaluation (GPQA, MMLU-Pro,
   Terminal-Bench, SWE-Bench) - use
-  [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md).
+  [`inference-model-eval`](../inference-model-eval/SKILL.md).
 - Model deployment / promotion itself - creating or updating standing
   deployments is a platform operation outside this plugin's scope.
 
@@ -86,7 +80,7 @@ Do **not** use this skill for:
 
 ## Prerequisites
 
-Standard bench prerequisites plus the cockpit's provenance contract:
+Standard bench prerequisites plus the project's provenance contract:
 
 1. **`HF_TOKEN`** - a HuggingFace read token with access to the
    `replay-playback` dataset.
@@ -95,7 +89,7 @@ Standard bench prerequisites plus the cockpit's provenance contract:
 3. **Namespace** - the namespace where the bench pod (e.g.
    `my-perf-bench`) lands.
 4. **`PROFILE_AND_OPTIMIZE_REPO_ROOT`** - set by the bundled MCP server at install
-   time. The cockpit writes the result bundle under
+   time. The workflow writes the result bundle under
    `${PROFILE_AND_OPTIMIZE_REPO_ROOT}/experiments/artifacts/inference-perf-bench/<UTC-ts>/`.
 
 ## Interaction style
@@ -106,9 +100,9 @@ the bridge skills below before deleting the bench pod.
 
 ## Workflow
 
-### Phase A: scaffold an evidence bundle (cockpit-side)
+### Phase A: scaffold an evidence bundle
 
-Optional but recommended. Use [`evidence-bundle-init`](/plugins/profile-and-optimize/skills/evidence-bundle-init/SKILL.md):
+Optional but recommended. Use [`evidence-bundle-init`](../evidence-bundle-init/SKILL.md):
 
 ```text
 /evidence-bundle-init --family inference-perf-bench --intent "perf-bench on <model> at concurrency <C>"
@@ -118,12 +112,12 @@ This creates `experiments/artifacts/inference-perf-bench/<run-id>/` with
 `SOURCE.md`, `summary.md`, `commands/`. Every shell command in the
 9-phase workflow can then be captured as a four-file tuple
 under `commands/` for the reproducibility-grade-evidence rule
-(`server/CLAUDE.md`).
+(`server/AGENTS.md`).
 
 ### Phase A.25: write the pre-bench estimate
 
 Before choosing a broad concurrency sweep, apply
-[`inference-performance-hints`](/plugins/profile-and-optimize/skills/inference-performance-hints/SKILL.md).
+[`inference-performance-hints`](../inference-performance-hints/SKILL.md).
 Record a DRAFT estimate ledger in the bundle: expected weight/KV, compute,
 collective, launch/host, and queueing terms, their sources, and which costs overlap.
 Use it to choose the smallest sweep that crosses the expected latency/throughput
@@ -165,12 +159,12 @@ Download Results, (9) Report.
 
 The four canonical vLLM Prometheus metrics captured in Phases 4 + 7
 are also the canonical metric set
-[`prometheus-anchored-query`](/plugins/profile-and-optimize/skills/prometheus-anchored-query/SKILL.md)
+[`prometheus-anchored-query`](../prometheus-anchored-query/SKILL.md)
 exposes as a worked example: `vllm:prefix_cache_hit_rate`,
 `vllm:gpu_cache_usage_perc`, `vllm:num_requests_running`,
 `vllm:avg_generation_throughput_toks_per_s`.
 
-### Phase C: register a baseline (cockpit-side)
+### Phase C: register a baseline
 
 After Phase 9 (Report), the operator has a
 `perf-bench-report-<YYYY-MM-DD>.md` plus per-concurrency aiperf logs.
@@ -182,15 +176,15 @@ Register the result as a baseline for future regression diffs:
   --source experiments/artifacts/inference-perf-bench/<run-id>/
 ```
 
-See [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md)
+See [`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md)
 for the full contract.
 
 ### Phase D: land the result in the perf-lake (MANDATORY)
 
-Per the `server/CLAUDE.md` "Experiment Isolation &
+Per the `server/AGENTS.md` "Experiment Isolation &
 Traceability" rule, a measurement is not a result until it lands in the
 perf-lake with Speed-of-Light rooflines. The canonical path is the
-`perftunereport` pipeline (see [`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md)),
+`perftunereport` pipeline (see [`inference-perf-tune-report`](../inference-perf-tune-report/SKILL.md)),
 keyed by `campaign=<id>` where `<id>` is this bundle's run-id:
 
 ```text
@@ -200,27 +194,27 @@ perftunereport atlas_aggregate --campaign <id>
 perftunereport dcgm_correlate  --campaign <id> --cell-id <cell> --frozen-yaml <dcgm-frozen>.yaml  # raises sol_rigor to L3 (pages 6/6b)
 perftunereport import_roofline_sweep --campaign <id> --bundle <roofline-out> --hardware GB300 --tensor-parallel <tp> --cache-mode cold  # page 7
 perftunereport report_render   --campaign <id>              # SoL roofline pages; sets sol_complete + sol_rigor
-perftunereport publish_to_lake --campaign <id>              # atlas_v1 + campaign_v1 parquet (always lands; records focus + sol_rigor)
+perftunereport publish_to_lake --campaign <id> --i-understand-this-publishes-externally  # atlas_v1 + campaign_v1 parquet
 ```
 
-**Always-on prefill/decode roofline.** Before publish, also run the gated
-`*-deploy/profiling/roofline-sweep.sh` (decode-concurrency + prefill-ISL sweep with
-per-cell in-pod `dcgmi` PROF) and `import_roofline_sweep` so the campaign carries **page 7**
+**Always-on prefill/decode roofline.** Before publish, capture an
+operator-provided decode-concurrency and prefill-ISL sweep with per-cell DCGM
+metrics. Run `import_roofline_sweep` so the campaign carries **page 7**
 (per-GPU roofline + HBM%/tensor%/SM%-vs-concurrency - the "what C maxes the TFLOPs / is decode
 >=75% HBM / which sharding degree" answers. Per-(c,ISL) DCGM lands in `atlas_v1.extra_json`).
 Sweep every candidate config (TP / KV-dtype) so page 7 overlays them. See
-[`inference-perf-tune-report`](/plugins/profile-and-optimize/skills/inference-perf-tune-report/SKILL.md) Phase D3.
+[`inference-perf-tune-report`](../inference-perf-tune-report/SKILL.md) Phase D3.
 
-**Always-publish with focus + sol_rigor.** EVERY run publishes a
+**Strict publish with focus + sol_rigor.** Every complete run publishes a
 `sol_complete` roofline and records `focus` (set it in the campaign YAML) +
 `sol_rigor` (`L4` ncu | `L3` DCGM | `L1` zymtrace-proxy | `none`). The DCGM +
 zymtrace capture below RAISES `sol_rigor` toward L3/L4 - it is not a
-publish gate. `publish_to_lake` **never refuses** by default: a latency-bound /
-proxy / `dcgm_grounded=false` run is a first-class published result, with the
-gap RECORDED on `campaign_v1` + warned (pass `--strict` only when you want
-publish to refuse). Still capture DCGM (SM/DRAM/tensor/GR + NVLINK bytes)
+publish gate. `publish_to_lake` is strict by default and refuses a latency-bound,
+proxy, or `dcgm_grounded=false` run that misses required evidence. Use
+`--no-strict` only for an intentional-gap publish, which records and warns on
+the gap. Still capture DCGM (SM/DRAM/tensor/GR + NVLINK bytes)
 concurrently with the bench window and fold it in via `dcgm_correlate` (or the
-[`inference-dcgm-correlate`](/plugins/profile-and-optimize/skills/inference-dcgm-correlate/SKILL.md) skill) for a
+[`inference-dcgm-correlate`](../inference-dcgm-correlate/SKILL.md) skill) for a
 tighter (L3) roofline.
 
 This pipeline records gaps loudly instead of leaving silent
@@ -229,8 +223,8 @@ STATUS_FULL but lacks `Median TTFT (ms)` / `Request throughput (req/s)`
 (such a cell produces no scatter point), `atlas_aggregate` warns on 0
 plot-ready / full-but-unplottable cells, `report_render` records every
 omitted SoL page (why + how-to-fix) on a completeness page +
-`report_status.json`, and `publish_to_lake` records the gap on the lake row
-(it lands by default, `--strict` refuses). If a cell's bench output
+`report_status.json`. Strict publish refuses the gap. An explicit `--no-strict`
+publish records it on the lake row. If a cell's bench output
 is missing those lines, re-run the bench so it prints them, then
 re-import + re-aggregate + re-render.
 
@@ -255,7 +249,7 @@ re-import + re-aggregate + re-render.
 
 ## Experiment isolation & traceability (mandatory)
 
-Per the `server/CLAUDE.md` "Experiment Isolation &
+Per the `server/AGENTS.md` "Experiment Isolation &
 Traceability" rule (and `docs/METHODOLOGY.md`):
 
 - Any disposable serve/bench deployment this workflow creates MUST use
@@ -274,7 +268,7 @@ Traceability" rule (and `docs/METHODOLOGY.md`):
   roofline pages render. zymtrace flushes to ClickHouse asynchronously, so an
   empty L1 right after the window is **ingest lag, not absence** -- wait + requery
   for the freshest data (see
-  [`server/docs/zymtrace-query-hygiene.md`](/plugins/profile-and-optimize/server/docs/zymtrace-query-hygiene.md)).
+  [`server/docs/zymtrace-query-hygiene.md`](../../server/docs/zymtrace-query-hygiene.md)).
   Record the created object names + perf-lake `campaign=<id>` in the bundle `SOURCE.md`.
 
 ## Full-context reporting (no bare numbers)
@@ -295,7 +289,7 @@ default, ship a config, or appear in a report.
 
 Every result table this skill produces MUST carry a `%SoL` column
 alongside the absolute throughput / latency numbers. Per the
-`server/CLAUDE.md` "Speed-of-light framing" section:
+`server/AGENTS.md` "Speed-of-light framing" section:
 
 - Workload-level: peak `output_tps_per_gpu` compared to the
   HBM-bandwidth ceiling (`b200_sm100.hbm3e_tbps = 8.0 TB/s` ÷
@@ -312,7 +306,7 @@ alongside the absolute throughput / latency numbers. Per the
 
 If this skill emits a measured result, its output MUST end by naming the **next perf lever**,
 its **expected unlock** (direction + rough magnitude), and the **gate** that proves/refutes it,
-per "The Grind Mandate" (`server/CLAUDE.md` + `docs/METHODOLOGY.md`). A
+per "The Grind Mandate" (`server/AGENTS.md` + `docs/METHODOLOGY.md`). A
 measured win is the new floor, not the finish -- so **do everything we can to find the next
 BREAKTHROUGH**: the highest-EV unlock toward Speed-of-Light (a new champion / kernel / router /
 quant / parallelism / spec-decode win, or an unblocked stack), not just the next micro-lever.
@@ -324,7 +318,7 @@ documented SoL wall only). Delete this section ONLY if the skill produces no mea
 
 ## Verdict rigor (DRAFT vs VERDICT)
 
-Per `server/CLAUDE.md` "Verdict rigor: DRAFT vs VERDICT", tier every bench number.
+Per `server/AGENTS.md` "Verdict rigor: DRAFT vs VERDICT", tier every bench number.
 A single sweep is a **DRAFT**. Promote to a **VERDICT** only when variance-controlled
 (same-node, >=3 trials, mean +/- std), metric-isolated (median TPOT/ITL for
 decode-latency claims - output tok/s at small num_prompts is TTFT-dominated, NOT
@@ -333,7 +327,7 @@ backend. Never an eager strawman). Mark the campaign `verdict_tier` accordingly.
 perf-lake writer gates `verdict_tier=verdict` on this provenance.
 
 **Quant-format / serve-backend claims are a MATRIX, not a single cell** (per
-`server/CLAUDE.md` "Validate the matrix, never generalize from one cell" +
+`server/AGENTS.md` "Validate the matrix, never generalize from one cell" +
 `docs/METHODOLOGY.md`). When A/B-ing quant formats or serve
 backends (NVFP4 marlin vs cutlass, FP8 compressed-tensors, ...), a single
 (backend, concurrency) point is NEVER a universal verdict -- the winner is
@@ -347,7 +341,7 @@ assuming the backend is blocked. Report the winner PER concurrency regime.
 ## Source-of-truth references
 
 - Pair: `ai-bench` (colloquial alias of this
-  skill), [`inference-model-eval`](/plugins/profile-and-optimize/skills/inference-model-eval/SKILL.md)
+  skill), [`inference-model-eval`](../inference-model-eval/SKILL.md)
   (quality-side counterpart).
-- Bridge: [`inference-perf-baseline-bridge`](/plugins/profile-and-optimize/skills/inference-perf-baseline-bridge/SKILL.md).
-- `server/CLAUDE.md` - fail-fast + provenance rules.
+- Bridge: [`inference-perf-baseline-bridge`](../inference-perf-baseline-bridge/SKILL.md).
+- `server/AGENTS.md` - fail-fast + provenance rules.

@@ -1,0 +1,9 @@
+* @cfregly
+
+/.github/ @cfregly
+/SECURITY.md @cfregly
+/CODE_OF_CONDUCT.md @cfregly
+/THIRD_PARTY_NOTICES.md @cfregly
+/plugins/profile-and-optimize/.mcp.json @cfregly
+/plugins/profile-and-optimize/server/pyproject.toml @cfregly
+/plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/pyproject.toml @cfregly

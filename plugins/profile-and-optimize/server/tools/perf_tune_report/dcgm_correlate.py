@@ -1,6 +1,6 @@
 """DCGM byte-grounded workload SoL correlator.
 
-Phase 2 of the SoL framing workstream (per workspace CLAUDE.md
+Phase 2 of the SoL framing workstream (per workspace AGENTS.md
 "Speed-of-light framing" 3-level rigor hierarchy: sample-share -> ncu
 per-kernel -> DCGM workload-level). This module is the third level.
 
@@ -185,10 +185,10 @@ class DcgmCorrelationResult:
     queries: list[dict[str, Any]]  # provenance: the actual PromQL fired
     dry_run: bool
     # Mean per-GPU power draw (watts) over the bench window, from
-    # DCGM_FI_DEV_POWER_USAGE (added v1.42.0). Enables tokens-per-watt in the
+    # DCGM_FI_DEV_POWER_USAGE. Enables tokens-per-watt in the
     # economics/cost_v1 table. None when power was not captured.
     power_watts_per_gpu: float | None = None
-    # Provenance for a later re-query of windowed DCGM metrics (added v1.51.0).
+    # Provenance for a later re-query of windowed DCGM metrics.
     # `nodes` is the distinct host/node identifier(s) the DCGM series carried
     # (DCGM_FI_DEV_POWER_USAGE is per-node, so without the node a window-only
     # capture cannot be re-queried for tokens-per-watt). `namespace` +
@@ -871,7 +871,7 @@ def write_correlation(
 
 
 # ---------------------------------------------------------------------------
-# Frozen-correlation path (v1.23.1)
+# Frozen-correlation path
 #
 # Some operators capture DCGM measurements interactively via the
 # the Prometheus MCP-mcp `query_prometheus` tool then need to fold those
@@ -932,7 +932,7 @@ def _resource_from_frozen(
     """Materialise one ResourceResult from a frozen YAML resource entry.
 
     The unit-specific computation mirrors the inline math in the
-    pre-v1.23.1 workshop scripts:
+    earlier workshop scripts:
 
     - ``ratio``: measured_avg is fraction-of-peak. For bandwidth peaks
       the bytes/s = measured_avg * peak * 1e12 (TB/s -> bytes/s);
@@ -1121,7 +1121,7 @@ def correlate_from_frozen(
         float(power_in) if isinstance(power_in, (int, float)) and power_in > 0 else None
     )
 
-    # Optional re-query provenance (v1.51.0): node(s) + pod scope.
+    # Optional re-query provenance: node(s) + pod scope.
     nodes_in = data.get("nodes")
     nodes = (
         [str(n).strip() for n in nodes_in if str(n).strip()]

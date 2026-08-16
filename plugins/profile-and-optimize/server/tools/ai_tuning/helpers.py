@@ -7,7 +7,6 @@ import argparse
 import contextlib
 import datetime as dt
 import hashlib
-import importlib.util
 import io
 import itertools
 import json
@@ -26,8 +25,6 @@ from tools.ai_tuning.optimizer import tpe as tpe_engine
 REPO_ROOT = Path(__file__).resolve().parents[2]
 from tools.shared.jsonutil import load_json
 
-DEFAULT_SPACE = REPO_ROOT / "tuning" / "tuning-space.b200-llama31-8b.json"
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for
@@ -41,13 +38,9 @@ from tools.ai_tuning.safety import (
 
 
 def load_validate_artifacts() -> Any:
-    path = REPO_ROOT / "validate_artifacts.py"
-    spec = importlib.util.spec_from_file_location("validate_artifacts", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    from tools.ai_tuning import artifact_validation
+
+    return artifact_validation
 
 def write_json(payload: Any, output: Path | None) -> None:
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
@@ -1237,7 +1230,7 @@ def validate_collected_artifacts(destination: Path, benchmark: str, min_runs: in
     errors: list[str] = []
     with contextlib.redirect_stdout(io.StringIO()):
         # require_nccl_runtime=False matches the warn-only default in
-        # validate_artifacts.py; ai_tuning's offline collector never gates
+        # artifact_validation.py. The offline collector never gates
         # the user on it. Flip to True only when the operator opts in via
         # `--require-nccl-runtime` on the validator CLI.
         validator.validate_raw_results_dir(
@@ -1295,7 +1288,7 @@ def classify_artifacts(path: Path) -> list[dict[str, Any]]:
     return findings
 
 def _proposal_candidate_index(proposal: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """v3.7 W10: index candidates by experiment_id_prefix for diffing."""
+    """Index candidates by experiment_id_prefix for diffing."""
     out: dict[str, dict[str, Any]] = {}
     candidates = proposal.get("candidates")
     if not isinstance(candidates, list):
@@ -1318,7 +1311,7 @@ def _proposal_diff_payload(
     before_path: Path,
     after_path: Path,
 ) -> dict[str, Any]:
-    """v3.7 W10: machine-readable diff between two proposal.json files."""
+    """Build a machine-readable diff between two proposal.json files."""
     import hashlib
 
     before = load_json(before_path)

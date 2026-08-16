@@ -3,10 +3,8 @@
 ``run_detector`` ties the GPUSD scraper to the stride detector and
 writes append-only JSONL output for downstream operator triage.
 
-Per ``mlperf-6.0-training/CLAUDE.md`` "Fail Fast, No Silent Fallbacks",
-the orchestrator refuses to start if the output directory's parent
-does not exist, and refuses to silently swallow stride-detector
-errors.
+The orchestrator refuses to start if the output directory's parent
+does not exist. It also propagates stride-detector errors.
 """
 
 from __future__ import annotations
@@ -43,7 +41,7 @@ def run_detector(
         output_path: when set, append the result as one JSONL row.
             Parent directory must exist; the orchestrator does NOT
             create it (operator artifact directories are managed
-            explicitly per CLAUDE.md).
+            explicitly per AGENTS.md).
         jobid: identifier carried through to the JSONL row; useful
             for the operator's downstream join against sacct.
 

@@ -1,6 +1,6 @@
-# claude-gpu-perf-tune
+# gpu-perf-tune
 
-[![ci](https://github.com/cfregly/claude-gpu-perf-tune/actions/workflows/ci.yml/badge.svg)](https://github.com/cfregly/claude-gpu-perf-tune/actions/workflows/ci.yml)
+[![ci](https://github.com/cfregly/gpu-perf-tune/actions/workflows/ci.yml/badge.svg)](https://github.com/cfregly/gpu-perf-tune/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 GPU inference profiling and optimization skills backed by a bundled MCP server: shipped as the `profile-and-optimize` plugin. 32 task-oriented workflows covering back-of-the-envelope performance triage, benchmark sweeps, kernel-level profiling (nsys / ncu / DCGM / zymtrace), speed-of-light roofline analysis, quantization and speculative-decode tuning, and a multi-page PDF perf-tune report renderer. Each skill is a `SKILL.md` following the open [Agent Skills standard](https://agentskills.io/).
@@ -21,7 +21,7 @@ higher throughput, better reliability, or a clearer operator action.
 
 ## Root concept
 
-`claude-gpu-perf-tune` is the standalone GPU inference profiling and
+`gpu-perf-tune` is the standalone GPU inference profiling and
 optimization plugin. It ships the skills, bundled MCP server, workload proof
 schema, synthetic fixture, and validation gates in this repository. A fresh
 clone has the repo-owned code and docs needed to inspect the contract, run the
@@ -34,13 +34,13 @@ local checks, and install the plugin.
 3. **Optimize**: `inference-model-optimize` (cross-engine bring-up orchestrator), `inference-quantize-calibrate`, `inference-spec-decode-train` / `-tune` / `-service`, `inference-decode-step-budget`, `inference-capacity-sizing`, `inference-known-good-config`.
 4. **Report & track**: `inference-perf-tune-report` (multi-page PDF renderer), `inference-perf-synthesize`, `inference-fleet-leaderboard`, `inference-value-ledger`, `evidence-bundle-init` provenance bundles, `prometheus-anchored-query` / `zymtrace-anchored-query` anchored observability queries.
 
-This is a Claude Code plugin: Claude operates it. The 32 skills and the bundled MCP server (`plugins/profile-and-optimize/server/`) are how Claude drives the cost work, loading a skill when your prompt matches its triggers and calling the MCP tools to estimate, sweep, profile, and report. The documented bash-tool path is the fallback wherever an external observability server is missing.
+The 32 skills and the bundled MCP server (`plugins/profile-and-optimize/server/`) are how AI coding assistants drive the cost work, loading a skill when your prompt matches its triggers and calling the MCP tools to estimate, sweep, profile, and report. The documented bash-tool path is the fallback wherever an external observability server is missing.
 
 ## Quickstart
 
 ```bash
 # 1. Add the marketplace.
-claude plugin marketplace add cfregly/claude-gpu-perf-tune
+claude plugin marketplace add cfregly/gpu-perf-tune
 
 # 2. Install the plugin.
 claude plugin install --scope user profile-and-optimize@profile-and-optimize-plugins
@@ -50,7 +50,7 @@ claude plugin install --scope user profile-and-optimize@profile-and-optimize-plu
 bash "$(ls -dt ~/.claude/plugins/cache/profile-and-optimize-plugins/profile-and-optimize/*/server/install.sh | head -1)"
 ```
 
-Restart Claude Code, then invoke any skill (e.g. `/inference-perf-bench`) or just describe the task: Claude loads a skill automatically when your prompt matches its triggers.
+Restart, then invoke any skill (e.g. `/inference-perf-bench`) or just describe the task: Claude loads a skill automatically when your prompt matches its triggers.
 
 ## Verify it
 
@@ -98,7 +98,7 @@ contract, validation gates, or runtime dependencies.
 
 ## Limitations
 
-Claude operates the skills to measure and report. They do not tune the cluster
+AI assistants operate the skills to measure and report. They do not tune the cluster
 for you. Every number depends on hardware, precision, and engine version, which
 the skills record next to the result. The speed-of-light ceilings are datasheet
 values, an upper bound rather than a promise. Within the plugin, the bundled MCP

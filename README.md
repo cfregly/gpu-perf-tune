@@ -3,7 +3,7 @@
 [![ci](https://github.com/cfregly/claude-gpu-perf-tune/actions/workflows/ci.yml/badge.svg)](https://github.com/cfregly/claude-gpu-perf-tune/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GPU inference profiling and optimization skills for [Claude Code](https://claude.com/claude-code), backed by a bundled MCP server: shipped as the `profile-and-optimize` plugin. 32 task-oriented workflows covering back-of-the-envelope performance triage, benchmark sweeps, kernel-level profiling (nsys / ncu / DCGM / zymtrace), speed-of-light roofline analysis, quantization and speculative-decode tuning, and a multi-page PDF perf-tune report renderer. Each skill is a `SKILL.md` following the open [Agent Skills standard](https://agentskills.io/).
+GPU inference profiling and optimization skills backed by a bundled MCP server: shipped as the `profile-and-optimize` plugin. 32 task-oriented workflows covering back-of-the-envelope performance triage, benchmark sweeps, kernel-level profiling (nsys / ncu / DCGM / zymtrace), speed-of-light roofline analysis, quantization and speculative-decode tuning, and a multi-page PDF perf-tune report renderer. Each skill is a `SKILL.md` following the open [Agent Skills standard](https://agentskills.io/).
 
 Born from real GPU-fleet performance engineering work, genericized so any team running GPU inference can use it. This is the cost-of-intelligence work: make inference faster and cheaper, measured not asserted.
 

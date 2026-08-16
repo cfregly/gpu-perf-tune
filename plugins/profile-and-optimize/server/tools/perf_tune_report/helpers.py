@@ -18,15 +18,29 @@ _SLUG_RE = re.compile(r"[^a-z0-9-]+")
 _SAFE_SEGMENT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
+def resolve_operator_path(value: str, *, label: str) -> Path:
+    """Normalize a complete local path selected by the process operator.
+
+    Use this only for CLI and environment overrides that intentionally select
+    the whole path. Child names joined beneath an artifact root must instead
+    pass through ``safe_path_segment`` and a containment check.
+    """
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise ValueError(f"{label} must be a non-empty local path without NUL bytes")
+
+    # codeql[py/path-injection]
+    return Path(value).expanduser().resolve()
+
+
 def resolve_campaigns_dir(override: str | None = None) -> Path:
     """Resolve the campaigns root, honoring (1) explicit override, (2) env,
     (3) the server-local ``experiments/artifacts/perf-tune-report/campaigns``
     default."""
     if override:
-        return Path(override).expanduser().resolve()
+        return resolve_operator_path(override, label="campaigns directory")
     env = os.environ.get(CAMPAIGNS_ENV)
     if env:
-        return Path(env).expanduser().resolve()
+        return resolve_operator_path(env, label=CAMPAIGNS_ENV)
     return DEFAULT_CAMPAIGNS_DIR.expanduser().resolve()
 
 
@@ -57,17 +71,26 @@ def resolve_cell_dir(campaign_dir: Path, cell_id: str) -> Path:
 def resolve_campaign_dir(slug_or_path: str, campaigns_root: Path | None = None) -> Path:
     """If the argument looks like an absolute / relative path that exists,
     return that. Otherwise treat it as a campaign slug under campaigns_root."""
-    candidate = Path(slug_or_path).expanduser()
+    candidate = resolve_operator_path(slug_or_path, label="campaign")
     if candidate.exists():
-        return candidate.resolve()
-    root = campaigns_root or resolve_campaigns_dir()
-    direct = root / slug_or_path
+        return candidate
+    try:
+        slug = safe_path_segment(slug_or_path, label="campaign")
+    except ValueError as exc:
+        raise SystemExit(f"FATAL: invalid campaign path or slug: {exc}") from exc
+    root = (campaigns_root or resolve_campaigns_dir()).resolve()
+    direct = (root / slug).resolve()
+    if not direct.is_relative_to(root):
+        raise SystemExit("FATAL: campaign slug escapes the campaigns directory")
     if direct.exists():
-        return direct.resolve()
+        return direct
     # Glob: <slug> matched as suffix of any campaign dir name.
-    for entry in sorted(root.glob(f"*-{slug_or_path}")):
+    for entry in sorted(root.glob(f"*-{slug}")):
         if entry.is_dir():
-            return entry.resolve()
+            resolved_entry = entry.resolve()
+            if not resolved_entry.is_relative_to(root):
+                raise SystemExit("FATAL: campaign symlink escapes the campaigns directory")
+            return resolved_entry
     raise SystemExit(
         f"FATAL: could not resolve campaign {slug_or_path!r}; "
         f"checked {candidate}, {direct}, and *-{slug_or_path} under {root}"

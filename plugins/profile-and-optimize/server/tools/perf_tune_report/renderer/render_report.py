@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from tools.perf_tune_report.coverage import summarize
+from tools.perf_tune_report.helpers import resolve_operator_path
 from tools.perf_tune_report.renderer import (
     champion_select,
     dcgm_category_attribution,
@@ -394,7 +395,7 @@ def discover_sol_inputs(
         return None
 
     if env_override:
-        yaml_path = Path(env_override).expanduser().resolve()
+        yaml_path = resolve_operator_path(env_override, label="SOL_CEILINGS_YAML")
         if not yaml_path.is_file():
             return None
     else:

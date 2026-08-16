@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from pathlib import Path
 
 
 VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
@@ -26,12 +25,17 @@ def main() -> int:
         print(f"release-notes: invalid numeric version {args.version!r}", file=sys.stderr)
         return 2
 
-    path = Path(args.changelog)
+    path = args.changelog
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as error:
+        source = argparse.FileType("r", encoding="utf-8")(args.changelog)
+    except argparse.ArgumentTypeError as error:
         print(f"release-notes: cannot read {path}: {error}", file=sys.stderr)
         return 2
+    try:
+        lines = source.read().splitlines()
+    finally:
+        if source is not sys.stdin:
+            source.close()
 
     start: int | None = None
     for index, line in enumerate(lines):

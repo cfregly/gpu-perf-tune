@@ -18,6 +18,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from profile_and_optimize_mcp.repo import _operator_path
 from profile_and_optimize_mcp.server import (
     RESOURCE_PATHS,
     SEARCH_TOOL_SPECS,
@@ -66,6 +67,10 @@ class ServerSmokeTest(unittest.TestCase):
             mcp_surface._TOTAL_MCP_TOOLS,
         )
         self.assertEqual(len(RESOURCE_PATHS), 6)
+
+    def test_repo_operator_path_rejects_nul_bytes(self) -> None:
+        with self.assertRaisesRegex(ValueError, "without NUL bytes"):
+            _operator_path("repo\x00outside", label="PROFILE_AND_OPTIMIZE_REPO_ROOT")
 
     def test_every_registered_resource_exists_and_is_readable(self) -> None:
         for uri, relative_path in RESOURCE_PATHS.items():

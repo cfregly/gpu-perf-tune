@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "profile-and-optimize-server"
-version = "0.3.0"
+version = "0.3.1"
 description = "GPU inference profiling and optimization server. Ships 8 CLI libraries and 53 MCP tools total, including 51 contract-driven tools and 2 auxiliary tools."
 readme = "README.md"
 requires-python = ">=3.11"

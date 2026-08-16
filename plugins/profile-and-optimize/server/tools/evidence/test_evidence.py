@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.evidence.evidence_cli import CONTRACT, build_parser, main
+from tools.evidence.evidence_cli import CONTRACT, _operator_path, build_parser, main
 
 
 SERVER_ROOT = Path(__file__).resolve().parents[2]
@@ -35,6 +35,11 @@ def test_contract_shape() -> None:
     assert spec["json"] is True
     assert "--family" in spec["required"]
     assert "--intent" in spec["required"]
+
+
+def test_operator_path_rejects_nul_bytes() -> None:
+    with pytest.raises(ValueError, match="without NUL bytes"):
+        _operator_path("repo\x00outside", label="--repo-root")
 
 
 def test_init_creates_skeleton(

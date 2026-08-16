@@ -3,6 +3,19 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-16
+
+### Security
+- Restricted the standalone TTFO probe to loopback HTTP targets, an exact API
+  path, explicit unprivileged ports, and requests that do not follow redirects.
+- Hardened operator-controlled path handling found by the first CodeQL scan,
+  including derived S3 object keys and campaign lookup slugs.
+- Replaced secret-shaped installer test fixtures with inert markers.
+
+### Changed
+- Added focused tests for validated probe URLs, safe derived paths, and explicit
+  local CLI file inputs.
+
 ## [0.3.0] - 2026-08-16
 
 ### Added

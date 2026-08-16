@@ -33,6 +33,11 @@ def test_contract_shape() -> None:
     assert "--jobid" in spec["required"]
 
 
+def test_operator_path_rejects_nul_bytes() -> None:
+    with pytest.raises(ValueError, match="without NUL bytes"):
+        slurm_cli._operator_path("bundle\x00outside", label="--bundle")
+
+
 def test_drain_contract_shape() -> None:
     spec = CONTRACT["drain"]
     assert spec["safety"] == "substitutes_nodes"

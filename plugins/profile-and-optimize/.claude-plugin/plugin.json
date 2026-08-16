@@ -1,6 +1,6 @@
 {
   "name": "profile-and-optimize",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Claude Code adapter for gpu-perf-tune. Packages GPU inference Agent Skills, an opt-in provenance hook, and the bundled profile_and_optimize MCP server for benchmarking, profiling, optimization, and evidence-backed reports.",
   "author": {
     "name": "Project contributors"

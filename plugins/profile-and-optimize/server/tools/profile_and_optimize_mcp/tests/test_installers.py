@@ -183,8 +183,8 @@ class InstallerTests(unittest.TestCase):
             root = Path(temporary_directory)
             venv = root / "venv"
             config = root / "codex-config.toml"
-            secret = "existing-private-token"
-            original = f'private_value = "{secret}"\n'
+            marker = "unchanged-config-marker"
+            original = f'custom_value = "{marker}"\n'
             config.write_text(original, encoding="utf-8")
 
             result = subprocess.run(
@@ -211,7 +211,7 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse(venv.exists())
             self.assertEqual(config.read_text(encoding="utf-8"), original)
-            self.assertNotIn(secret, result.stdout)
+            self.assertNotIn(marker, result.stdout)
             self.assertIn("would create venv", result.stdout)
             self.assertIn("[mcp_servers.profile_and_optimize]", result.stdout)
             self.assertIn("No files or client settings were changed", result.stdout)

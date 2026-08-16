@@ -31,6 +31,16 @@ import sys
 from collections import Counter
 
 
+def open_cli_text(path: str, mode: str):
+    """Open a path that the local CLI caller selected explicitly."""
+    return argparse.FileType(mode, encoding="utf-8")(path)
+
+
+def close_cli_text(stream) -> None:
+    if stream not in (sys.stdin, sys.stdout, sys.stderr):
+        stream.close()
+
+
 def approx_token_count(text: str) -> int:
     """Cheap tokenizer-free estimate (~4 chars/token for English-ish text). Replaced by
     a real HF tokenizer when --tokenizer is given."""
@@ -152,8 +162,11 @@ def main():
 
     if args.aa_shapes:
         profile = build_aa_profile()
-        with open(args.out, "w") as f:
-            json.dump(profile, f, indent=2, default=list)
+        output = open_cli_text(args.out, "w")
+        try:
+            json.dump(profile, output, indent=2, default=list)
+        finally:
+            close_cli_text(output)
         print(f"== wrote {args.out} (profile_source=aa-shapes) ==")
         print(json.dumps({k: profile[k] for k in
                           ("bench_shapes", "recommended_spec_decode")}, indent=2))
@@ -183,8 +196,9 @@ def main():
     samples = {"chat": [], "code": [], "structured-rewrite": []}
     n, skipped = 0, 0
 
-    with open(args.inp) as f:
-        for line in f:
+    source = open_cli_text(args.inp, "r")
+    try:
+        for line in source:
             line = line.strip()
             if not line:
                 continue
@@ -219,6 +233,8 @@ def main():
             class_mix[cls] += 1
             isl_buckets[bucket(il)] += 1
             osl_buckets[bucket(ol)] += 1
+    finally:
+        close_cli_text(source)
 
     if n == 0:
         print("FATAL: no usable records (need `messages`/`completion` or "
@@ -242,8 +258,11 @@ def main():
         "recommended_spec_decode": recommend_method(class_mix, out_p50),
         "redacted_samples": samples if args.keep_samples else {},
     }
-    with open(args.out, "w") as f:
-        json.dump(profile, f, indent=2, default=list)
+    output = open_cli_text(args.out, "w")
+    try:
+        json.dump(profile, output, indent=2, default=list)
+    finally:
+        close_cli_text(output)
     print(f"== wrote {args.out} ==")
     print(json.dumps({k: profile[k] for k in
                       ("n_requests", "content_class_mix", "recommended_spec_decode")},

@@ -24,7 +24,6 @@ import argparse
 import collections
 import gzip
 import json
-import os
 import sqlite3
 import statistics
 import sys
@@ -174,10 +173,12 @@ def analyze_nsys(path, tpot_ms, tokens_per_step):
 
 
 # ---------------------------------------------------------------- kineto json
-def analyze_kineto(path, tpot_ms, tokens_per_step):
-    op = gzip.open if path.endswith(".gz") else open
-    with op(path, "rt") as f:
-        trace = json.load(f)
+def analyze_kineto(source, compressed, tpot_ms, tokens_per_step):
+    if compressed:
+        with gzip.GzipFile(fileobj=source, mode="rb") as stream:
+            trace = json.load(stream)
+    else:
+        trace = json.load(source)
     ev = trace.get("traceEvents", trace if isinstance(trace, list) else [])
     GPU_CATS = {"kernel", "gpu_memcpy", "gpu_memset"}
     gpu = [(int(e["ts"] * 1000), int((e["ts"] + e.get("dur", 0)) * 1000))  # us -> ns
@@ -215,15 +216,22 @@ def main():
                     help="tokens emitted per decode step (MTP accept_len; ~2 for K=1)")
     a = ap.parse_args()
     p = a.trace
-    if not os.path.exists(p):
-        sys.exit(f"no such trace: {p}")
-    if p.endswith(".sqlite"):
-        q = analyze_nsys(p, a.tpot_ms, a.tokens_per_step)
-    elif p.endswith(".json") or p.endswith(".json.gz"):
-        q = analyze_kineto(p, a.tpot_ms, a.tokens_per_step)
-    else:
-        sys.exit("unknown trace type (want .sqlite or .json[.gz]). For nsys: "
-                 "`nsys export --type sqlite <rep>` first.")
+    try:
+        source = argparse.FileType("rb")(p)
+    except argparse.ArgumentTypeError as error:
+        sys.exit(str(error))
+    try:
+        if p.endswith(".sqlite"):
+            q = analyze_nsys(p, a.tpot_ms, a.tokens_per_step)
+        elif p.endswith(".json") or p.endswith(".json.gz"):
+            q = analyze_kineto(source, p.endswith(".gz"), a.tpot_ms, a.tokens_per_step)
+        else:
+            sys.exit("unknown trace type (want .sqlite or .json[.gz]). For nsys: "
+                     "`nsys export --type sqlite <rep>` first.")
+    finally:
+        stdin_buffer = getattr(sys.stdin, "buffer", sys.stdin)
+        if source is not stdin_buffer:
+            source.close()
     print(f"\nOVERALL: {q}")
     sys.exit(0 if q == "GREEN" else 2)
 

@@ -94,12 +94,21 @@ CONTRACT: dict[str, dict[str, Any]] = {
 # --------------------------------------------------------------------------- #
 
 
+def _operator_path(value: str, *, label: str) -> Path:
+    """Normalize a complete path chosen by the local CLI operator."""
+    if not value or "\x00" in value:
+        raise ValueError(f"{label} must be a non-empty local path without NUL bytes")
+
+    # codeql[py/path-injection]
+    return Path(value).expanduser().resolve()
+
+
 def _resolve_repo_root(arg: str | None) -> Path:
     if arg:
-        return Path(arg).expanduser().resolve()
+        return _operator_path(arg, label="--repo-root")
     env = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
     if env:
-        return Path(env).expanduser().resolve()
+        return _operator_path(env, label="PROFILE_AND_OPTIMIZE_REPO_ROOT")
     current = Path.cwd().resolve()
     while current != current.parent:
         if (
@@ -196,7 +205,7 @@ def _cluster_handoff(klass: str, sacct: dict[str, str] | None) -> str | None:
 
 def cmd_triage(args: argparse.Namespace) -> int:
     jobid = args.jobid
-    logdir = Path(args.logdir).expanduser().resolve() if args.logdir else None
+    logdir = _operator_path(args.logdir, label="--logdir") if args.logdir else None
     repo_root = None if logdir else _resolve_repo_root(args.repo_root)
     search_root = logdir or repo_root
     assert search_root is not None
@@ -327,11 +336,11 @@ def _sinfo_snapshot(ns: str, ctl: str, container: str) -> str:
 
 def _resolve_bundle(bundle: str | None, *, family: str) -> Path:
     if bundle:
-        return Path(bundle).expanduser().resolve()
+        return _operator_path(bundle, label="--bundle")
     stamp = _utc_stamp()
     env = os.environ.get("PROFILE_AND_OPTIMIZE_BUNDLE_ROOT")
     base = (
-        Path(env).expanduser().resolve()
+        _operator_path(env, label="PROFILE_AND_OPTIMIZE_BUNDLE_ROOT")
         if env
         else Path.cwd().resolve() / "experiments" / "artifacts" / "inference-perf-bench"
     )

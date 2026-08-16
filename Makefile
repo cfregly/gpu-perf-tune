@@ -12,7 +12,7 @@ SERVER_PY := $(SERVER_DIR)/.venv/bin/python
 PYTHON ?= $(if $(wildcard $(SERVER_PY)),$(SERVER_PY),python3)
 
 # Default VERSION for `make release-notes`. Override on the command line:
-#   make release-notes VERSION=v0.3.0
+#   make release-notes VERSION=v0.3.1
 VERSION ?=
 
 .PHONY: help demo check validate validate-agent-skills validate-claude-plugin validate-claude-plugin-uncached validate-uncached smoke-test smoke-mcp-runtime check-doc-links workload-proof-check lint-skill-mcp-args lint-skill-counts lint-tool-counts lint-versions check-version-transition test-release-gates pytest pytest-mcp pytest-xdist all freshness bootstrap print-mcp-snippet doctor install-mcp install-skills install-into-codex install-into-cursor refresh-symlinks release release-notes mcp-surface clean-pycache
@@ -50,11 +50,11 @@ help:
 	@printf '  make bootstrap               Set up the best-effort Cursor adapter from a clone\n'
 	@printf '  make print-mcp-snippet       Print a Cursor MCP config block without writing it\n'
 	@printf '  make doctor                  Diagnose a Cursor MCP entry. Read-only unless FIX=1\n'
-	@printf '  make release-notes VERSION=v0.3.0   Extract the CHANGELOG section for v0.3.0\n'
+	@printf '  make release-notes VERSION=v0.3.1   Extract the CHANGELOG section for v0.3.1\n'
 	@printf '  make clean-pycache           Remove __pycache__ + *.pyc under server/\n'
 	@printf '\n'
 	@printf 'Variables (override on command line):\n'
-	@printf '  VERSION                      Version tag for release-notes (e.g. v0.3.0)\n'
+	@printf '  VERSION                      Version tag for release-notes (e.g. v0.3.1)\n'
 
 validate: validate-agent-skills
 

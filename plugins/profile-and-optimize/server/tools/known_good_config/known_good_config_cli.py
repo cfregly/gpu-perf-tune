@@ -69,12 +69,21 @@ ALLOWED_SEVERITIES = FAIL_SEVERITIES | {"perf"}
 REGISTRY_RELPATH = Path("perf-tune-report") / "configs" / "known-good-configs.yaml"
 
 
+def _operator_path(value: str, *, label: str) -> Path:
+    """Normalize a complete path chosen by the local CLI operator."""
+    if not value or "\x00" in value:
+        raise ValueError(f"{label} must be a non-empty local path without NUL bytes")
+
+    # codeql[py/path-injection]
+    return Path(value).expanduser().resolve()
+
+
 def _resolve_registry(arg: str | None) -> Path:
     if arg:
-        return Path(arg).expanduser().resolve()
+        return _operator_path(arg, label="--registry")
     env = os.environ.get("KNOWN_GOOD_CONFIG_REGISTRY")
     if env:
-        return Path(env).expanduser().resolve()
+        return _operator_path(env, label="KNOWN_GOOD_CONFIG_REGISTRY")
     current = Path.cwd().resolve()
     while current != current.parent:
         candidate = current / REGISTRY_RELPATH

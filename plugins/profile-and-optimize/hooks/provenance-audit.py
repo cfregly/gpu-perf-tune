@@ -4,16 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 
 def _server_root() -> Path:
-    configured = os.environ.get("PROFILE_AND_OPTIMIZE_SERVER_ROOT")
-    if configured:
-        return Path(configured).expanduser().resolve()
     return Path(__file__).resolve().parents[1] / "server"
 
 

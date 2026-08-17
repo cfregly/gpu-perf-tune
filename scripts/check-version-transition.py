@@ -10,10 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-
-VERSION_PATTERN = re.compile(
-    r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$"
-)
+VERSION_PATTERN = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
 LEGACY_VERSION_PATH = "plugins/profile-and-optimize/.claude-plugin/plugin.json"
 
 
@@ -22,8 +19,7 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         ["git", *args],
         check=check,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
 
 
@@ -45,9 +41,7 @@ def parent_of(ref: str) -> str | None:
         return result.stdout.strip()
     shallow = git("rev-parse", "--is-shallow-repository", check=False)
     if shallow.returncode == 0 and shallow.stdout.strip() == "true":
-        raise ValueError(
-            f"cannot resolve the parent of {ref} in a shallow repository. Fetch full history first"
-        )
+        raise ValueError(f"cannot resolve the parent of {ref} in a shallow repository. Fetch full history first")
     return None
 
 

@@ -53,7 +53,7 @@ class Page5Status:
 
 
 def _dcgm_fallback_available(
-    cell_dcgm: "OrderedDict[str, dict[str, Any]] | None",
+    cell_dcgm: OrderedDict[str, dict[str, Any]] | None,
 ) -> bool:
     """True iff ``_plot_dcgm_fallback`` would plot at least one point.
 
@@ -146,7 +146,7 @@ def _peak_bandwidth_tbps(hw_data: dict[str, Any]) -> tuple[float, str]:
 
 def _plot_dcgm_fallback(
     ax,
-    cell_dcgm: "OrderedDict[str, dict[str, Any]]",
+    cell_dcgm: OrderedDict[str, dict[str, Any]],
     *,
     ridge_ai: float,
     peak_tflops: float,
@@ -172,7 +172,7 @@ def _plot_dcgm_fallback(
     Returns True iff at least one point was plotted.
     """
     plotted = 0
-    for ci, (cell_id, payload) in enumerate(cell_dcgm.items()):
+    for ci, (_cell_id, payload) in enumerate(cell_dcgm.items()):
         per_cat = payload.get("per_category_attribution") or []
         duration_s = float(payload.get("duration_s") or 0.0)
         if duration_s <= 0:
@@ -244,10 +244,10 @@ def _plot_dcgm_fallback(
 
 def render_page(
     fig,
-    cell_ncu: "OrderedDict[str, dict[str, Any]]",
+    cell_ncu: OrderedDict[str, dict[str, Any]],
     ceilings: dict[str, Any],
     hardware_key: str,
-    cell_dcgm: "OrderedDict[str, dict[str, Any]] | None" = None,
+    cell_dcgm: OrderedDict[str, dict[str, Any]] | None = None,
 ) -> Page5Status:
     """Draw the SoL roofline scatter page onto a matplotlib Figure.
 
@@ -270,11 +270,8 @@ def render_page(
     if not cell_ncu:
         raise ValueError("sol_roofline_scatter.render_page: cell_ncu is empty")
     if hardware_key not in ceilings:
-        raise ValueError(
-            f"sol_roofline_scatter.render_page: hardware_key {hardware_key!r} not in ceilings"
-        )
+        raise ValueError(f"sol_roofline_scatter.render_page: hardware_key {hardware_key!r} not in ceilings")
 
-    import matplotlib.pyplot as plt
     from matplotlib import gridspec
 
     hw_data = ceilings[hardware_key]
@@ -295,15 +292,12 @@ def render_page(
     # "dcgm" = workload-level DCGM byte/FLOP fallback (measured, not partial);
     # "empty" = nothing plottable.
     _has_real_ai = any(
-        (k.get("arithmetic_intensity_flops_per_byte") or 0) > 0
-        and (k.get("achieved_tflops") or 0) > 0
+        (k.get("arithmetic_intensity_flops_per_byte") or 0) > 0 and (k.get("achieved_tflops") or 0) > 0
         for payload in cell_ncu.values()
         for k in payload.get("kernels", [])
     )
     _has_solonly = (not _has_real_ai) and any(
-        (k.get("achieved_sm_pct_peak") or 0) > 0
-        for payload in cell_ncu.values()
-        for k in payload.get("kernels", [])
+        (k.get("achieved_sm_pct_peak") or 0) > 0 for payload in cell_ncu.values() for k in payload.get("kernels", [])
     )
     if _has_real_ai:
         page_mode = "ncu"
@@ -387,7 +381,7 @@ def render_page(
     # Decide axis range from data + the ceilings.
     all_ai: list[float] = []
     all_tflops: list[float] = []
-    for vid, payload in cell_ncu.items():
+    for _vid, payload in cell_ncu.items():
         for k in payload.get("kernels", []):
             ai = k.get("arithmetic_intensity_flops_per_byte")
             tf = k.get("achieved_tflops")
@@ -398,7 +392,7 @@ def render_page(
 
     # Reasonable defaults if some kernels lack data.
     ai_min = min(all_ai) / 5.0 if all_ai else 0.05
-    ai_max = max(all_ai + [ridge_ai]) * 5.0 if (all_ai or ridge_ai) else 1000.0
+    ai_max = max([*all_ai, ridge_ai]) * 5.0 if (all_ai or ridge_ai) else 1000.0
     tflops_min = min(all_tflops) / 5.0 if all_tflops else 0.1
     tflops_max = peak_tflops * 1.5
 
@@ -437,10 +431,7 @@ def render_page(
                 sm_pct = k.get("achieved_sm_pct_peak")
                 if sm_pct is None or sm_pct <= 0:
                     continue
-                ceil_tflops = (
-                    _category_compute_ceiling_tflops(cat, ceilings, hardware_key)
-                    or peak_tflops
-                )
+                ceil_tflops = _category_compute_ceiling_tflops(cat, ceilings, hardware_key) or peak_tflops
                 y_est = (sm_pct / 100.0) * ceil_tflops
                 if y_est <= 0:
                     continue
@@ -533,7 +524,11 @@ def render_page(
     used_dcgm_fallback = False
     if plotted_count == 0 and sol_only_count == 0 and cell_dcgm:
         used_dcgm_fallback = _plot_dcgm_fallback(
-            ax, cell_dcgm, ridge_ai=ridge_ai, peak_tflops=peak_tflops, peak_tbps=peak_tbps,
+            ax,
+            cell_dcgm,
+            ridge_ai=ridge_ai,
+            peak_tflops=peak_tflops,
+            peak_tbps=peak_tbps,
         )
 
     # When STILL no points (no ncu kernels + no %SoL-only +
@@ -571,7 +566,7 @@ def render_page(
 
     # Legend (deduped by category, since we only labelled the first cell)
     handles, labels = ax.get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
+    by_label = dict(zip(labels, handles, strict=True))
     if by_label:
         ax.legend(by_label.values(), by_label.keys(), loc="lower right", fontsize=7, frameon=True)
 

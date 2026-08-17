@@ -64,6 +64,30 @@ MODE_SYNTHETIC = "synthetic"
 MODE_DATASET_REPLAY = "dataset-replay"
 MODES = (MODE_SYNTHETIC, MODE_DATASET_REPLAY)
 
+# Command receipts preserve the invocation shape without exposing credentials.
+REDACTED_API_KEY = "<redacted>"
+API_KEY_FLAG_ERROR = (
+    "custom AIPerf commands must not include --api-key. "
+    "Use the managed API-key option or its configured environment variable."
+)
+
+
+def validate_aiperf_command(command: list[str]) -> None:
+    """Reject custom commands that could put an API key back in argv."""
+    if any("--api-key" in token for token in command):
+        raise ValueError(API_KEY_FLAG_ERROR)
+
+
+def redact_aiperf_command(command: list[str]) -> list[str]:
+    """Return a copy with every AIPerf API-key value redacted."""
+    redacted = list(command)
+    for index, token in enumerate(redacted):
+        if token == "--api-key" and index + 1 < len(redacted):
+            redacted[index + 1] = REDACTED_API_KEY
+        elif token.startswith("--api-key="):
+            redacted[index] = f"--api-key={REDACTED_API_KEY}"
+    return redacted
+
 
 @dataclass(frozen=True)
 class AAShape:
@@ -72,6 +96,90 @@ class AAShape:
     name: str
     input_tokens: int
     output_tokens: int
+
+
+def build_aiperf_auth_config(
+    shape: AAShape,
+    *,
+    model: str,
+    url: str,
+    output_artifact_dir: str,
+    endpoint: str = "/v1/chat/completions",
+    endpoint_type: str = "chat",
+    concurrency: int = 1,
+    request_count: int = 10,
+    mode: str = MODE_SYNTHETIC,
+    input_file: str | None = None,
+    custom_dataset_type: str = DEFAULT_CUSTOM_DATASET_TYPE,
+    extra_output_controls: bool = True,
+) -> dict:
+    """Build a complete AIPerf config with an environment-backed API key.
+
+    AIPerf ``profile`` does not read ``OPENAI_API_KEY`` as a direct CLI
+    default. It does resolve ``${OPENAI_API_KEY}`` in config files. Keeping
+    that placeholder in this non-secret config lets the child environment
+    carry the real key without exposing it in argv or evidence receipts.
+    """
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
+    if mode == MODE_DATASET_REPLAY and not input_file:
+        raise ValueError("dataset-replay mode requires input_file")
+
+    dataset: dict
+    if mode == MODE_SYNTHETIC:
+        dataset = {
+            "type": "synthetic",
+            "entries": request_count,
+            "prompts": {
+                "isl": {"mean": shape.input_tokens, "stddev": 0},
+                "osl": {"mean": shape.output_tokens, "stddev": 0},
+            },
+        }
+    else:
+        dataset = {
+            "type": "file",
+            "path": input_file,
+            "format": custom_dataset_type,
+            "entries": request_count,
+            "force_min_tokens": True,
+        }
+
+    extra: dict[str, int | bool] = {
+        "temperature": AA_TEMPERATURE,
+        "top_p": AA_TOP_P,
+    }
+    if extra_output_controls:
+        extra.update({"min_tokens": shape.output_tokens, "ignore_eos": True})
+
+    return {
+        "schemaVersion": "2.0",
+        "benchmark": {
+            "model": model,
+            "endpoint": {
+                "url": url,
+                "type": endpoint_type,
+                "path": endpoint,
+                "api_key": "${OPENAI_API_KEY}",
+                "streaming": True,
+                "extra": extra,
+            },
+            "dataset": dataset,
+            "phases": {
+                "type": "concurrency",
+                "concurrency": concurrency,
+                "requests": request_count,
+            },
+            "artifacts": {"dir": output_artifact_dir},
+        },
+    }
+
+
+def write_aiperf_auth_config(path: Path, config: dict) -> str:
+    """Write a deterministic, secret-free AIPerf config and return its text."""
+    text = json.dumps(config, indent=2, sort_keys=True) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return text
 
 
 # Canonical AA shapes (single source of truth). The standalone script and the
@@ -104,9 +212,7 @@ def count_tokens(text: str, encoding_name: str = O200K_ENCODING) -> int:
     try:
         import tiktoken
     except ImportError as exc:  # pragma: no cover - exercised via fallback path
-        raise TokenizerUnavailable(
-            "tiktoken is not installed; cannot count o200k_base tokens"
-        ) from exc
+        raise TokenizerUnavailable("tiktoken is not installed; cannot count o200k_base tokens") from exc
     enc = tiktoken.get_encoding(encoding_name)
     return len(enc.encode(text))
 
@@ -191,10 +297,7 @@ def generate_aa_dataset(
     text, measured, used_tiktoken = generate_prompt_text(
         shape.input_tokens, encoding_name=encoding_name, use_tiktoken=use_tiktoken
     )
-    rows = [
-        {"text_input": text, "output_length": shape.output_tokens}
-        for _ in range(count)
-    ]
+    rows = [{"text_input": text, "output_length": shape.output_tokens} for _ in range(count)]
     with out_path.open("w", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row))
@@ -222,7 +325,6 @@ def build_aiperf_command(
     endpoint_type: str = "chat",
     concurrency: int = 1,
     request_count: int = 10,
-    api_key: str | None = None,
     tokenizer: str | None = None,
     tokenizer_trust_remote_code: bool = True,
     mode: str = MODE_SYNTHETIC,
@@ -232,18 +334,23 @@ def build_aiperf_command(
 ) -> list[str]:
     """Build one ``aiperf profile`` argv for one AA shape at one concurrency.
 
+    Authentication is intentionally absent from argv. The runner supplies
+    ``OPENAI_API_KEY`` only in the child process environment.
+
     Mirrors the original ``repro_artificialanalysis.sh`` flag set. In
     ``synthetic`` mode AIPerf generates the prompt at the token mean; in
     ``dataset-replay`` mode it replays ``input_file`` exactly. The
     ``temperature:0`` / ``top_p:1`` and (optional) ``min_tokens`` /
     ``ignore_eos`` extra-inputs are applied in both modes.
     """
+    validate_aiperf_command(aiperf_cmd)
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
     if mode == MODE_DATASET_REPLAY and not input_file:
         raise ValueError("dataset-replay mode requires input_file")
 
-    cmd = list(aiperf_cmd) + [
+    cmd = [
+        *aiperf_cmd,
         "profile",
         "--model",
         model,
@@ -255,8 +362,6 @@ def build_aiperf_command(
         "--url",
         url,
     ]
-    if api_key:
-        cmd += ["--api-key", api_key]
     if tokenizer:
         cmd += ["--tokenizer", tokenizer]
         if tokenizer_trust_remote_code:

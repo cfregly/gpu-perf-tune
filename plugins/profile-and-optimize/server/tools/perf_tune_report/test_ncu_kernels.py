@@ -31,7 +31,6 @@ from tools.perf_tune_report.importers.ncu_kernels import (
     import_ncu_kernels,
 )
 
-
 # ---------------------------------------------------------------------------
 # Synthetic ncu CSV helpers
 # ---------------------------------------------------------------------------
@@ -108,14 +107,18 @@ def _make_bundle(
 
 def test_positive_path(tmp_path):
     """S1: manifest declares ncu + paired sol+raw CSVs -> ncu_kernels.json."""
-    sol = _sol_csv([
-        ("multimem_all_reduce_kernel<bfloat16>", 92.0, 8.5, 0.31, 8.0, 6.0, 4.0),
-        ("bmm_E2m1E2m1_Fp32_sm100f", 45.0, 88.0, 0.62, 8.0, 6.0, 8.0),
-    ])
-    raw = _raw_csv([
-        ("multimem_all_reduce_kernel<bfloat16>", 1.2e9, 1.5e8, 8e7, 12340.0),
-        ("bmm_E2m1E2m1_Fp32_sm100f", 5e8, 8e9, 5e9, 23000.0),
-    ])
+    sol = _sol_csv(
+        [
+            ("multimem_all_reduce_kernel<bfloat16>", 92.0, 8.5, 0.31, 8.0, 6.0, 4.0),
+            ("bmm_E2m1E2m1_Fp32_sm100f", 45.0, 88.0, 0.62, 8.0, 6.0, 8.0),
+        ]
+    )
+    raw = _raw_csv(
+        [
+            ("multimem_all_reduce_kernel<bfloat16>", 1.2e9, 1.5e8, 8e7, 12340.0),
+            ("bmm_E2m1E2m1_Fp32_sm100f", 5e8, 8e9, 5e9, 23000.0),
+        ]
+    )
     bundle = _make_bundle(
         tmp_path / "bundle",
         manifest=_VALID_MANIFEST,
@@ -145,9 +148,7 @@ def test_positive_path(tmp_path):
     # Block limit factor: warps_limit (4.0) < shared (6.0) < regs (8.0) -> "warps"
     assert nccl["block_limit_factor"] == "warps"
     # Arithmetic intensity: flops/bytes
-    assert nccl["arithmetic_intensity_flops_per_byte"] == pytest.approx(
-        (1.5e8 + 8e7) / 1.2e9, rel=1e-6
-    )
+    assert nccl["arithmetic_intensity_flops_per_byte"] == pytest.approx((1.5e8 + 8e7) / 1.2e9, rel=1e-6)
 
     bmm = next(k for k in payload["kernels"] if k["name"] == "bmm_E2m1E2m1_Fp32_sm100f")
     assert bmm["category"] == "BMM-NVFP4"
@@ -258,16 +259,20 @@ def test_multi_launch_aggregates_correctly(tmp_path):
     The importer averages SOL percentages and sums byte/flop counts.
     """
     # Same kernel, 3 launches with slightly different numbers
-    sol = _sol_csv([
-        ("k1", 90.0, 10.0, 0.30, 8, 6, 4),
-        ("k1", 92.0, 11.0, 0.32, 8, 6, 4),
-        ("k1", 94.0, 12.0, 0.34, 8, 6, 4),
-    ])
-    raw = _raw_csv([
-        ("k1", 1e9, 1e8, 1e8, 1000.0),
-        ("k1", 1e9, 1e8, 1e8, 1000.0),
-        ("k1", 1e9, 1e8, 1e8, 1000.0),
-    ])
+    sol = _sol_csv(
+        [
+            ("k1", 90.0, 10.0, 0.30, 8, 6, 4),
+            ("k1", 92.0, 11.0, 0.32, 8, 6, 4),
+            ("k1", 94.0, 12.0, 0.34, 8, 6, 4),
+        ]
+    )
+    raw = _raw_csv(
+        [
+            ("k1", 1e9, 1e8, 1e8, 1000.0),
+            ("k1", 1e9, 1e8, 1e8, 1000.0),
+            ("k1", 1e9, 1e8, 1e8, 1000.0),
+        ]
+    )
     bundle = _make_bundle(
         tmp_path / "bundle",
         manifest=_VALID_MANIFEST,
@@ -321,20 +326,12 @@ def _long_sol_csv(kernel: str, metrics: list[tuple[str, str, str]]) -> str:
     metrics: list of (metric_name, metric_unit, metric_value).
     Mirrors the real ``--page details --section SpeedOfLight`` export shape.
     """
-    header = (
-        '"ID","Process ID","Kernel Name","Section Name",'
-        '"Metric Name","Metric Unit","Metric Value","Rule Name"'
-    )
+    header = '"ID","Process ID","Kernel Name","Section Name","Metric Name","Metric Unit","Metric Value","Rule Name"'
     lines = [header]
     for mname, munit, mval in metrics:
-        lines.append(
-            f'"0","942","{kernel}","GPU Speed Of Light Throughput",'
-            f'"{mname}","{munit}","{mval}",""'
-        )
+        lines.append(f'"0","942","{kernel}","GPU Speed Of Light Throughput","{mname}","{munit}","{mval}",""')
     # ncu also emits a trailing rule row with empty Metric Name -> must be skipped.
-    lines.append(
-        f'"0","942","{kernel}","SpeedOfLight","","","","SOLBottleneck"'
-    )
+    lines.append(f'"0","942","{kernel}","SpeedOfLight","","","","SOLBottleneck"')
     return "\n".join(lines) + "\n"
 
 
@@ -359,10 +356,7 @@ def test_long_format_sol_only_basic_set(tmp_path):
     )
     # Basic-set raw page: no dram__bytes / sm__sass_thread_inst_executed_op
     # columns; carries the occupancy proxy instead.
-    raw = (
-        '"ID","Kernel Name","sm__warps_active.avg.pct_of_peak_sustained_active"\n'
-        '"0","triton_red_fused_2","91.13"\n'
-    )
+    raw = '"ID","Kernel Name","sm__warps_active.avg.pct_of_peak_sustained_active"\n"0","triton_red_fused_2","91.13"\n'
     bundle = _make_bundle(
         tmp_path / "bundle",
         manifest=_VALID_MANIFEST,
@@ -401,12 +395,12 @@ def test_ncu_2026_1_1_units_row_filtered(tmp_path):
     sol_with_units_row = (
         _SOL_HEADER + "\n"
         '"","","%","%","","","",""\n'  # units-row (Kernel Name empty, "%" units)
-        + '"0","triton_red_fused","45.0","88.0","0.62","8.0","6.0","8.0"\n'
+         + '"0","triton_red_fused","45.0","88.0","0.62","8.0","6.0","8.0"\n'
     )
     raw_with_units_row = (
         _RAW_HEADER + "\n"
         '"","","byte","inst","inst","ns"\n'  # units-row
-        + '"0","triton_red_fused","5e8","8e9","5e9","23000.0"\n'
+         + '"0","triton_red_fused","5e8","8e9","5e9","23000.0"\n'
     )
     bundle = _make_bundle(
         tmp_path / "bundle",
@@ -434,15 +428,11 @@ def test_dram_bytes_mbyte_unit_scaled_to_bytes(tmp_path):
     Regression for the unit-unaware sum that produced ~1e6-too-small bytes
     (the published dram_bytes_total=11.64 / 90 artifacts).
     """
-    sol = (
-        _SOL_HEADER + "\n"
-        '"","","%","%","","","",""\n'
-        + '"0","fmha_test","48.6","24.6","0.23","8.0","6.0","8.0"\n'
-    )
+    sol = _SOL_HEADER + '\n"","","%","%","","","",""\n' + '"0","fmha_test","48.6","24.6","0.23","8.0","6.0","8.0"\n'
     raw = (
         _RAW_HEADER + "\n"
         '"","","Mbyte","inst","inst","usecond"\n'  # units row: bytes in Mbyte
-        + '"0","fmha_test","248.4","1000","2000","66.6"\n'
+         + '"0","fmha_test","248.4","1000","2000","66.6"\n'
     )
     bundle = _make_bundle(
         tmp_path / "bundle",
@@ -456,9 +446,7 @@ def test_dram_bytes_mbyte_unit_scaled_to_bytes(tmp_path):
     # 248.4 Mbyte -> 248.4e6 bytes (NOT 248.4 raw).
     assert k["dram_bytes_total"] == pytest.approx(248.4e6)
     # AI denominator uses the scaled bytes.
-    assert k["arithmetic_intensity_flops_per_byte"] == pytest.approx(
-        3000.0 / 248.4e6, rel=1e-6
-    )
+    assert k["arithmetic_intensity_flops_per_byte"] == pytest.approx(3000.0 / 248.4e6, rel=1e-6)
 
 
 def test_tensor_core_flops_folded_into_ai(tmp_path):
@@ -493,9 +481,7 @@ def test_tensor_core_flops_folded_into_ai(tmp_path):
     # scalar stays separate (CUDA-core ffma only).
     assert k["sm_flops_total"] == pytest.approx(100.0)
     # AI uses scalar + tensor over bytes -- dominated by tensor, NOT 100/1e6.
-    assert k["arithmetic_intensity_flops_per_byte"] == pytest.approx(
-        (5e6 + 100.0) / 1e6, rel=1e-6
-    )
+    assert k["arithmetic_intensity_flops_per_byte"] == pytest.approx((5e6 + 100.0) / 1e6, rel=1e-6)
     # achieved TFLOPS computed off the total (non-null, tensor-inclusive).
     assert k["achieved_tflops"] is not None and k["achieved_tflops"] > 0
 
@@ -506,10 +492,7 @@ def test_raw_time_usecond_unit_scaled_for_tflops(tmp_path):
     to ns -- else achieved_tflops is ~1000x inflated. (Real-capture regression.)
     """
     # No SoL Duration column -> rate falls back to raw time.
-    sol = (
-        '"ID","Kernel Name","DRAM Throughput [%]","Compute (SM) Throughput [%]"\n'
-        '"0","k_t","48.0","25.0"\n'
-    )
+    sol = '"ID","Kernel Name","DRAM Throughput [%]","Compute (SM) Throughput [%]"\n"0","k_t","48.0","25.0"\n'
     # 1 GFLOP over 1000 usecond (= 1e-3 s) -> 1e9 / 1e-3 / 1e12 = 1.0 TFLOPS
     # WHEN the usecond unit is scaled to ns. Unscaled (treating 1000 as ns) it
     # would be ~1000 TFLOPS -- so 1.0 proves the unit scaling fired.

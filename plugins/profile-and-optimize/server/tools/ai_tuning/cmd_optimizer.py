@@ -20,8 +20,6 @@ from tools.ai_tuning.optimizer import hyperband as hb_engine
 from tools.ai_tuning.optimizer import tpe as tpe_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-from tools.shared.jsonutil import load_json
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for
@@ -48,21 +46,18 @@ from tools.ai_tuning.safety import (
     EXPERIMENT_LEDGER_SCHEMA_VERSION,
     PROPOSAL_SCHEMA_VERSION,
 )
+from tools.shared.jsonutil import load_json
 
 
 def command_optimizer_propose(args: argparse.Namespace) -> int:
     space = load_json(Path(args.space))
     selected_objective = choose_objective(space, args.objective)
     objective = (
-        str(selected_objective.get("name"))
-        if isinstance(selected_objective, dict)
-        else "mlperf_submission_readiness"
+        str(selected_objective.get("name")) if isinstance(selected_objective, dict) else "mlperf_submission_readiness"
     )
     direction = _objective_direction(space, objective)
     domains = finite_parameter_domains(space)
-    selected_domains = [
-        domain for domain in domains if not args.parameter or domain["name"] in set(args.parameter)
-    ]
+    selected_domains = [domain for domain in domains if not args.parameter or domain["name"] in set(args.parameter)]
     if not selected_domains:
         raise SystemExit("optimizer propose requires at least one finite parameter domain")
     selected_names = [domain["name"] for domain in selected_domains]
@@ -84,9 +79,7 @@ def command_optimizer_propose(args: argparse.Namespace) -> int:
     truncated_default = False
 
     if strategy in {"deterministic_matrix", "random"}:
-        total_possible, parameter_iterator = iter_candidate_parameters(
-            selected_domains, strategy, rng
-        )
+        total_possible, parameter_iterator = iter_candidate_parameters(selected_domains, strategy, rng)
         for parameters in parameter_iterator:
             if candidate_seen(parameters, states):
                 continue
@@ -109,7 +102,11 @@ def command_optimizer_propose(args: argparse.Namespace) -> int:
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
         observations = _observations_from_states(optimizer_space, states)
-        skip = {candidate_key({str(k): str(v) for k, v in record.get("parameters", {}).items()}) for record in states.values() if isinstance(record.get("parameters"), dict)}
+        skip = {
+            candidate_key({str(k): str(v) for k, v in record.get("parameters", {}).items()})
+            for record in states.values()
+            if isinstance(record.get("parameters"), dict)
+        }
         engine_variant = variant or "tpe"
         if engine_variant == "tpe":
             decoded, engine_state = tpe_engine.propose(
@@ -150,7 +147,11 @@ def command_optimizer_propose(args: argparse.Namespace) -> int:
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
         observations = _observations_from_states(optimizer_space, states)
-        skip = {candidate_key({str(k): str(v) for k, v in record.get("parameters", {}).items()}) for record in states.values() if isinstance(record.get("parameters"), dict)}
+        skip = {
+            candidate_key({str(k): str(v) for k, v in record.get("parameters", {}).items()})
+            for record in states.values()
+            if isinstance(record.get("parameters"), dict)
+        }
         engine_variant = variant or "hyperband"
         config = _resolve_hyperband_config(space, engine_variant, args)
         state_in = None
@@ -200,6 +201,7 @@ def command_optimizer_propose(args: argparse.Namespace) -> int:
     }
     write_json(payload, args.output)
     return 0
+
 
 def command_optimizer_status(args: argparse.Namespace) -> int:
     space = load_json(Path(args.space))
@@ -251,6 +253,7 @@ def command_optimizer_status(args: argparse.Namespace) -> int:
     }
     write_json(payload, args.output)
     return 0
+
 
 def command_optimizer_history(args: argparse.Namespace) -> int:
     space = load_json(Path(args.space)) if args.space else {}
@@ -307,6 +310,7 @@ def command_optimizer_history(args: argparse.Namespace) -> int:
     write_json(payload, args.output)
     return 0
 
+
 def command_optimizer_compare(args: argparse.Namespace) -> int:
     space = load_json(Path(args.space))
     records = read_ledger_records(args.ledger)
@@ -318,7 +322,9 @@ def command_optimizer_compare(args: argparse.Namespace) -> int:
     if record_b is None:
         raise SystemExit(f"unknown experiment id: {args.experiment_b}")
 
-    objective_name = args.objective or record_a.get("objective") or record_b.get("objective") or "mlperf_submission_readiness"
+    objective_name = (
+        args.objective or record_a.get("objective") or record_b.get("objective") or "mlperf_submission_readiness"
+    )
     direction = _objective_direction(space, objective_name)
 
     value_a = _experiment_state_value(record_a)
@@ -335,9 +341,7 @@ def command_optimizer_compare(args: argparse.Namespace) -> int:
         else:
             winner = args.experiment_a if value_a < value_b else args.experiment_b
 
-    legality_changed = (
-        record_a.get("config_patches") != record_b.get("config_patches")
-    )
+    legality_changed = record_a.get("config_patches") != record_b.get("config_patches")
 
     payload = {
         "schema_version": 1,
@@ -367,6 +371,7 @@ def command_optimizer_compare(args: argparse.Namespace) -> int:
     }
     write_json(payload, args.output)
     return 0
+
 
 def command_optimizer_import_hyp(args: argparse.Namespace) -> int:
     template_path = Path(args.template)

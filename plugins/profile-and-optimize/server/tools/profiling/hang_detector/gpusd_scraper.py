@@ -81,9 +81,7 @@ def scrape_gpusd_snapshot(
     if live_cluster:
         return _scrape_live(nodelist or [], port)
     if fixture_path is None:
-        raise ValueError(
-            "scrape_gpusd_snapshot requires fixture_path when live_cluster=False"
-        )
+        raise ValueError("scrape_gpusd_snapshot requires fixture_path when live_cluster=False")
     if not fixture_path.is_file():
         raise FileNotFoundError(f"fixture not found: {fixture_path}")
     return _scrape_fixture(fixture_path)
@@ -140,11 +138,10 @@ def _scrape_live(nodelist: list[str], port: int) -> list[RankSnapshot]:
     if not nodelist:
         raise ValueError("live_cluster=True requires a non-empty nodelist")
     try:
-        import requests  # noqa: F401 (imported here for the live path only)
+        import requests
     except ImportError as exc:
         raise ImportError(
-            "live_cluster=True requires the `requests` package; "
-            "install it or use the fixture path"
+            "live_cluster=True requires the `requests` package; install it or use the fixture path"
         ) from exc
 
     # Group nodes by rack. The cluster's hostname convention is
@@ -155,7 +152,7 @@ def _scrape_live(nodelist: list[str], port: int) -> list[RankSnapshot]:
         racks.setdefault(rack, []).append(host)
 
     by_rank: dict[int, RankSnapshot] = {}
-    for rack, hosts in racks.items():
+    for hosts in racks.values():
         # One persistent session per rack, reused across hosts. This
         # caps FDs at len(racks), not len(nodelist).
         session = requests.Session()
@@ -164,15 +161,10 @@ def _scrape_live(nodelist: list[str], port: int) -> list[RankSnapshot]:
                 url = f"http://{host}:{port}/metrics"
                 resp = session.get(url, timeout=5.0)
                 if resp.status_code != 200:
-                    raise RuntimeError(
-                        f"{host}: GET {url} returned {resp.status_code}"
-                    )
+                    raise RuntimeError(f"{host}: GET {url} returned {resp.status_code}")
                 payload = resp.json()
                 if payload.get("schema_version") != 1:
-                    raise RuntimeError(
-                        f"{host}: unsupported schema_version="
-                        f"{payload.get('schema_version')}"
-                    )
+                    raise RuntimeError(f"{host}: unsupported schema_version={payload.get('schema_version')}")
                 for row in payload.get("ranks", []):
                     snap = RankSnapshot(
                         rank=int(row["rank"]),

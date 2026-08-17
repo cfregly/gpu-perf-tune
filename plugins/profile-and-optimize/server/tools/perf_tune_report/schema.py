@@ -18,9 +18,10 @@ treats them specially (gray cells in the heatmap, omitted from scatter).
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import IO, Any, Iterable
+from typing import IO, Any
 
 STATUS_FULL = "full"
 STATUS_PARTIAL = "partial"
@@ -29,9 +30,9 @@ STATUS_EVICTED = "evicted"
 STATUSES = frozenset({STATUS_FULL, STATUS_PARTIAL, STATUS_FAILED, STATUS_EVICTED})
 
 BACKEND_VLLM_SWEEP = "vllm-sweep"
-BACKEND_SGLANG_SWEEP = "sglang-sweep"   # cross-engine A/B (SGLang arm), same client/parser as vllm-sweep
+BACKEND_SGLANG_SWEEP = "sglang-sweep"  # cross-engine A/B (SGLang arm), same client/parser as vllm-sweep
 BACKEND_AIPERF = "aiperf"
-BACKEND_TRTLLM = "trtllm"   # Stub backend, not yet implemented
+BACKEND_TRTLLM = "trtllm"  # Stub backend, not yet implemented
 BACKENDS = frozenset({BACKEND_VLLM_SWEEP, BACKEND_SGLANG_SWEEP, BACKEND_AIPERF, BACKEND_TRTLLM})
 
 # serving_engine is the normalized serving engine the bench exercised. The
@@ -149,30 +150,30 @@ class AtlasCell:
     # and docs/METHODOLOGY.md.
     # All defaulted so older JSONL still parses; the methodology gate flags any
     # "unknown"/None on a MEASURED row (fail-closed under publish/render --strict).
-    dataset: str = "unknown"            # random | sharegpt | sonnet | aa | code | ...
-    cudagraph_mode: str = "unknown"     # full | piecewise | none | eager (the eager/cudagraph trap)
+    dataset: str = "unknown"  # random | sharegpt | sonnet | aa | code | ...
+    cudagraph_mode: str = "unknown"  # full | piecewise | none | eager (the eager/cudagraph trap)
     gpu_memory_utilization: float | None = None
-    kv_cache_dtype: str = "unknown"     # fp8_e4m3 | bf16 | nvfp4 | ...
-    image: str = "unknown"              # serving image tag / vllm commit (the stack the number is from)
-    data_parallel: int = 1              # DP replica count (1 = single instance)
-    pipeline_parallel: int = 1          # PP size (1 = none)
+    kv_cache_dtype: str = "unknown"  # fp8_e4m3 | bf16 | nvfp4 | ...
+    image: str = "unknown"  # serving image tag / vllm commit (the stack the number is from)
+    data_parallel: int = 1  # DP replica count (1 = single instance)
+    pipeline_parallel: int = 1  # PP size (1 = none)
 
     # Serving-variant descriptor: the per-variant knobs needed to answer
     # "which variant + why" and to build a stable cross-campaign variant_key. All
     # nullable/optional so older JSONL still parses AND so they never fail-close the
     # methodology gate (they are not always known/applicable on every run).
-    num_speculative_tokens: int | None = None   # MTP / EAGLE K (the ``mtp`` bool is on/off; this is the K value)
-    async_scheduling: bool | None = None        # --async-scheduling (host/decode overlap)
-    max_num_seqs: int | None = None             # --max-num-seqs (decode batch cap; was extra-only)
-    enable_prefix_caching: bool | None = None   # prefix-caching on/off (distinct from prefix_cache_hit_rate)
-    bench_backend: str = ""                      # bench CLIENT (vllm | openai), distinct from `backend` (the sweep runner)
-    variant_key: str = ""                        # stable serving-variant hash (capture_signature); populated at publish/aggregate
+    num_speculative_tokens: int | None = None  # MTP / EAGLE K (the ``mtp`` bool is on/off; this is the K value)
+    async_scheduling: bool | None = None  # --async-scheduling (host/decode overlap)
+    max_num_seqs: int | None = None  # --max-num-seqs (decode batch cap; was extra-only)
+    enable_prefix_caching: bool | None = None  # prefix-caching on/off (distinct from prefix_cache_hit_rate)
+    bench_backend: str = ""  # bench CLIENT (vllm | openai), distinct from `backend` (the sweep runner)
+    variant_key: str = ""  # stable serving-variant hash (capture_signature); populated at publish/aggregate
     # Ledger-to-atlas fields are nullable/defaulted so older JSONL parses. They
     # provide first-class capture for value-findings dimensions previously
     # carried only in ``extra``. None/"" means the lever does not apply.
     # Routing / load-balancer A/B descriptor (the KV-router findings).
-    router_policy: str = ""             # round-robin | prefix-affinity | cache_aware | hybrid | adaptive | ""
-    prefix_reuse: float | None = None   # prefix-reuse level swept in a routing A/B
+    router_policy: str = ""  # round-robin | prefix-affinity | cache_aware | hybrid | adaptive | ""
+    prefix_reuse: float | None = None  # prefix-reuse level swept in a routing A/B
     per_replica_cache_hit: float | None = None  # per-replica prefix-cache hit (0..1)
     # Spec-decode acceptance length (the RESULT; the K lever is num_speculative_tokens).
     acceptance_length: float | None = None
@@ -184,7 +185,7 @@ class AtlasCell:
     # Engine-init KV-cache token capacity (the nvfp4-kv "more KV tokens" headline).
     kv_cache_tokens: int | None = None
     # DeepEP / expert-parallel mode (sub-discriminator of parallel_strategy=EP).
-    ep_mode: str = ""                   # deepep-ll | deepep-ht | none | ""
+    ep_mode: str = ""  # deepep-ll | deepep-ht | none | ""
     # Per-(cell,concurrency) DCGM utilization (0..1), promoted from campaign-level
     # dcgm_correlation.json so utilization-vs-concurrency is a flat atlas read.
     dcgm_sm_active: float | None = None
@@ -205,24 +206,16 @@ class AtlasCell:
 
     def __post_init__(self) -> None:
         if self.status not in STATUSES:
-            raise ValueError(
-                f"AtlasCell.status must be one of {sorted(STATUSES)}, got {self.status!r}"
-            )
+            raise ValueError(f"AtlasCell.status must be one of {sorted(STATUSES)}, got {self.status!r}")
         if self.parallel_strategy not in ("EP", "TP"):
-            raise ValueError(
-                f"AtlasCell.parallel_strategy must be 'EP' or 'TP', got {self.parallel_strategy!r}"
-            )
+            raise ValueError(f"AtlasCell.parallel_strategy must be 'EP' or 'TP', got {self.parallel_strategy!r}")
         if self.backend and self.backend not in BACKENDS:
-            raise ValueError(
-                f"AtlasCell.backend must be one of {sorted(BACKENDS)} or empty, got {self.backend!r}"
-            )
+            raise ValueError(f"AtlasCell.backend must be one of {sorted(BACKENDS)} or empty, got {self.backend!r}")
         # Derive serving_engine from backend when not explicitly provided.
         if not self.serving_engine:
             self.serving_engine = engine_for_backend(self.backend)
         if self.cache_mode not in ("warm", "cold", "unknown"):
-            raise ValueError(
-                f"AtlasCell.cache_mode must be 'warm', 'cold', or 'unknown', got {self.cache_mode!r}"
-            )
+            raise ValueError(f"AtlasCell.cache_mode must be 'warm', 'cold', or 'unknown', got {self.cache_mode!r}")
 
     @property
     def has_metrics(self) -> bool:
@@ -235,11 +228,7 @@ class AtlasCell:
         or TTFT). A focus=latency run (e.g. c=1 decode / kernel probe) is a
         first-class published result even without request throughput, so the
         publish path counts these via ``plot_ready_latency_points``."""
-        return (
-            self.tpot_median_ms is not None
-            or self.itl_avg_ms is not None
-            or self.ttft_avg_ms is not None
-        )
+        return self.tpot_median_ms is not None or self.itl_avg_ms is not None or self.ttft_avg_ms is not None
 
     @property
     def legend_key(self) -> tuple[str, str, int, str, bool]:
@@ -257,10 +246,7 @@ class AtlasCell:
     def legend_label(self) -> str:
         """Human-readable label used in the matplotlib legend."""
         mtp_suffix = " MTP" if self.mtp else ""
-        return (
-            f"{self.hardware} {self.quant}{mtp_suffix} "
-            f"TP={self.tensor_parallel} {self.parallel_strategy}"
-        )
+        return f"{self.hardware} {self.quant}{mtp_suffix} TP={self.tensor_parallel} {self.parallel_strategy}"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

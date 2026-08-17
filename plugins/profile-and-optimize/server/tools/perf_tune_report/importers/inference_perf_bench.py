@@ -45,25 +45,22 @@ import json
 import re
 import sys
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from tools.perf_tune_report.helpers import resolve_cell_dir
-
-from tools.perf_tune_report.schema import (
-    BACKEND_SGLANG_SWEEP,
-    BACKEND_VLLM_SWEEP,
-    STATUS_FAILED,
-    STATUS_FULL,
-    STATUS_PARTIAL,
-    AtlasCell,
-)
 from tools.perf_tune_report.importers.zymtrace_kernels import (
     KernelImportResult,
     import_zymtrace_kernels,
 )
-
+from tools.perf_tune_report.schema import (
+    BACKEND_SGLANG_SWEEP,
+    BACKEND_VLLM_SWEEP,
+    STATUS_FULL,
+    STATUS_PARTIAL,
+    AtlasCell,
+)
 
 # Regexes are anchored on the leading label so we don't pick up
 # percentile blocks or summaries from other parts of vllm's output.
@@ -71,20 +68,12 @@ _REGEX = {
     "n_reqs": re.compile(r"^Successful requests:\s+(\d+)\s*$", re.MULTILINE),
     "duration_s": re.compile(r"^Benchmark duration \(s\):\s+([\d.]+)\s*$", re.MULTILINE),
     "req_per_s": re.compile(r"^Request throughput \(req/s\):\s+([\d.]+)\s*$", re.MULTILINE),
-    "output_tps": re.compile(
-        r"^Output token throughput \(tok/s\):\s+([\d.]+)\s*$", re.MULTILINE
-    ),
-    "total_tps": re.compile(
-        r"^Total token throughput \(tok/s\):\s+([\d.]+)\s*$", re.MULTILINE
-    ),
+    "output_tps": re.compile(r"^Output token throughput \(tok/s\):\s+([\d.]+)\s*$", re.MULTILINE),
+    "total_tps": re.compile(r"^Total token throughput \(tok/s\):\s+([\d.]+)\s*$", re.MULTILINE),
     # Total input / generated tokens -> mean ISL/OSL per request (the shape
     # dimension pricing/capacity analysis needs). Derived against n_reqs below.
-    "total_input_tokens": re.compile(
-        r"^Total input tokens:\s+(\d+)\s*$", re.MULTILINE
-    ),
-    "total_generated_tokens": re.compile(
-        r"^Total generated tokens:\s+(\d+)\s*$", re.MULTILINE
-    ),
+    "total_input_tokens": re.compile(r"^Total input tokens:\s+(\d+)\s*$", re.MULTILINE),
+    "total_generated_tokens": re.compile(r"^Total generated tokens:\s+(\d+)\s*$", re.MULTILINE),
     "ttft_med_ms": re.compile(r"^Median TTFT \(ms\):\s+([\d.]+)\s*$", re.MULTILINE),
     "tpot_med_ms": re.compile(r"^Median TPOT \(ms\):\s+([\d.]+)\s*$", re.MULTILINE),
 }
@@ -115,9 +104,7 @@ def _enumerate_sweep_files(bundle: Path) -> list[_SweepFileInfo]:
             continue
         m = _SWEEP_K.match(fp.name)
         if m:
-            files.append(
-                _SweepFileInfo(path=fp, concurrency=int(m.group(2)), k=int(m.group(1)))
-            )
+            files.append(_SweepFileInfo(path=fp, concurrency=int(m.group(2)), k=int(m.group(1))))
             continue
         m = _SWEEP_SIMPLE.match(fp.name)
         if m:
@@ -267,6 +254,7 @@ def _identity_from_meta_and_overrides(
     > sensible defaults. Raises ``ValueError`` if a required field is still
     missing after the merge.
     """
+
     def pick(*keys: str, default: Any = None) -> Any:
         """Look up the first non-None match across overrides then bundle_meta.
 
@@ -406,12 +394,8 @@ def _row_from_metrics(
     total_tps_total = metrics.get("total_tps")
 
     output_tps_per_user = (1000.0 / tpot_ms) if tpot_ms else None
-    output_tps_per_gpu = (
-        (output_tps_total / identity.tensor_parallel) if output_tps_total else None
-    )
-    total_tps_per_gpu = (
-        (total_tps_total / identity.tensor_parallel) if total_tps_total else None
-    )
+    output_tps_per_gpu = (output_tps_total / identity.tensor_parallel) if output_tps_total else None
+    total_tps_per_gpu = (total_tps_total / identity.tensor_parallel) if total_tps_total else None
     ttft = metrics.get("ttft_med_ms")
 
     # Mean ISL/OSL (shape): total input/generated tokens / successful requests.
@@ -421,14 +405,17 @@ def _row_from_metrics(
     mean_input_tokens = (total_in / n_reqs) if (total_in and n_reqs) else None
     mean_output_tokens = (total_gen / n_reqs) if (total_gen and n_reqs) else None
 
-    # Typed num_speculative_tokens for THIS row (captured before the variant_extra loop below
-    # rebinds the local `k`): the row's K when sweeping K>1, else the bundle identity, else
-    # 1-if-MTP. This is what makes variant_key distinguish K=2 vs K=3.
+    # Typed num_speculative_tokens for THIS row: the row's K when sweeping K>1,
+    # else the bundle identity, else 1-if-MTP. This is what makes variant_key
+    # distinguish K=2 vs K=3.
     num_speculative_tokens = (
-        k if (k and k > 1)
-        else (identity.speculative_num_tokens
-              if identity.speculative_num_tokens is not None
-              else (1 if identity.mtp else None))
+        k
+        if (k and k > 1)
+        else (
+            identity.speculative_num_tokens
+            if identity.speculative_num_tokens is not None
+            else (1 if identity.mtp else None)
+        )
     )
 
     notes_parts = [f"imported from {sweep_path.parent.parent.name}"]
@@ -459,9 +446,9 @@ def _row_from_metrics(
     if identity.patch_files:
         extra["patch_files"] = identity.patch_files
     if identity.variant_extra:
-        for k, v in identity.variant_extra.items():
-            if k not in extra:
-                extra[k] = v
+        for extra_key, extra_value in identity.variant_extra.items():
+            if extra_key not in extra:
+                extra[extra_key] = extra_value
 
     # cell_id-with-K-suffix: keep different K runs distinguishable in the atlas.
     cell_id = identity.cell_id if k == 1 else f"{identity.cell_id}-K{k}"
@@ -526,9 +513,7 @@ def _row_from_metrics(
     )
 
 
-def _check_plot_ready(
-    rows: list[AtlasCell], require_plot_ready: bool, *, context: str = ""
-) -> None:
+def _check_plot_ready(rows: list[AtlasCell], require_plot_ready: bool, *, context: str = "") -> None:
     """Fail EARLY (at import) when ``require_plot_ready`` and any STATUS_FULL row
     lacks the ttft + request-throughput a throughput scatter point needs.
 
@@ -544,8 +529,7 @@ def _check_plot_ready(
     bad = [
         f"{r.cell_id} (c={r.concurrency})"
         for r in rows
-        if r.status == STATUS_FULL
-        and (r.ttft_avg_ms is None or r.request_throughput_avg is None)
+        if r.status == STATUS_FULL and (r.ttft_avg_ms is None or r.request_throughput_avg is None)
     ]
     if bad:
         raise ValueError(
@@ -555,8 +539,7 @@ def _check_plot_ready(
             f"output): {', '.join(bad)}. A strict throughput campaign cannot be "
             "built from incomplete capture. How to fix: re-capture the full, "
             "unfiltered `vllm bench serve` stdout and stderr. Do not grep-drop "
-            "those lines. Then re-import the bundle."
-            + (f" [{context}]" if context else "")
+            "those lines. Then re-import the bundle." + (f" [{context}]" if context else "")
         )
 
 
@@ -596,17 +579,13 @@ def import_perf_bench_bundle(
 
     sweep_files = _enumerate_sweep_files(bundle)
     if not sweep_files:
-        raise ValueError(
-            f"import_perf_bench: no sweep-c*.txt files found in {bundle}/raw/"
-        )
+        raise ValueError(f"import_perf_bench: no sweep-c*.txt files found in {bundle}/raw/")
 
     bundle_meta = _load_bundle_metadata(bundle)
-    identity = _identity_from_meta_and_overrides(
-        bundle, bundle_meta, overrides or {}
-    )
+    identity = _identity_from_meta_and_overrides(bundle, bundle_meta, overrides or {})
 
     if captured_at is None:
-        captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     rows: list[AtlasCell] = []
     skipped: list[Path] = []
@@ -671,9 +650,7 @@ def import_perf_bench_bundle(
 
     cell_dir.mkdir(parents=True, exist_ok=True)
     normalized_path = cell_dir / "normalized.json"
-    normalized_path.write_text(
-        json.dumps([r.to_dict() for r in rows], indent=2, sort_keys=True)
-    )
+    normalized_path.write_text(json.dumps([r.to_dict() for r in rows], indent=2, sort_keys=True))
     (cell_dir / "status.txt").write_text(status + "\n")
     (cell_dir / "backend.txt").write_text(BACKEND_VLLM_SWEEP + "\n")
     kernels_line = (
@@ -689,8 +666,7 @@ def import_perf_bench_bundle(
         f"- k_values:      {k_values}\n"
         f"- row_count:     {len(rows)}\n"
         f"- status:        {status}\n"
-        f"- skipped_files: {len(skipped)}\n"
-        + kernels_line
+        f"- skipped_files: {len(skipped)}\n" + kernels_line
     )
 
     return ImportResult(

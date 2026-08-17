@@ -1,4 +1,5 @@
 """Tests for the perf_tune_report kernel_reproducer_scaffold verb."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -70,9 +71,12 @@ def test_cli_verb_registered() -> None:
     ns = parser.parse_args(
         [
             "kernel_reproducer_scaffold",
-            "--kernel-name", "linear_sm100_mpk_task_impl",
-            "--header", "tasks/blackwell/linear_sm100_mpk.cuh",
-            "--output-dir", "/tmp/x",
+            "--kernel-name",
+            "linear_sm100_mpk_task_impl",
+            "--header",
+            "tasks/blackwell/linear_sm100_mpk.cuh",
+            "--output-dir",
+            "/tmp/x",
             "--dry-run",
             "--json",
         ]

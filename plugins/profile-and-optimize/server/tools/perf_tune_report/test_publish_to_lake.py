@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,25 +28,25 @@ if str(REPO_ROOT) not in sys.path:
 
 from tools.perf_tune_report.lake_writer import (
     ATLAS_TABLE_NAME,
-    S3_PREFIX,
     CAMPAIGN_TABLE_NAME,
+    CHAMPION_TABLE_NAME,
+    COST_TABLE_NAME,
     IF_EXISTS_FAIL,
     IF_EXISTS_OVERWRITE,
     IF_EXISTS_SKIP,
+    QUALITY_TABLE_NAME,
+    ROOFLINE_TABLE_NAME,
+    S3_PREFIX,
     SOL_TABLE_NAME,
     TPM_TABLE_NAME,
-    COST_TABLE_NAME,
-    QUALITY_TABLE_NAME,
-    CHAMPION_TABLE_NAME,
-    ROOFLINE_TABLE_NAME,
-    S3Config,
     CampaignIncompleteError,
+    S3Config,
     build_atlas_table,
     build_campaign_row,
-    build_sol_table,
-    build_tpm_table,
     build_cost_table,
     build_quality_table,
+    build_sol_table,
+    build_tpm_table,
     parse_campaign_utc,
     parse_source_md,
     publish,
@@ -56,7 +56,6 @@ from tools.perf_tune_report.lake_writer import (
 )
 from tools.perf_tune_report.perf_tune_report_cli import main
 from tools.perf_tune_report.schema import AtlasCell
-
 
 pytest.importorskip("pyarrow")
 
@@ -150,16 +149,12 @@ def _stage_campaign(tmp_path: Path, *, campaign_slug: str = "test-20260525T08165
 
 
 def test_parse_campaign_utc_strips_slug_prefix():
-    assert parse_campaign_utc("glm51-phase6-20260525T081650Z") == datetime(
-        2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc
-    )
+    assert parse_campaign_utc("glm51-phase6-20260525T081650Z") == datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC)
 
 
 def test_parse_campaign_utc_handles_utc_prefix():
     # Canonical campaign_init layout is "<UTC>-<slug>" (timestamp first).
-    assert parse_campaign_utc("20260529T175706Z-glm51-deepep-sweep") == datetime(
-        2026, 5, 29, 17, 57, 6, tzinfo=timezone.utc
-    )
+    assert parse_campaign_utc("20260529T175706Z-glm51-deepep-sweep") == datetime(2026, 5, 29, 17, 57, 6, tzinfo=UTC)
 
 
 def test_parse_campaign_utc_rejects_missing_suffix():
@@ -200,31 +195,71 @@ def test_build_atlas_table_schema_stable_across_extra_keys():
     table = build_atlas_table(rows, campaign_id="campaign-20260525T081650Z")
     names = [f.name for f in table.schema]
     assert names == [
-        "campaign_id", "cell_id", "model", "hardware", "quant",
-        "tensor_parallel", "parallel_strategy", "mtp",
-        "max_num_batched_tokens", "concurrency", "status",
-        "ttft_avg_ms", "request_throughput_avg",
-        "output_tps_per_user", "output_tps_per_gpu",
+        "campaign_id",
+        "cell_id",
+        "model",
+        "hardware",
+        "quant",
+        "tensor_parallel",
+        "parallel_strategy",
+        "mtp",
+        "max_num_batched_tokens",
+        "concurrency",
+        "status",
+        "ttft_avg_ms",
+        "request_throughput_avg",
+        "output_tps_per_user",
+        "output_tps_per_gpu",
         "total_tps_per_gpu",
-        "tpot_median_ms", "itl_avg_ms",
-        "mean_input_tokens", "mean_output_tokens",
-            "prefix_cache_hit_rate", "cache_mode",
-            "dataset", "cudagraph_mode", "gpu_memory_utilization",
-            "kv_cache_dtype", "image", "data_parallel", "pipeline_parallel",
-            "num_speculative_tokens", "async_scheduling", "max_num_seqs",
-            "enable_prefix_caching", "bench_backend", "variant_key",
-            "backend", "serving_engine",
-            "router_policy", "prefix_reuse", "per_replica_cache_hit", "acceptance_length",
-            "spec_accept_rate",
-            "kv_cache_tokens", "ep_mode", "dcgm_sm_active", "dcgm_dram_active", "dcgm_tensor_active",
-            "raw_path", "captured_at", "notes", "extra_json",
-        ]
+        "tpot_median_ms",
+        "itl_avg_ms",
+        "mean_input_tokens",
+        "mean_output_tokens",
+        "prefix_cache_hit_rate",
+        "cache_mode",
+        "dataset",
+        "cudagraph_mode",
+        "gpu_memory_utilization",
+        "kv_cache_dtype",
+        "image",
+        "data_parallel",
+        "pipeline_parallel",
+        "num_speculative_tokens",
+        "async_scheduling",
+        "max_num_seqs",
+        "enable_prefix_caching",
+        "bench_backend",
+        "variant_key",
+        "backend",
+        "serving_engine",
+        "router_policy",
+        "prefix_reuse",
+        "per_replica_cache_hit",
+        "acceptance_length",
+        "spec_accept_rate",
+        "kv_cache_tokens",
+        "ep_mode",
+        "dcgm_sm_active",
+        "dcgm_dram_active",
+        "dcgm_tensor_active",
+        "raw_path",
+        "captured_at",
+        "notes",
+        "extra_json",
+    ]
     assert table.num_rows == 3
     # Serving-variant descriptor columns (2026-06-07) are present + variant_key populated.
     assert "variant_key" in names and "num_speculative_tokens" in names
     vt = build_atlas_table(
-        [_make_atlas_row(num_speculative_tokens=3, async_scheduling=True,
-                         max_num_seqs=192, enable_prefix_caching=True, bench_backend="vllm")],
+        [
+            _make_atlas_row(
+                num_speculative_tokens=3,
+                async_scheduling=True,
+                max_num_seqs=192,
+                enable_prefix_caching=True,
+                bench_backend="vllm",
+            )
+        ],
         campaign_id="c-20260525T081650Z",
     )
     assert vt.column("num_speculative_tokens").to_pylist() == [3]
@@ -325,26 +360,33 @@ def test_build_atlas_table_true_grain_is_unique_after_numspec_lift():
         _make_atlas_row(cell_id="cellA", concurrency=256, cache_mode="cold"),
         _make_atlas_row(cell_id="cellA", concurrency=256, cache_mode="warm"),
         # Same cell + c=1, MTP K2 vs K3 recorded only in extra.
-        _make_atlas_row(cell_id="cellB", concurrency=1, mtp=True,
-                        num_speculative_tokens=None, extra={"num_speculative_tokens": 2}),
-        _make_atlas_row(cell_id="cellB", concurrency=1, mtp=True,
-                        num_speculative_tokens=None, extra={"spec_decode_k": 3}),
+        _make_atlas_row(
+            cell_id="cellB", concurrency=1, mtp=True, num_speculative_tokens=None, extra={"num_speculative_tokens": 2}
+        ),
+        _make_atlas_row(
+            cell_id="cellB", concurrency=1, mtp=True, num_speculative_tokens=None, extra={"spec_decode_k": 3}
+        ),
     ]
     t = build_atlas_table(rows, campaign_id="c-20260525T081650Z")
     grain_cols = (
-        "campaign_id", "cell_id", "concurrency", "mean_input_tokens",
-        "mean_output_tokens", "cache_mode", "num_speculative_tokens",
+        "campaign_id",
+        "cell_id",
+        "concurrency",
+        "mean_input_tokens",
+        "mean_output_tokens",
+        "cache_mode",
+        "num_speculative_tokens",
     )
     cols = {n: t.column(n).to_pylist() for n in grain_cols}
-    keys = list(zip(*(cols[n] for n in grain_cols)))
+    keys = list(zip(*(cols[n] for n in grain_cols), strict=True))
     assert len(keys) == len(set(keys)) == 6  # true grain: all distinct
     # ...whereas the legacy (campaign_id, cell_id, concurrency) key collapses them.
-    legacy = list(zip(cols["campaign_id"], cols["cell_id"], cols["concurrency"]))
+    legacy = list(zip(cols["campaign_id"], cols["cell_id"], cols["concurrency"], strict=True))
     assert len(set(legacy)) == 3 < len(keys)
 
 
 def _quality_ts() -> datetime:
-    return datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc)
+    return datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC)
 
 
 def test_build_quality_table_long_format_flat_key_fallback():
@@ -358,16 +400,18 @@ def test_build_quality_table_long_format_flat_key_fallback():
                 "metric_kind": "train_accuracy_proxy",
                 "acc_proxy_24k_samples": 0.311,
                 "loss_24k_samples": 3.454,
-                "batch_size": 4,        # hyperparameter -> excluded
-                "global_batch": 128,    # hyperparameter -> excluded
-                "note": "eagle3",       # non-numeric -> excluded
+                "batch_size": 4,  # hyperparameter -> excluded
+                "global_batch": 128,  # hyperparameter -> excluded
+                "note": "eagle3",  # non-numeric -> excluded
             },
         ),
         _make_atlas_row(cell_id="serving", extra={"max_num_seqs": 16}),  # no metric_kind
     ]
     table = build_quality_table(
-        rows, campaign_id="x-20260525T081650Z",
-        captured_at_utc=_quality_ts(), published_at_utc=_quality_ts(),
+        rows,
+        campaign_id="x-20260525T081650Z",
+        captured_at_utc=_quality_ts(),
+        published_at_utc=_quality_ts(),
     )
     assert set(table.column("metric_name").to_pylist()) == {"acc_proxy_24k_samples", "loss_24k_samples"}
     assert set(table.column("metric_kind").to_pylist()) == {"train_accuracy_proxy"}
@@ -377,36 +421,64 @@ def test_build_quality_table_long_format_flat_key_fallback():
 def test_build_quality_table_canonical_quality_metrics_subdict():
     # Canonical convention: extra["quality_metrics"]={name: value} -- only those
     # numeric values are emitted (hyperparameters outside the sub-dict ignored).
-    rows = [_make_atlas_row(extra={
-        "metric_kind": "acceptance",
-        "quality_metrics": {"acceptance_length": 3.2, "draft_hit_rate": 0.61},
-        "global_batch": 128,
-    })]
+    rows = [
+        _make_atlas_row(
+            extra={
+                "metric_kind": "acceptance",
+                "quality_metrics": {"acceptance_length": 3.2, "draft_hit_rate": 0.61},
+                "global_batch": 128,
+            }
+        )
+    ]
     table = build_quality_table(
-        rows, campaign_id="x-20260525T081650Z",
-        captured_at_utc=_quality_ts(), published_at_utc=_quality_ts(),
+        rows,
+        campaign_id="x-20260525T081650Z",
+        captured_at_utc=_quality_ts(),
+        published_at_utc=_quality_ts(),
     )
     assert set(table.column("metric_name").to_pylist()) == {"acceptance_length", "draft_hit_rate"}
-    assert table.column("metric_value").to_pylist() == [3.2, 0.61] or set(table.column("metric_value").to_pylist()) == {3.2, 0.61}
+    assert table.column("metric_value").to_pylist() == [3.2, 0.61] or set(table.column("metric_value").to_pylist()) == {
+        3.2,
+        0.61,
+    }
 
 
 def test_build_quality_table_empty_for_serving_only_campaign():
     rows = [_make_atlas_row(extra={"max_num_seqs": 16})]
     table = build_quality_table(
-        rows, campaign_id="x-20260525T081650Z",
-        captured_at_utc=_quality_ts(), published_at_utc=_quality_ts(),
+        rows,
+        campaign_id="x-20260525T081650Z",
+        captured_at_utc=_quality_ts(),
+        published_at_utc=_quality_ts(),
     )
     assert table.num_rows == 0
 
 
 _SOL_SCHEMA_COLUMNS = [
-    "campaign_id", "cell_id", "category", "sol_level",
-    "gpu_time_share_pct", "pct_sol", "bound", "ceiling_key",
-    "ceiling_value", "ceiling_units", "measured_value", "measured_units",
-    "attributed_bytes_total", "attributed_flops_total",
-    "arithmetic_intensity_flops_per_byte", "kernel_name", "hw_key",
-    "source_artifact", "source_artifact_sha256", "sol_ceilings_yaml_sha256",
-    "captured_at_utc", "published_at_utc", "focus", "sol_rigor",
+    "campaign_id",
+    "cell_id",
+    "category",
+    "sol_level",
+    "gpu_time_share_pct",
+    "pct_sol",
+    "bound",
+    "ceiling_key",
+    "ceiling_value",
+    "ceiling_units",
+    "measured_value",
+    "measured_units",
+    "attributed_bytes_total",
+    "attributed_flops_total",
+    "arithmetic_intensity_flops_per_byte",
+    "kernel_name",
+    "hw_key",
+    "source_artifact",
+    "source_artifact_sha256",
+    "sol_ceilings_yaml_sha256",
+    "captured_at_utc",
+    "published_at_utc",
+    "focus",
+    "sol_rigor",
 ]
 
 
@@ -414,43 +486,66 @@ def _stage_sol_cells(campaign_dir: Path) -> None:
     """Add cells/cellA/{kernels.json,dcgm_correlation.json} SoL artifacts."""
     cell = campaign_dir / "cells" / "cellA"
     cell.mkdir(parents=True, exist_ok=True)
-    (cell / "kernels.json").write_text(json.dumps({
-        "schema_version": 1,
-        "captured_sources": ["zymtrace"],
-        "top_kernels": [],
-        "per_gpu": [],
-        "per_category": {"NCCL": 300, "MoE": 100, "FMHA": 100},
-        "top_python_during_cuda": [],
-    }))
-    (cell / "dcgm_correlation.json").write_text(json.dumps({
-        "schema_version": 1,
-        "captured_sources": ["dcgm"],
-        "hw_key": "b200_sm100",
-        "sweep_start_utc": "2026-05-25T06:18:00Z",
-        "sweep_end_utc": "2026-05-25T06:20:00Z",
-        "duration_s": 120.0,
-        "n_gpus": 8,
-        "dcgm_group_level": "prof",
-        "scrape_interval_s": 1.0,
-        "short_sweep_warning": False,
-        "resources": [
-            {"peak_key": "hbm3e_tbps", "metric": "DCGM_FI_PROF_DRAM_ACTIVE",
-             "is_fallback": False, "n_gpus": 8, "measured_bytes_total": 5.0e13,
-             "measured_bytes_per_s": 4.32e11, "measured_tflops_avg": None,
-             "peak_per_gpu": 8.0, "peak_per_gpu_units": "TB/s",
-             "peak_aggregate": 64.0, "sol_pct": 5.4, "notes": []},
-        ],
-        "queries": [],
-        "dry_run": False,
-        "per_category_attribution": [
-            {"category": "NCCL", "time_share_pct": 60.0,
-             "attributed_bytes_total": 1.1e10, "attributed_flops_total": None,
-             "effective_bw_during_category_window": 1.35e8,
-             "effective_tflops_during_category_window": None,
-             "sol_pct_bw": 0.0075, "sol_pct_compute": None,
-             "bound": "bandwidth", "ceiling_metric": "nvlink5_tbps"},
-        ],
-    }))
+    (cell / "kernels.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "captured_sources": ["zymtrace"],
+                "top_kernels": [],
+                "per_gpu": [],
+                "per_category": {"NCCL": 300, "MoE": 100, "FMHA": 100},
+                "top_python_during_cuda": [],
+            }
+        )
+    )
+    (cell / "dcgm_correlation.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "captured_sources": ["dcgm"],
+                "hw_key": "b200_sm100",
+                "sweep_start_utc": "2026-05-25T06:18:00Z",
+                "sweep_end_utc": "2026-05-25T06:20:00Z",
+                "duration_s": 120.0,
+                "n_gpus": 8,
+                "dcgm_group_level": "prof",
+                "scrape_interval_s": 1.0,
+                "short_sweep_warning": False,
+                "resources": [
+                    {
+                        "peak_key": "hbm3e_tbps",
+                        "metric": "DCGM_FI_PROF_DRAM_ACTIVE",
+                        "is_fallback": False,
+                        "n_gpus": 8,
+                        "measured_bytes_total": 5.0e13,
+                        "measured_bytes_per_s": 4.32e11,
+                        "measured_tflops_avg": None,
+                        "peak_per_gpu": 8.0,
+                        "peak_per_gpu_units": "TB/s",
+                        "peak_aggregate": 64.0,
+                        "sol_pct": 5.4,
+                        "notes": [],
+                    },
+                ],
+                "queries": [],
+                "dry_run": False,
+                "per_category_attribution": [
+                    {
+                        "category": "NCCL",
+                        "time_share_pct": 60.0,
+                        "attributed_bytes_total": 1.1e10,
+                        "attributed_flops_total": None,
+                        "effective_bw_during_category_window": 1.35e8,
+                        "effective_tflops_during_category_window": None,
+                        "sol_pct_bw": 0.0075,
+                        "sol_pct_compute": None,
+                        "bound": "bandwidth",
+                        "ceiling_metric": "nvlink5_tbps",
+                    },
+                ],
+            }
+        )
+    )
 
 
 def test_build_sol_table_schema_stable_and_levels(tmp_path: Path):
@@ -458,10 +553,13 @@ def test_build_sol_table_schema_stable_and_levels(tmp_path: Path):
     _stage_sol_cells(campaign_dir)
     rows = [_make_atlas_row()]
     table = build_sol_table(
-        campaign_dir, campaign_dir.name, rows,
-        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc),
-        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=timezone.utc),
-        focus="latency", sol_rigor="L3",
+        campaign_dir,
+        campaign_dir.name,
+        rows,
+        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC),
+        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=UTC),
+        focus="latency",
+        sol_rigor="L3",
     )
     assert [f.name for f in table.schema] == _SOL_SCHEMA_COLUMNS
     levels = set(table.column("sol_level").to_pylist())
@@ -480,10 +578,13 @@ def test_build_sol_table_schema_stable_and_levels(tmp_path: Path):
 def test_build_sol_table_empty_when_no_cells(tmp_path: Path):
     campaign_dir = _stage_campaign(tmp_path)  # no cells/ dir
     table = build_sol_table(
-        campaign_dir, campaign_dir.name, [_make_atlas_row()],
-        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc),
-        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=timezone.utc),
-        focus="mixed", sol_rigor="none",
+        campaign_dir,
+        campaign_dir.name,
+        [_make_atlas_row()],
+        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC),
+        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=UTC),
+        focus="mixed",
+        sol_rigor="none",
     )
     assert table.num_rows == 0
     assert [f.name for f in table.schema] == _SOL_SCHEMA_COLUMNS
@@ -495,9 +596,10 @@ def test_build_tpm_table_peak_only_without_sla():
         _make_atlas_row(concurrency=2, output_tps_per_gpu=18.81),
     ]
     table = build_tpm_table(
-        rows, "x-20260525T081650Z",
-        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc),
-        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=timezone.utc),
+        rows,
+        "x-20260525T081650Z",
+        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC),
+        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=UTC),
     )
     ops = set(table.column("operating_point").to_pylist())
     assert ops == {"peak"}  # no SLA thresholds -> peak-only
@@ -510,9 +612,10 @@ def test_build_tpm_table_emits_sla_rows_with_thresholds():
     ]
     # ttft<=200 -> only the c=1 row qualifies; peak is the c=2 row.
     table = build_tpm_table(
-        rows, "x-20260525T081650Z",
-        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc),
-        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=timezone.utc),
+        rows,
+        "x-20260525T081650Z",
+        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC),
+        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=UTC),
         ttft_sla_ms=200.0,
     )
     d = table.to_pylist()
@@ -529,9 +632,11 @@ def test_build_cost_table_usd_per_1m_tokens(tmp_path: Path):
     # $/1M out = 4.5*1e6/(10*3600) = 125.0
     rows = [_make_atlas_row(output_tps_per_gpu=10.0, total_tps_per_gpu=40.0)]
     table = build_cost_table(
-        campaign_dir, rows, campaign_dir.name,
-        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc),
-        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=timezone.utc),
+        campaign_dir,
+        rows,
+        campaign_dir.name,
+        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC),
+        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=UTC),
         usd_per_gpu_hour={"B200": 4.50},
     )
     d = table.to_pylist()
@@ -547,9 +652,11 @@ def test_build_cost_table_usd_per_1m_tokens(tmp_path: Path):
 def test_build_cost_table_cost_null_without_config(tmp_path: Path):
     campaign_dir = _stage_campaign(tmp_path)
     table = build_cost_table(
-        campaign_dir, [_make_atlas_row(output_tps_per_gpu=10.0)], campaign_dir.name,
-        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc),
-        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=timezone.utc),
+        campaign_dir,
+        [_make_atlas_row(output_tps_per_gpu=10.0)],
+        campaign_dir.name,
+        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC),
+        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=UTC),
     )
     d = table.to_pylist()
     assert d[0]["usd_per_1m_output_tokens"] is None
@@ -561,16 +668,26 @@ def test_build_cost_table_tokens_per_watt_from_dcgm_power(tmp_path: Path):
     # Stage a per-cell dcgm_correlation.json carrying power_watts_per_gpu.
     cell = campaign_dir / "cells" / "cellA"
     cell.mkdir(parents=True, exist_ok=True)
-    (cell / "dcgm_correlation.json").write_text(json.dumps({
-        "schema_version": 1, "captured_sources": ["dcgm"], "hw_key": "b200_sm100",
-        "resources": [], "queries": [], "power_watts_per_gpu": 700.0,
-    }))
+    (cell / "dcgm_correlation.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "captured_sources": ["dcgm"],
+                "hw_key": "b200_sm100",
+                "resources": [],
+                "queries": [],
+                "power_watts_per_gpu": 700.0,
+            }
+        )
+    )
     # The peak point's row must originate from cellA so the power join hits.
     rows = [_make_atlas_row(cell_id="cellA", output_tps_per_gpu=350.0)]
     table = build_cost_table(
-        campaign_dir, rows, campaign_dir.name,
-        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc),
-        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=timezone.utc),
+        campaign_dir,
+        rows,
+        campaign_dir.name,
+        captured_at_utc=datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC),
+        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=UTC),
     )
     d = table.to_pylist()
     assert d[0]["power_watts_per_gpu"] == 700.0
@@ -587,8 +704,7 @@ def test_publish_reads_tpm_config_block(tmp_path: Path):
     # config block sets both thresholds the rows meet.
     rows = [
         _make_atlas_row(concurrency=1, ttft_avg_ms=182.0, tpot_median_ms=20.0),
-        _make_atlas_row(concurrency=2, ttft_avg_ms=264.0, tpot_median_ms=22.0,
-                        output_tps_per_gpu=18.81),
+        _make_atlas_row(concurrency=2, ttft_avg_ms=264.0, tpot_median_ms=22.0, output_tps_per_gpu=18.81),
     ]
     with (campaign_dir / "atlas.jsonl").open("w", encoding="utf-8") as f:
         for row in rows:
@@ -639,7 +755,7 @@ def test_build_campaign_row_reads_sourcemd_provenance(tmp_path: Path):
     table = build_campaign_row(
         campaign_dir,
         rows,
-        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=timezone.utc),
+        published_at_utc=datetime(2026, 5, 25, 16, 0, 0, tzinfo=UTC),
         publisher_operator="ci-bot",
         publisher_host="ci-runner-1",
     )
@@ -653,7 +769,7 @@ def test_build_campaign_row_reads_sourcemd_provenance(tmp_path: Path):
     assert row["atlas_row_count"] == 2
     assert row["publisher_operator"] == "ci-bot"
     assert row["publisher_host"] == "ci-runner-1"
-    assert row["captured_at_utc"] == datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc)
+    assert row["captured_at_utc"] == datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC)
     # config_yaml + SOURCE.md were created by _stage_campaign, so digests are non-empty.
     assert len(row["config_yaml_sha256"]) == 64
     assert len(row["source_md_sha256"]) == 64
@@ -665,12 +781,9 @@ def test_build_campaign_row_reads_sourcemd_provenance(tmp_path: Path):
 
 
 def test_s3_key_uses_hive_layout():
-    captured = datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc)
+    captured = datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC)
     atlas_key = s3_key_for(ATLAS_TABLE_NAME, "glm51-phase6-20260525T081650Z", captured)
-    assert atlas_key == (
-        f"{S3_PREFIX}/atlas_v1/dt=2026-05-25/"
-        "campaign=glm51-phase6-20260525T081650Z/part-0.parquet"
-    )
+    assert atlas_key == (f"{S3_PREFIX}/atlas_v1/dt=2026-05-25/campaign=glm51-phase6-20260525T081650Z/part-0.parquet")
     campaign_key = s3_key_for(CAMPAIGN_TABLE_NAME, "glm51-phase6-20260525T081650Z", captured)
     assert campaign_key.endswith("campaign_v1/dt=2026-05-25/campaign=glm51-phase6-20260525T081650Z/part-0.parquet")
 
@@ -722,9 +835,7 @@ class _FakeS3Client:
         Body: Any,
         IfNoneMatch: str | None = None,
     ) -> dict[str, Any]:
-        self.put_attempts.append(
-            {"bucket": Bucket, "key": Key, "if_none_match": IfNoneMatch}
-        )
+        self.put_attempts.append({"bucket": Bucket, "key": Key, "if_none_match": IfNoneMatch})
         if self.put_error is not None:
             raise self.put_error
         self.put_calls.append({"bucket": Bucket, "key": Key})
@@ -925,7 +1036,7 @@ def test_publish_real_run_uploads_eight_objects(tmp_path: Path):
 
 def test_publish_skip_on_existing_keys(tmp_path: Path):
     campaign_dir = _stage_campaign(tmp_path)
-    captured = datetime(2026, 5, 25, 8, 16, 50, tzinfo=timezone.utc)
+    captured = datetime(2026, 5, 25, 8, 16, 50, tzinfo=UTC)
     pre_existing = {
         s3_key_for(ATLAS_TABLE_NAME, campaign_dir.name, captured),
         s3_key_for(CAMPAIGN_TABLE_NAME, campaign_dir.name, captured),
@@ -1035,7 +1146,9 @@ def test_publish_strict_refuses_zero_plot_ready(tmp_path: Path):
     campaign_dir = _stage_campaign(tmp_path)
     _write_status(campaign_dir, plot_ready_points=0)  # focus defaults "mixed"
     with pytest.raises(CampaignIncompleteError, match="throughput-scatter"):
-        publish(campaign_dir, cfg=_stub_cfg(), dry_run=True, strict=True, s3_client_factory=lambda _cfg: _FakeS3Client())
+        publish(
+            campaign_dir, cfg=_stub_cfg(), dry_run=True, strict=True, s3_client_factory=lambda _cfg: _FakeS3Client()
+        )
 
 
 def test_campaign_row_records_focus_and_sol_rigor(tmp_path: Path):
@@ -1050,8 +1163,7 @@ def test_campaign_row_records_focus_and_sol_rigor(tmp_path: Path):
 def test_campaign_row_has_completeness_columns(tmp_path: Path):
     campaign_dir = _stage_campaign(tmp_path)
     table = build_campaign_row(campaign_dir, _read_atlas_rows(campaign_dir))
-    for col in ("sol_complete", "plot_ready_points", "omitted_pages", "partial_pages",
-                "sol_per_arm_complete"):
+    for col in ("sol_complete", "plot_ready_points", "omitted_pages", "partial_pages", "sol_per_arm_complete"):
         assert col in table.column_names
     assert table.column("sol_complete")[0].as_py() is True
     assert table.column("plot_ready_points")[0].as_py() == 3
@@ -1085,10 +1197,7 @@ def test_campaign_row_records_partial_pages(tmp_path: Path):
         ],
     )
     table = build_campaign_row(campaign_dir, _read_atlas_rows(campaign_dir))
-    assert (
-        table.column("partial_pages")[0].as_py()
-        == "Byte-grounded per-kernel SoL scatter (page 5)"
-    )
+    assert table.column("partial_pages")[0].as_py() == "Byte-grounded per-kernel SoL scatter (page 5)"
 
 
 def test_campaign_row_defaults_experiment_id_to_campaign_id(tmp_path: Path):
@@ -1162,12 +1271,12 @@ def test_publish_strict_blocks_verdict_without_pinned_source(tmp_path: Path):
     campaign_dir = _stage_campaign(tmp_path)
     _write_status(campaign_dir, focus="latency")
     (campaign_dir / "verdict.json").write_text(
-        json.dumps({"tier": "verdict", "trials": 3, "same_node": True,
-                    "baseline_named": True})
+        json.dumps({"tier": "verdict", "trials": 3, "same_node": True, "baseline_named": True})
     )
     with pytest.raises(CampaignIncompleteError, match="provenance block"):
-        publish(campaign_dir, cfg=_stub_cfg(), dry_run=True, strict=True,
-                s3_client_factory=lambda _cfg: _FakeS3Client())
+        publish(
+            campaign_dir, cfg=_stub_cfg(), dry_run=True, strict=True, s3_client_factory=lambda _cfg: _FakeS3Client()
+        )
 
 
 def test_source_problems_blocks_unpinned_verdict(tmp_path: Path):
@@ -1258,8 +1367,10 @@ def test_resolve_s3_config_missing_keys_exits(monkeypatch):
     monkeypatch.delenv("PERFLAKE_LAKE_S3_SECRET_KEY", raising=False)
     with pytest.raises(SystemExit, match="S3 access/secret key missing"):
         resolve_s3_config(
-            endpoint=None, bucket=None,
-            access_key_file=None, secret_key_file=None,
+            endpoint=None,
+            bucket=None,
+            access_key_file=None,
+            secret_key_file=None,
         )
 
 
@@ -1276,13 +1387,16 @@ def test_cli_dry_run_succeeds_without_s3(monkeypatch, tmp_path: Path, capsys):
     # --no-strict: this fixture is intentionally SoL-incomplete (no cells/*/ SoL
     # artifacts -> sol_v1 empty); publish defaults strict now, so opt out to
     # exercise the first-class intentional-gap publish path.
-    rc = main([
-        "publish_to_lake",
-        "--campaign", campaign_dir.name,
-        "--dry-run",
-        "--no-strict",
-        "--json",
-    ])
+    rc = main(
+        [
+            "publish_to_lake",
+            "--campaign",
+            campaign_dir.name,
+            "--dry-run",
+            "--no-strict",
+            "--json",
+        ]
+    )
     assert rc == 0
     out = capsys.readouterr().out
     envelope = json.loads(out)
@@ -1320,10 +1434,7 @@ def test_publish_appends_lake_provenance_to_evidence_bundle(monkeypatch, tmp_pat
     # Campaign that points back at the bundle.
     campaign_dir = _stage_campaign(tmp_path)
     (campaign_dir / "SOURCE.md").write_text(
-        "# Campaign\n\n"
-        "- captured_at: 20260525T081650Z\n"
-        "- config: /tmp/test.yaml\n"
-        f"- evidence_bundle_path: {bundle}\n"
+        f"# Campaign\n\n- captured_at: 20260525T081650Z\n- config: /tmp/test.yaml\n- evidence_bundle_path: {bundle}\n"
     )
     monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(tmp_path))
     monkeypatch.setenv("PERFLAKE_LAKE_S3_ACCESS_KEY", "envAK")
@@ -1333,30 +1444,36 @@ def test_publish_appends_lake_provenance_to_evidence_bundle(monkeypatch, tmp_pat
 
     monkeypatch.setattr(lw, "_make_s3_client", lambda cfg: _FakeS3Client())
     # --no-strict: SoL-incomplete fixture (intentional-gap publish path).
-    rc = main([
-        "publish_to_lake",
-        "--campaign", campaign_dir.name,
-        "--no-strict",
-        "--i-understand-this-publishes-externally",
-        "--json",
-    ])
+    rc = main(
+        [
+            "publish_to_lake",
+            "--campaign",
+            campaign_dir.name,
+            "--no-strict",
+            "--i-understand-this-publishes-externally",
+            "--json",
+        ]
+    )
     assert rc == 0
     updated = (bundle / "SOURCE.md").read_text()
     assert f"campaign={campaign_dir.name}" in updated
     assert "atlas_v1: s3://perf-lake/" in updated
     assert "campaign_v1: s3://perf-lake/" in updated
     # Idempotent: a second publish does not duplicate the block.
-    rc2 = main([
-        "publish_to_lake",
-        "--campaign", campaign_dir.name,
-        "--if-exists", "overwrite",
-        "--no-strict",
-        "--i-understand-this-publishes-externally",
-        "--json",
-    ])
+    rc2 = main(
+        [
+            "publish_to_lake",
+            "--campaign",
+            campaign_dir.name,
+            "--if-exists",
+            "overwrite",
+            "--no-strict",
+            "--i-understand-this-publishes-externally",
+            "--json",
+        ]
+    )
     assert rc2 == 0
-    assert (bundle / "SOURCE.md").read_text().count(
-        "## Perf-lake publish (auto-appended") == 1
+    assert (bundle / "SOURCE.md").read_text().count("## Perf-lake publish (auto-appended") == 1
 
 
 def test_cli_strict_is_default_refuses_incomplete(monkeypatch, tmp_path: Path, capsys):
@@ -1369,6 +1486,15 @@ def test_cli_strict_is_default_refuses_incomplete(monkeypatch, tmp_path: Path, c
     # No --no-strict -> strict is the default now -> refuse.
     rc = main(["publish_to_lake", "--campaign", campaign_dir.name, "--dry-run", "--json"])
     assert rc == 2
+
+
+def test_krhpa_readers_ignore_non_mapping_yaml(tmp_path: Path):
+    import tools.perf_tune_report.lake_writer as lake_writer
+
+    (tmp_path / "config.yaml").write_text("- not\n- a mapping\n")
+
+    assert lake_writer._read_krhpa(tmp_path) is None
+    assert lake_writer._read_krhpa_exempt_reason(tmp_path) == ""
 
 
 def test_cli_real_publish_requires_current_command_ack(monkeypatch, tmp_path: Path, capsys):
@@ -1385,12 +1511,15 @@ def test_cli_missing_atlas_fails_with_clear_message(monkeypatch, tmp_path: Path,
     monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(tmp_path))
     monkeypatch.setenv("PERFLAKE_LAKE_S3_ACCESS_KEY", "envAK")
     monkeypatch.setenv("PERFLAKE_LAKE_S3_SECRET_KEY", "envSK")
-    rc = main([
-        "publish_to_lake",
-        "--campaign", campaign_dir.name,
-        "--dry-run",
-        "--json",
-    ])
+    rc = main(
+        [
+            "publish_to_lake",
+            "--campaign",
+            campaign_dir.name,
+            "--dry-run",
+            "--json",
+        ]
+    )
     assert rc == 2
     err = capsys.readouterr().err
     assert "atlas.jsonl not found" in err

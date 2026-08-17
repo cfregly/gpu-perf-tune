@@ -50,10 +50,11 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 # Backends that target an already-running endpoint URL: they do NOT manage a
 # helm release, so run_one_cell skips the helm_upgrade + warmup steps for them.
@@ -84,14 +85,9 @@ class CellPlan:
 
     def __post_init__(self) -> None:
         if not self.id or not self.id.replace("-", "").replace("_", "").isalnum():
-            raise ValueError(
-                f"CellPlan.id must be alphanumeric (+ - or _), got {self.id!r}"
-            )
+            raise ValueError(f"CellPlan.id must be alphanumeric (+ - or _), got {self.id!r}")
         if self.backend not in ("vllm-sweep", "aiperf", "aa", "trtllm"):
-            raise ValueError(
-                f"CellPlan.backend must be one of vllm-sweep|aiperf|aa|trtllm; "
-                f"got {self.backend!r}"
-            )
+            raise ValueError(f"CellPlan.backend must be one of vllm-sweep|aiperf|aa|trtllm; got {self.backend!r}")
         if not self.concurrencies:
             raise ValueError(f"CellPlan {self.id}: concurrencies must be non-empty")
 
@@ -138,8 +134,6 @@ class CampaignRunResult:
         d["campaign_dir"] = str(self.campaign_dir)
         d["pdf_path"] = str(self.pdf_path) if self.pdf_path else None
         d["atlas_path"] = str(self.atlas_path) if self.atlas_path else None
-        for c in d["per_cell"]:
-            pass  # already dict-friendly via asdict
         return d
 
 
@@ -184,7 +178,7 @@ class StepFns:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _verdict_rollup(per_cell: Sequence[CellStepResult]) -> str:
@@ -257,14 +251,9 @@ def run_one_cell(
             # do not manage a helm release, so the deploy step is a no-op pass.
             if endpoint_only:
                 helm_ok = True
-                notes.append(
-                    f"backend={cell.backend} targets an existing endpoint; "
-                    "skipping helm_upgrade"
-                )
+                notes.append(f"backend={cell.backend} targets an existing endpoint; skipping helm_upgrade")
             else:
-                helm_ok = step_fns.helm_upgrade(
-                    target_namespace, target_release, chart_dir, cell.helm_overrides
-                )
+                helm_ok = step_fns.helm_upgrade(target_namespace, target_release, chart_dir, cell.helm_overrides)
                 if not helm_ok:
                     notes.append("helm_upgrade returned False; aborting cell")
                     aborted_early = True
@@ -293,9 +282,7 @@ def run_one_cell(
                     notes.append("zymtrace returned False; not blocking cell")
 
             # Step 6: import_perf_bench (idempotent — converts raw to normalized).
-            import_ok = step_fns.import_bundle(
-                campaign_dir / "cells" / cell.id, campaign_dir, cell.id
-            )
+            import_ok = step_fns.import_bundle(campaign_dir / "cells" / cell.id, campaign_dir, cell.id)
 
             # Step 7: atlas_aggregate (campaign-level rollup).
             aggregate_ok = step_fns.aggregate(campaign_dir)
@@ -321,9 +308,7 @@ def run_one_cell(
 
             # Step 8: report_render (re-render PDF after each cell — important
             # for the safe-Ctrl-C contract).
-            render_ok = step_fns.render(
-                campaign_dir, campaign_dir / f"{cell.id}-report.pdf"
-            )
+            render_ok = step_fns.render(campaign_dir, campaign_dir / f"{cell.id}-report.pdf")
 
             # Step 9: baseline_record.
             baseline_record_ok = step_fns.baseline_record(campaign_dir, cell.id)
@@ -337,9 +322,7 @@ def run_one_cell(
                 )
                 verdict = "RED"
             else:
-                verdict = step_fns.baseline_diff(
-                    campaign_dir, cell.id, comparator_baseline
-                )
+                verdict = step_fns.baseline_diff(campaign_dir, cell.id, comparator_baseline)
 
     finally:
         # CRITICAL: always-resume on Slurm-on-K8s drain. This runs even on Ctrl-C
@@ -354,24 +337,47 @@ def run_one_cell(
                         "Slurm-on-K8s partition may be left in DRAIN state — operator must "
                         "manually `scontrol update state=RESUME`!"
                     )
-            except Exception as exc:
+            except (OSError, RuntimeError, ValueError) as exc:
                 notes.append(f"resume raised: {type(exc).__name__}: {exc}")
                 resume_ok = False
         else:
             resume_ok = True
 
     return _make_cell_result(
-        cell, started, started_iso, drain_ok, helm_ok,
-        warmup_ok, bench_ok, zymtrace_ok, import_ok,
-        aggregate_ok, render_ok, baseline_record_ok,
-        verdict, resume_ok, notes,
+        cell,
+        started,
+        started_iso,
+        drain_ok,
+        helm_ok,
+        warmup_ok,
+        bench_ok,
+        zymtrace_ok,
+        import_ok,
+        aggregate_ok,
+        render_ok,
+        baseline_record_ok,
+        verdict,
+        resume_ok,
+        notes,
     )
 
 
 def _make_cell_result(
-    cell, started, started_iso, drain_ok, helm_ok, warmup_ok, bench_ok,
-    zymtrace_ok, import_ok, aggregate_ok, render_ok, baseline_record_ok,
-    verdict, resume_ok, notes,
+    cell,
+    started,
+    started_iso,
+    drain_ok,
+    helm_ok,
+    warmup_ok,
+    bench_ok,
+    zymtrace_ok,
+    import_ok,
+    aggregate_ok,
+    render_ok,
+    baseline_record_ok,
+    verdict,
+    resume_ok,
+    notes,
 ) -> CellStepResult:
     return CellStepResult(
         cell_id=cell.id,
@@ -448,12 +454,8 @@ def run_campaign(
             aborted_at = cell.id
             break
 
-    cells_completed = sum(
-        1 for r in per_cell if r.bench_ok and r.import_ok and r.aggregate_ok
-    )
-    cells_failed = sum(
-        1 for r in per_cell if not r.bench_ok or not r.import_ok
-    )
+    cells_completed = sum(1 for r in per_cell if r.bench_ok and r.import_ok and r.aggregate_ok)
+    cells_failed = sum(1 for r in per_cell if not r.bench_ok or not r.import_ok)
 
     return CampaignRunResult(
         campaign_dir=campaign_dir,

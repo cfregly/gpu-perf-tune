@@ -12,6 +12,7 @@ NO throughput/latency metrics, so it is exempt from the warm/cold + shape method
 
 Dependency-light (stdlib + schema only).
 """
+
 from __future__ import annotations
 
 import json

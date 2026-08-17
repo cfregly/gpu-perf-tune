@@ -98,24 +98,26 @@ import json
 import re
 import statistics
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from tools.perf_tune_report.helpers import resolve_cell_dir
-
-from tools.perf_tune_report.schema import (
-    BACKEND_VLLM_SWEEP,
-    STATUS_FAILED,
-    STATUS_FULL,
-    STATUS_PARTIAL,
-    AtlasCell,
+from tools.perf_tune_report.importers.inference_perf_bench import (
+    _CellIdentity,
+    _identity_from_meta_and_overrides,
+    _load_bundle_metadata,
 )
 from tools.perf_tune_report.importers.zymtrace_kernels import (
     KernelImportResult,
     import_zymtrace_kernels,
 )
-
+from tools.perf_tune_report.schema import (
+    BACKEND_VLLM_SWEEP,
+    STATUS_FULL,
+    STATUS_PARTIAL,
+    AtlasCell,
+)
 
 # Multi-concurrency layout: bundle/bench-c<NNN>/raw/load.jsonl
 _BENCH_C_DIR = re.compile(r"^bench-c(\d+)$")
@@ -129,9 +131,7 @@ class _JSONLFileInfo:
     concurrency: int
 
 
-def _enumerate_jsonl_files(
-    bundle: Path, *, concurrency_override: int | None = None
-) -> list[_JSONLFileInfo]:
+def _enumerate_jsonl_files(bundle: Path, *, concurrency_override: int | None = None) -> list[_JSONLFileInfo]:
     """Find all load.jsonl files in the bundle.
 
     Two layouts supported:
@@ -298,15 +298,6 @@ class DriveLoadImportResult:
         return d
 
 
-# Reuse identity helpers from the bench-serve importer (the metadata shape
-# in inference_perfbench_v1.json is identical across the two importers).
-from tools.perf_tune_report.importers.inference_perf_bench import (
-    _CellIdentity,
-    _identity_from_meta_and_overrides,
-    _load_bundle_metadata,
-)
-
-
 def _row_from_aggregate(
     identity: _CellIdentity,
     concurrency: int,
@@ -316,22 +307,12 @@ def _row_from_aggregate(
 ) -> AtlasCell:
     """Build one AtlasCell row from drive-load aggregates."""
     output_tps_per_gpu = (
-        metrics.output_tps / identity.tensor_parallel
-        if identity.tensor_parallel
-        else metrics.output_tps
+        metrics.output_tps / identity.tensor_parallel if identity.tensor_parallel else metrics.output_tps
     )
-    total_tps_per_gpu = (
-        metrics.total_tps / identity.tensor_parallel
-        if identity.tensor_parallel
-        else metrics.total_tps
-    )
+    total_tps_per_gpu = metrics.total_tps / identity.tensor_parallel if identity.tensor_parallel else metrics.total_tps
     # Mean ISL/OSL (shape) from the per-request token sums over OK requests.
-    mean_input_tokens = (
-        metrics.total_input_tokens / metrics.n_ok if metrics.n_ok else None
-    )
-    mean_output_tokens = (
-        metrics.total_output_tokens / metrics.n_ok if metrics.n_ok else None
-    )
+    mean_input_tokens = metrics.total_input_tokens / metrics.n_ok if metrics.n_ok else None
+    mean_output_tokens = metrics.total_output_tokens / metrics.n_ok if metrics.n_ok else None
 
     notes_parts = [
         f"imported from {jsonl_path.parent.parent.parent.name}",
@@ -427,9 +408,7 @@ def import_drive_load_bundle(
     if not bundle.is_dir():
         raise ValueError(f"import_drive_load: bundle does not exist: {bundle}")
 
-    jsonl_files = _enumerate_jsonl_files(
-        bundle, concurrency_override=concurrency_override
-    )
+    jsonl_files = _enumerate_jsonl_files(bundle, concurrency_override=concurrency_override)
     if not jsonl_files:
         raise ValueError(
             f"import_drive_load: no load.jsonl files found in {bundle} "
@@ -437,12 +416,10 @@ def import_drive_load_bundle(
         )
 
     bundle_meta = _load_bundle_metadata(bundle)
-    identity = _identity_from_meta_and_overrides(
-        bundle, bundle_meta, overrides or {}
-    )
+    identity = _identity_from_meta_and_overrides(bundle, bundle_meta, overrides or {})
 
     if captured_at is None:
-        captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     rows: list[AtlasCell] = []
     skipped: list[Path] = []
@@ -490,9 +467,7 @@ def import_drive_load_bundle(
 
     cell_dir.mkdir(parents=True, exist_ok=True)
     normalized_path = cell_dir / "normalized.json"
-    normalized_path.write_text(
-        json.dumps([r.to_dict() for r in rows], indent=2, sort_keys=True)
-    )
+    normalized_path.write_text(json.dumps([r.to_dict() for r in rows], indent=2, sort_keys=True))
     (cell_dir / "status.txt").write_text(status + "\n")
     (cell_dir / "backend.txt").write_text(BACKEND_VLLM_SWEEP + "\n")
     kernels_line = (
@@ -508,8 +483,7 @@ def import_drive_load_bundle(
         f"- concurrencies: {concurrencies}\n"
         f"- row_count:     {len(rows)}\n"
         f"- status:        {status}\n"
-        f"- skipped_files: {len(skipped)}\n"
-        + kernels_line
+        f"- skipped_files: {len(skipped)}\n" + kernels_line
     )
 
     return DriveLoadImportResult(
@@ -529,6 +503,7 @@ def import_drive_load_bundle(
 # ----------------------------------------------------------------------------
 # Auto-detect dispatcher
 # ----------------------------------------------------------------------------
+
 
 def detect_bundle_pattern(bundle: Path) -> str:
     """Detect which importer to use for a given bundle directory.
@@ -550,10 +525,7 @@ def detect_bundle_pattern(bundle: Path) -> str:
     raw_dir = bundle / "raw"
     if raw_dir.is_dir():
         for entry in raw_dir.iterdir():
-            if entry.is_file() and (
-                entry.name.startswith("sweep-c")
-                or entry.name.startswith("sweep-K")
-            ):
+            if entry.is_file() and (entry.name.startswith("sweep-c") or entry.name.startswith("sweep-K")):
                 return "inference_perf_bench"
         if (raw_dir / "load.jsonl").is_file():
             return "inference_drive_load"

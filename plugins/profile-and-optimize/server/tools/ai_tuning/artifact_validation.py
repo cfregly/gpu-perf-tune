@@ -67,9 +67,7 @@ def validate_result_file(
     benchmark_record = _last_record(records, "submission_benchmark")
     observed_benchmark = benchmark_record.get("value") if benchmark_record else None
     if observed_benchmark != benchmark:
-        errors.append(
-            f"{path}: submission_benchmark {observed_benchmark!r} does not match {benchmark!r}"
-        )
+        errors.append(f"{path}: submission_benchmark {observed_benchmark!r} does not match {benchmark!r}")
 
     start = _last_record(records, "run_start")
     stop = _last_record(records, "run_stop")
@@ -100,8 +98,7 @@ def validate_result_file(
         (
             record
             for record in reversed(records)
-            if record.get("key")
-            in {"eval_accuracy", "eval_loss", "final_loss", "log_ppl"}
+            if record.get("key") in {"eval_accuracy", "eval_loss", "final_loss", "log_ppl"}
         ),
         None,
     )
@@ -142,9 +139,7 @@ def validate_raw_results_dir(
         return
     run_logs = sorted(raw_dir.glob("*_1.log"))
     if len(run_logs) < min_runs:
-        errors.append(
-            f"expected at least {min_runs} raw run logs in {raw_dir}, found {len(run_logs)}"
-        )
+        errors.append(f"expected at least {min_runs} raw run logs in {raw_dir}, found {len(run_logs)}")
     if not list(raw_dir.glob("config_*.sh")):
         errors.append(f"missing config_*.sh in raw results directory: {raw_dir}")
     if not (raw_dir / "run.sub").is_file() and not list(raw_dir.glob("*.hyp")):
@@ -159,9 +154,7 @@ def validate_raw_results_dir(
         validate_checker_output(errors, raw_dir / f"audit_{run_id}.out")
 
     if require_nccl_runtime:
-        runtime_text = "\n".join(
-            path.read_text(encoding="utf-8", errors="replace") for path in run_logs
-        )
+        runtime_text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in run_logs)
         if "NCCL" not in runtime_text:
             errors.append(f"raw results directory has no NCCL runtime evidence: {raw_dir}")
 
@@ -179,9 +172,7 @@ def validate_fabric_evidence(errors: list[str], path: Path, require_clean: bool)
     _validate_evidence_dir(errors, path, "fabric evidence")
     if require_clean and path.is_dir():
         text = "\n".join(
-            item.read_text(encoding="utf-8", errors="replace")
-            for item in path.rglob("*")
-            if item.is_file()
+            item.read_text(encoding="utf-8", errors="replace") for item in path.rglob("*") if item.is_file()
         )
         if any(marker in text.upper() for marker in ("FAIL", "ERROR")):
             errors.append(f"fabric evidence contains failure markers: {path}")

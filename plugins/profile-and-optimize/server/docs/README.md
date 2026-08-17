@@ -29,3 +29,4 @@ New local users should start with [`first-hour.md`](first-hour.md). Reviewers sh
 | Durable evidence families | [`../experiments/artifacts/`](../experiments/artifacts) |
 | Repo policy | [`../AGENTS.md`](../AGENTS.md) |
 | Review path | [`REVIEWERS.md`](../../../../REVIEWERS.md) |
+| Version upgrades and migration notes | [`docs/UPGRADING.md`](../../../../docs/UPGRADING.md) |

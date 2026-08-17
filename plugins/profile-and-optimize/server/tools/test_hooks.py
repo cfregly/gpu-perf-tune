@@ -44,9 +44,7 @@ def _decision(verdict: dict[str, object]) -> str:
 def _guard(tmp_path: Path, output: str, *, exit_code: int = 0) -> Path:
     guard = tmp_path / "guard.sh"
     guard.write_text(
-        "#!/bin/bash\n"
-        f"printf '%s\\n' {output!r}\n"
-        f"exit {exit_code}\n",
+        f"#!/bin/bash\nprintf '%s\\n' {output!r}\nexit {exit_code}\n",
         encoding="utf-8",
     )
     return guard

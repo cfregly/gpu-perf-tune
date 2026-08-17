@@ -23,7 +23,9 @@ aggregate statistics + class counts, never raw prompt/response text. Pass
 Usage:
   ./workload-profile.py --in access.jsonl --out workload-profile.json [--tokenizer <hf-id>] [--keep-samples 0]
 """
+
 import argparse
+import importlib
 import json
 import math
 import re
@@ -53,12 +55,18 @@ def classify(text: str) -> str:
     """Heuristic content class so the corpus builder can match the mix."""
     if not text:
         return "chat"
-    code_markers = ("```", "def ", "function ", "class ", "import ", "#include",
-                    "{", "};", "</", "SELECT ", "=>")
+    code_markers = ("```", "def ", "function ", "class ", "import ", "#include", "{", "};", "</", "SELECT ", "=>")
     n_code = sum(text.count(m) for m in code_markers)
     # structured-rewrite: a request that echoes a large block it wants lightly edited
-    rewrite_markers = ("rewrite", "edit", "change every", "replace all", "apply this diff",
-                        "modify the following", "refactor")
+    rewrite_markers = (
+        "rewrite",
+        "edit",
+        "change every",
+        "replace all",
+        "apply this diff",
+        "modify the following",
+        "refactor",
+    )
     is_rewrite = any(m in text.lower() for m in rewrite_markers) and len(text) > 400
     if is_rewrite:
         return "structured-rewrite"
@@ -73,7 +81,7 @@ def percentiles(xs, ps=(50, 90, 99)):
     s = sorted(xs)
     out = {}
     for p in ps:
-        k = min(len(s) - 1, int(round((p / 100.0) * (len(s) - 1))))
+        k = min(len(s) - 1, round((p / 100.0) * (len(s) - 1)))
         out[f"p{p}"] = s[k]
     return out
 
@@ -92,16 +100,22 @@ def recommend_method(class_mix: dict, out_p50: int | None) -> dict:
     code_frac = class_mix.get("code", 0) / total
     if rewrite_frac >= 0.30:
         method = "predicted_outputs"
-        why = (f"{rewrite_frac:.0%} structured-rewrite traffic -> output is largely "
-               "known a priori; Predicted Outputs (WS-B) gives the biggest win.")
+        why = (
+            f"{rewrite_frac:.0%} structured-rewrite traffic -> output is largely "
+            "known a priori; Predicted Outputs (WS-B) gives the biggest win."
+        )
     elif code_frac >= 0.40:
         method = "eagle3"
-        why = (f"{code_frac:.0%} code traffic -> high local predictability; a draft head "
-               "trained on the code-weighted corpus (EAGLE3) should accept well.")
+        why = (
+            f"{code_frac:.0%} code traffic -> high local predictability; a draft head "
+            "trained on the code-weighted corpus (EAGLE3) should accept well."
+        )
     else:
         method = "eagle3"
-        why = ("general chat-dominant -> EAGLE3 draft head on the profile-matched corpus; "
-               "fall back to MTP if the model ships a built-in head.")
+        why = (
+            "general chat-dominant -> EAGLE3 draft head on the profile-matched corpus; "
+            "fall back to MTP if the model ships a built-in head."
+        )
     return {"method": method, "rationale": why}
 
 
@@ -139,8 +153,8 @@ def build_aa_profile() -> dict:
         "recommended_spec_decode": {
             "method": "eagle3",
             "rationale": "AA long-context chat/reasoning shapes -> EAGLE3 draft head on "
-                         "an AA-length-weighted corpus; fall back to the model's built-in "
-                         "MTP if a trained head loses the acceptance A/B.",
+            "an AA-length-weighted corpus; fall back to the model's built-in "
+            "MTP if a trained head loses the acceptance A/B.",
         },
         "redacted_samples": {},
     }
@@ -148,16 +162,17 @@ def build_aa_profile() -> dict:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--in", dest="inp", default=None,
-                    help="OpenAI-style access JSONL (omit when using --aa-shapes)")
-    ap.add_argument("--aa-shapes", action="store_true",
-                    help="synthesize the profile from the Artificial Analysis 1k/10k/100k "
-                         "shapes instead of an access log")
+    ap.add_argument("--in", dest="inp", default=None, help="OpenAI-style access JSONL (omit when using --aa-shapes)")
+    ap.add_argument(
+        "--aa-shapes",
+        action="store_true",
+        help="synthesize the profile from the Artificial Analysis 1k/10k/100k shapes instead of an access log",
+    )
     ap.add_argument("--out", default="workload-profile.json")
-    ap.add_argument("--tokenizer", default=None,
-                    help="HF tokenizer id for exact token counts (else ~4 chars/token)")
-    ap.add_argument("--keep-samples", type=int, default=0,
-                    help="retain N redacted exemplars per class for the corpus builder")
+    ap.add_argument("--tokenizer", default=None, help="HF tokenizer id for exact token counts (else ~4 chars/token)")
+    ap.add_argument(
+        "--keep-samples", type=int, default=0, help="retain N redacted exemplars per class for the corpus builder"
+    )
     args = ap.parse_args()
 
     if args.aa_shapes:
@@ -168,9 +183,8 @@ def main():
         finally:
             close_cli_text(output)
         print(f"== wrote {args.out} (profile_source=aa-shapes) ==")
-        print(json.dumps({k: profile[k] for k in
-                          ("bench_shapes", "recommended_spec_decode")}, indent=2))
-        print("\nNext: profile-to-corpus.py --profile %s -> AA-length-weighted corpus." % args.out)
+        print(json.dumps({k: profile[k] for k in ("bench_shapes", "recommended_spec_decode")}, indent=2))
+        print(f"\nNext: profile-to-corpus.py --profile {args.out} -> AA-length-weighted corpus.")
         return
 
     if not args.inp:
@@ -180,10 +194,10 @@ def main():
     tok = None
     if args.tokenizer:
         try:
-            from transformers import AutoTokenizer
-            tok = AutoTokenizer.from_pretrained(args.tokenizer)
-        except Exception as e:
-            print(f"[warn] tokenizer load failed ({e}); using char estimate", file=sys.stderr)
+            auto_tokenizer = importlib.import_module("transformers").AutoTokenizer
+            tok = auto_tokenizer.from_pretrained(args.tokenizer)
+        except Exception as exc:  # noqa: BLE001 - optional tokenizer failures use the documented fallback.
+            print(f"[warn] tokenizer load failed ({exc}); using char estimate", file=sys.stderr)
 
     def count(text):
         if tok is not None and text:
@@ -204,7 +218,7 @@ def main():
                 continue
             try:
                 rec = json.loads(line)
-            except Exception:
+            except json.JSONDecodeError:
                 skipped += 1
                 continue
             # shape (b): pre-counted
@@ -214,8 +228,7 @@ def main():
                 cls = rec.get("content_class") or "chat"
             elif "messages" in rec:
                 in_text = "\n".join(
-                    m.get("content", "") if isinstance(m.get("content"), str) else ""
-                    for m in rec["messages"]
+                    m.get("content", "") if isinstance(m.get("content"), str) else "" for m in rec["messages"]
                 )
                 out_text = rec.get("completion") or rec.get("response") or ""
                 il, ol = count(in_text), count(out_text)
@@ -237,8 +250,10 @@ def main():
         close_cli_text(source)
 
     if n == 0:
-        print("FATAL: no usable records (need `messages`/`completion` or "
-              "`prompt_tokens`/`completion_tokens`)", file=sys.stderr)
+        print(
+            "FATAL: no usable records (need `messages`/`completion` or `prompt_tokens`/`completion_tokens`)",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     out_p50 = percentiles(out_lens)["p50"]
@@ -252,8 +267,10 @@ def main():
         "isl_buckets": dict(isl_buckets),
         "osl_buckets": dict(osl_buckets),
         "bench_shapes": sorted(
-            {(percentiles(in_lens)["p50"], percentiles(out_lens)["p50"]),
-             (percentiles(in_lens)["p90"], percentiles(out_lens)["p90"])}
+            {
+                (percentiles(in_lens)["p50"], percentiles(out_lens)["p50"]),
+                (percentiles(in_lens)["p90"], percentiles(out_lens)["p90"]),
+            }
         ),
         "recommended_spec_decode": recommend_method(class_mix, out_p50),
         "redacted_samples": samples if args.keep_samples else {},
@@ -264,10 +281,8 @@ def main():
     finally:
         close_cli_text(output)
     print(f"== wrote {args.out} ==")
-    print(json.dumps({k: profile[k] for k in
-                      ("n_requests", "content_class_mix", "recommended_spec_decode")},
-                     indent=2))
-    print("\nNext: profile-to-corpus.py --profile %s -> hit-rate-matched corpus." % args.out)
+    print(json.dumps({k: profile[k] for k in ("n_requests", "content_class_mix", "recommended_spec_decode")}, indent=2))
+    print(f"\nNext: profile-to-corpus.py --profile {args.out} -> hit-rate-matched corpus.")
 
 
 if __name__ == "__main__":

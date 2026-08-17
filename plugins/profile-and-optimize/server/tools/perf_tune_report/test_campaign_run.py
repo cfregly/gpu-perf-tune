@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Sequence
 
 import pytest
 
 from tools.perf_tune_report.orchestrator.campaign_run import (
-    CampaignRunResult,
     CellPlan,
     CellStepResult,
     StepFns,
@@ -17,7 +14,6 @@ from tools.perf_tune_report.orchestrator.campaign_run import (
     run_campaign,
     run_one_cell,
 )
-
 
 # -----------------------------------------------------------------------------
 # CellPlan schema
@@ -69,11 +65,21 @@ def test_cell_plan_rejects_empty_concurrencies():
 
 def _mk_cell_result(cell_id: str, verdict: str, bench_ok: bool = True) -> CellStepResult:
     return CellStepResult(
-        cell_id=cell_id, started_at="t", ended_at="t", elapsed_s=0.0,
-        drain_ok=True, helm_ok=True, warmup_ok=True, bench_ok=bench_ok,
-        zymtrace_ok=True, import_ok=True, aggregate_ok=True,
-        render_ok=True, baseline_record_ok=True,
-        baseline_diff_verdict=verdict, resume_ok=True,
+        cell_id=cell_id,
+        started_at="t",
+        ended_at="t",
+        elapsed_s=0.0,
+        drain_ok=True,
+        helm_ok=True,
+        warmup_ok=True,
+        bench_ok=bench_ok,
+        zymtrace_ok=True,
+        import_ok=True,
+        aggregate_ok=True,
+        render_ok=True,
+        baseline_record_ok=True,
+        baseline_diff_verdict=verdict,
+        resume_ok=True,
     )
 
 
@@ -114,6 +120,7 @@ def _make_stub_fns(
     resume_raises: bool = False,
 ) -> StepFns:
     """Build a StepFns where every step returns the configured outcome."""
+
     def _resume_fn(nodes, cell_id):
         if resume_raises:
             raise RuntimeError("simulated resume failure")
@@ -171,9 +178,9 @@ def test_run_one_cell_always_resumes_on_bench_failure(tmp_path):
         comparator_baseline="",
         step_fns=fns,
     )
-    assert result.drain_ok       # drain succeeded
-    assert not result.bench_ok    # bench failed
-    assert result.resume_ok       # CRITICAL: resume still ran in finally
+    assert result.drain_ok  # drain succeeded
+    assert not result.bench_ok  # bench failed
+    assert result.resume_ok  # CRITICAL: resume still ran in finally
 
 
 def test_run_one_cell_handles_resume_exception(tmp_path):
@@ -293,9 +300,9 @@ def test_run_one_cell_aa_skips_helm_and_warmup(tmp_path):
         comparator_baseline="",
         step_fns=fns,
     )
-    assert helm_calls == []   # helm_upgrade never invoked
+    assert helm_calls == []  # helm_upgrade never invoked
     assert warmup_calls == []  # warmup never invoked
-    assert result.helm_ok      # recorded as no-op pass
+    assert result.helm_ok  # recorded as no-op pass
     assert result.warmup_ok
     assert result.bench_ok
 
@@ -307,9 +314,12 @@ def test_run_one_cell_aa_skips_helm_and_warmup(tmp_path):
 
 def test_step_bench_aa_returns_false_when_config_incomplete(tmp_path):
     from tools.perf_tune_report.orchestrator.production_steps import step_bench
+
     # missing url + shape
     cell = CellPlan(
-        id="aa-1k", backend="aa", concurrencies=(1,),
+        id="aa-1k",
+        backend="aa",
+        concurrencies=(1,),
         backend_config={"model": "m"},
     )
     assert step_bench(tmp_path, cell) is False
@@ -317,8 +327,12 @@ def test_step_bench_aa_returns_false_when_config_incomplete(tmp_path):
 
 def test_step_bench_aiperf_returns_false_when_config_incomplete(tmp_path):
     from tools.perf_tune_report.orchestrator.production_steps import step_bench
+
     cell = CellPlan(
-        id="replay", backend="aiperf", concurrencies=(1,), backend_config={},
+        id="replay",
+        backend="aiperf",
+        concurrencies=(1,),
+        backend_config={},
     )
     assert step_bench(tmp_path, cell) is False
 
@@ -426,8 +440,10 @@ def test_run_campaign_fail_fast_on_red(tmp_path):
     ]
     # Build a custom stub that returns RED only for cell-2-bad.
     diffs = {"cell-1": "GREEN", "cell-2-bad": "RED", "cell-3": "GREEN"}
+
     def _baseline_diff(cdir, cell_id, comp):
         return diffs.get(cell_id, "NA")
+
     fns = StepFns(
         drain=lambda nodes, cell_id: True,
         helm_upgrade=lambda ns, rel, chart, overrides: True,
@@ -495,7 +511,7 @@ def test_run_campaign_continue_on_red(tmp_path):
 def test_run_campaign_writes_receipts(tmp_path):
     cells = [CellPlan(id="cell-1", backend="vllm-sweep", concurrencies=(1,))]
     fns = _make_stub_fns()
-    result = run_campaign(
+    run_campaign(
         cells,
         campaign_dir=tmp_path,
         target_release="rel",
@@ -519,32 +535,58 @@ def test_contract_verb_set():
     """The perf_tune_report CONTRACT verb set, including champion_select and
     import_variant_ab."""
     from tools.perf_tune_report.perf_tune_report_cli import CONTRACT
+
     assert set(CONTRACT) == {
-        "campaign_init", "cell_run", "atlas_aggregate",
-        "report_render", "report_smoke", "publish_to_lake",
-        "import_perf_bench", "campaign_run",
-        "kernel_profile", "graph_diff",
-        "raw_bench_compare", "import_ncu", "import_nsys", "dcgm_correlate",
-        "experiments_index", "tpm_summary", "value_view",
-        "import_roofline_sweep", "fleet_leaderboard",
-        "champion_select", "import_variant_ab",
-        "capture_plan", "materialize_capture_reuse",
-        "experiment_inventory", "portability_view", "import_model_eval", "trend_view",
-        "kernel_reproducer_scaffold", "import_workloads",
+        "campaign_init",
+        "cell_run",
+        "atlas_aggregate",
+        "report_render",
+        "report_smoke",
+        "publish_to_lake",
+        "import_perf_bench",
+        "campaign_run",
+        "kernel_profile",
+        "graph_diff",
+        "raw_bench_compare",
+        "import_ncu",
+        "import_nsys",
+        "dcgm_correlate",
+        "experiments_index",
+        "tpm_summary",
+        "value_view",
+        "import_roofline_sweep",
+        "fleet_leaderboard",
+        "champion_select",
+        "import_variant_ab",
+        "capture_plan",
+        "materialize_capture_reuse",
+        "experiment_inventory",
+        "portability_view",
+        "import_model_eval",
+        "trend_view",
+        "kernel_reproducer_scaffold",
+        "import_workloads",
     }
 
 
 def test_contract_campaign_run_is_ack_gated():
     from tools.perf_tune_report.perf_tune_report_cli import CONTRACT, build_parser
+
     assert CONTRACT["campaign_run"]["safety"] == "mutates_cluster"
     assert CONTRACT["campaign_run"]["ack"] == "--i-understand-this-mutates-cluster"
     assert CONTRACT["campaign_run"]["ack_exempt_when"] == ("--dry-run",)
     assert "--config" in CONTRACT["campaign_run"]["required"]
     assert "--campaign" in CONTRACT["campaign_run"]["required"]
-    parsed = build_parser().parse_args([
-        "campaign_run", "--config", "matrix.yaml", "--campaign", "campaign",
-        "--i-understand-this-mutates-cluster",
-    ])
+    parsed = build_parser().parse_args(
+        [
+            "campaign_run",
+            "--config",
+            "matrix.yaml",
+            "--campaign",
+            "campaign",
+            "--i-understand-this-mutates-cluster",
+        ]
+    )
     assert parsed.i_understand_this_mutates_cluster is True
     assert not hasattr(parsed, "i_understand_this_submits_jobs")
 

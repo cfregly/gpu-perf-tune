@@ -6,7 +6,6 @@ Pure-Python; no Slurm / MCP / network. Run under
 
 from __future__ import annotations
 
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -72,9 +71,7 @@ def test_operator_path_rejects_nul_bytes() -> None:
 def test_build_parser_accepts_json_for_both_verbs() -> None:
     parser = build_parser()
     assert parser.parse_args(["record", "--model", "m", "--json"]).json is True
-    assert parser.parse_args(
-        ["check", "--model", "m", "--serve-args", "", "--json"]
-    ).json is True
+    assert parser.parse_args(["check", "--model", "m", "--serve-args", "", "--json"]).json is True
 
 
 def test_parse_required_flag_defaults() -> None:
@@ -100,23 +97,35 @@ def test_parse_required_flag_rejects_unknown_severity(severity: str) -> None:
 
 
 def test_check_pass_when_required_flag_present(registry: Path, capsys) -> None:
-    rc = main([
-        "check", "--registry", str(registry),
-        "--model", "nvidia/Qwen3-Next-80B-A3B-Thinking-NVFP4",
-        "--serve-args", "vllm serve --additional-config '{\"gdn_prefill_backend\":\"triton\"}'",
-        "--json",
-    ])
+    rc = main(
+        [
+            "check",
+            "--registry",
+            str(registry),
+            "--model",
+            "nvidia/Qwen3-Next-80B-A3B-Thinking-NVFP4",
+            "--serve-args",
+            'vllm serve --additional-config \'{"gdn_prefill_backend":"triton"}\'',
+            "--json",
+        ]
+    )
     assert rc == 0
     assert '"verdict": "pass"' in capsys.readouterr().out
 
 
 def test_check_fail_when_boot_blocker_missing(registry: Path, capsys) -> None:
-    rc = main([
-        "check", "--registry", str(registry),
-        "--model", "nvidia/Qwen3-Next-80B-A3B-Thinking-NVFP4",
-        "--serve-args", "vllm serve --tensor-parallel-size 4",  # no gdn_prefill_backend
-        "--json",
-    ])
+    rc = main(
+        [
+            "check",
+            "--registry",
+            str(registry),
+            "--model",
+            "nvidia/Qwen3-Next-80B-A3B-Thinking-NVFP4",
+            "--serve-args",
+            "vllm serve --tensor-parallel-size 4",  # no gdn_prefill_backend
+            "--json",
+        ]
+    )
     assert rc == 1  # fail-closed
     out = capsys.readouterr().out
     assert '"verdict": "fail"' in out
@@ -124,12 +133,18 @@ def test_check_fail_when_boot_blocker_missing(registry: Path, capsys) -> None:
 
 
 def test_check_perf_severity_missing_is_warning_not_failure(registry: Path, capsys) -> None:
-    rc = main([
-        "check", "--registry", str(registry),
-        "--model", "zai-org/GLM-5.1",
-        "--serve-args", "vllm serve --tensor-parallel-size 8",  # no FLASHMLA (perf only)
-        "--json",
-    ])
+    rc = main(
+        [
+            "check",
+            "--registry",
+            str(registry),
+            "--model",
+            "zai-org/GLM-5.1",
+            "--serve-args",
+            "vllm serve --tensor-parallel-size 8",  # no FLASHMLA (perf only)
+            "--json",
+        ]
+    )
     assert rc == 0  # perf-severity missing -> warn, not fail
     out = capsys.readouterr().out
     assert '"verdict": "pass"' in out
@@ -137,19 +152,36 @@ def test_check_perf_severity_missing_is_warning_not_failure(registry: Path, caps
 
 
 def test_check_require_registered_fails_for_unknown_model(registry: Path, capsys) -> None:
-    rc = main([
-        "check", "--registry", str(registry),
-        "--model", "made/up-model", "--serve-args", "", "--require-registered", "--json",
-    ])
+    rc = main(
+        [
+            "check",
+            "--registry",
+            str(registry),
+            "--model",
+            "made/up-model",
+            "--serve-args",
+            "",
+            "--require-registered",
+            "--json",
+        ]
+    )
     assert rc == 1
     assert "model_not_registered" in capsys.readouterr().out
 
 
 def test_check_unknown_model_fails_without_compatibility_flag(registry: Path, capsys) -> None:
-    rc = main([
-        "check", "--registry", str(registry), "--model", "made/up-model",
-        "--serve-args", "", "--json",
-    ])
+    rc = main(
+        [
+            "check",
+            "--registry",
+            str(registry),
+            "--model",
+            "made/up-model",
+            "--serve-args",
+            "",
+            "--json",
+        ]
+    )
     assert rc == 1
     output = capsys.readouterr().out
     assert '"registered": false' in output
@@ -163,19 +195,25 @@ def test_check_requires_exactly_one_input(registry: Path) -> None:
     with pytest.raises(SystemExit):
         parser.parse_args(common)
     with pytest.raises(SystemExit):
-        parser.parse_args(common + ["--serve-args", "vllm serve", "--deploy-file", "deploy.yaml"])
+        parser.parse_args([*common, "--serve-args", "vllm serve", "--deploy-file", "deploy.yaml"])
 
 
 def test_check_rejects_unknown_registry_severity(registry: Path) -> None:
     registry.write_text(REGISTRY_HEADER.replace("severity: perf", "severity: informational"))
 
     with pytest.raises(SystemExit, match="severity must be one of"):
-        main([
-            "check", "--registry", str(registry),
-            "--model", "zai-org/GLM-5.1",
-            "--serve-args", "vllm serve",
-            "--json",
-        ])
+        main(
+            [
+                "check",
+                "--registry",
+                str(registry),
+                "--model",
+                "zai-org/GLM-5.1",
+                "--serve-args",
+                "vllm serve",
+                "--json",
+            ]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -184,13 +222,22 @@ def test_check_rejects_unknown_registry_severity(registry: Path) -> None:
 
 
 def test_record_appends_new_model_and_preserves_comments(registry: Path) -> None:
-    rc = main([
-        "record", "--registry", str(registry),
-        "--model", "Qwen/Qwen3-235B-A22B-Thinking-2507",
-        "--slug", "qwen3-235b-thinking", "--engine", "vllm",
-        "--champion-verdict", "VERDICT vLLM 1.6x SGLang",
-        "--json",
-    ])
+    rc = main(
+        [
+            "record",
+            "--registry",
+            str(registry),
+            "--model",
+            "Qwen/Qwen3-235B-A22B-Thinking-2507",
+            "--slug",
+            "qwen3-235b-thinking",
+            "--engine",
+            "vllm",
+            "--champion-verdict",
+            "VERDICT vLLM 1.6x SGLang",
+            "--json",
+        ]
+    )
     assert rc == 0
     text = registry.read_text()
     assert "# HAND-CURATED -- a comment that record() MUST preserve." in text
@@ -205,20 +252,32 @@ def test_record_appends_new_model_and_preserves_comments(registry: Path) -> None
 
 
 def test_record_rejects_existing_model(registry: Path) -> None:
-    rc = main([
-        "record", "--registry", str(registry),
-        "--model", "zai-org/GLM-5.1", "--json",
-    ])
+    rc = main(
+        [
+            "record",
+            "--registry",
+            str(registry),
+            "--model",
+            "zai-org/GLM-5.1",
+            "--json",
+        ]
+    )
     assert rc == 2  # must edit by hand
 
 
 def test_record_parses_required_flag_tuple(registry: Path) -> None:
-    rc = main([
-        "record", "--registry", str(registry),
-        "--model", "new/model",
-        "--required-flag", "--moe-backend=cutlass|moe-backend[ =]+cutlass|crash-high-c|default MoE crashes c>=64|vllm 0.22|some/evidence",
-        "--json",
-    ])
+    rc = main(
+        [
+            "record",
+            "--registry",
+            str(registry),
+            "--model",
+            "new/model",
+            "--required-flag",
+            "--moe-backend=cutlass|moe-backend[ =]+cutlass|crash-high-c|default MoE crashes c>=64|vllm 0.22|some/evidence",
+            "--json",
+        ]
+    )
     assert rc == 0
     reg = _load_registry(registry)
     entry = _find_model(reg, "new/model")

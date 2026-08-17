@@ -125,6 +125,25 @@ LINE_EXEMPT_SUBSTRINGS = (
 )
 
 
+def _report_mismatch(
+    findings: list[str],
+    path: Path,
+    line_no: int,
+    line: str,
+    seen_pairs: set[tuple[str, int]],
+    kind: str,
+    num: int,
+    expected: int,
+) -> None:
+    if num == expected:
+        return
+    key = (kind, num)
+    if key in seen_pairs:
+        return
+    seen_pairs.add(key)
+    findings.append(f"{path}:{line_no}: reports {num} {kind} (expected {expected}): {line.strip()[:160]}")
+
+
 def lint_doc(path: Path, *, expected_contract: int, expected_total: int, expected_libs: int) -> list[str]:
     findings: list[str] = []
     if not path.is_file():
@@ -136,27 +155,42 @@ def lint_doc(path: Path, *, expected_contract: int, expected_total: int, expecte
 
         seen_pairs: set[tuple[str, int]] = set()
 
-        def report(kind: str, num: int, expected: int) -> None:
-            if num == expected:
-                return
-            key = (kind, num)
-            if key in seen_pairs:
-                return
-            seen_pairs.add(key)
-            findings.append(
-                f"{path}:{line_no}: reports {num} {kind} (expected {expected}): "
-                f"{line.strip()[:160]}"
-            )
-
         for pat in CONTRACT_TOOL_PATTERNS:
             for m in pat.finditer(line):
-                report("contract-tools", int(m.group(1)), expected_contract)
+                _report_mismatch(
+                    findings,
+                    path,
+                    line_no,
+                    line,
+                    seen_pairs,
+                    "contract-tools",
+                    int(m.group(1)),
+                    expected_contract,
+                )
         for pat in TOTAL_TOOL_PATTERNS:
             for m in pat.finditer(line):
-                report("MCP-tools-total", int(m.group(1)), expected_total)
+                _report_mismatch(
+                    findings,
+                    path,
+                    line_no,
+                    line,
+                    seen_pairs,
+                    "MCP-tools-total",
+                    int(m.group(1)),
+                    expected_total,
+                )
         for pat in LIBRARY_PATTERNS:
             for m in pat.finditer(line):
-                report("libraries", int(m.group(1)), expected_libs)
+                _report_mismatch(
+                    findings,
+                    path,
+                    line_no,
+                    line,
+                    seen_pairs,
+                    "libraries",
+                    int(m.group(1)),
+                    expected_libs,
+                )
 
     return findings
 

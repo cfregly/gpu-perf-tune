@@ -77,12 +77,13 @@ import shlex
 import subprocess
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
-_DEFAULT_SIDECAR_IMAGE = "ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d"
+_DEFAULT_SIDECAR_IMAGE = (
+    "ghcr.io/cfregly/nsys-sidecar:0.1.0@sha256:3146de96f6022a8cc36f86d1b8c0281cb940e51e2c3dc49c315646ad66ede43d"
+)
 _DEFAULT_DURATION_S = 120
 _DEFAULT_VLLM_PID_PATTERN = "vllm serve"
 _DEFAULT_SAMPLE = "cpu"
@@ -111,7 +112,7 @@ class KernelProfileStepFns:
     extract_artifacts: Any = None
 
     @classmethod
-    def production(cls) -> "KernelProfileStepFns":
+    def production(cls) -> KernelProfileStepFns:
         return cls(
             validate_pod=_step_validate_pod,
             attach_sidecar=_step_attach_sidecar,
@@ -171,9 +172,7 @@ def _step_validate_pod(*, namespace: str, pod: str, target_container: str) -> di
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"validate_pod: pod {namespace}/{pod} not found: {result.stderr.strip()}"
-        )
+        raise RuntimeError(f"validate_pod: pod {namespace}/{pod} not found: {result.stderr.strip()}")
     pod_obj = json.loads(result.stdout)
     containers = [c["name"] for c in pod_obj.get("spec", {}).get("containers", [])]
     if target_container not in containers:
@@ -198,14 +197,19 @@ def _step_attach_sidecar(
 ) -> dict[str, Any]:
     """``kubectl debug --share-processes`` to attach the nsys sidecar."""
     args = [
-        "-n", namespace,
-        "debug", pod,
-        "--image", sidecar_image,
-        "--container", sidecar_container,
+        "-n",
+        namespace,
+        "debug",
+        pod,
+        "--image",
+        sidecar_image,
+        "--container",
+        sidecar_container,
         "--share-processes",
         f"--target={target_container}",
         "--",
-        "sleep", "3600",
+        "sleep",
+        "3600",
     ]
     _run_kubectl(args)
     return {
@@ -243,8 +247,7 @@ def _step_wait_for_sidecar(
                     }
         time.sleep(_SIDECAR_POLL_INTERVAL_S)
     raise RuntimeError(
-        f"wait_for_sidecar: ephemeral container {sidecar_container} did not "
-        f"become Running within {timeout_s}s"
+        f"wait_for_sidecar: ephemeral container {sidecar_container} did not become Running within {timeout_s}s"
     )
 
 
@@ -257,18 +260,21 @@ def _step_find_vllm_pid(
 ) -> dict[str, Any]:
     """``kubectl exec`` + pgrep to find the engine PID."""
     args = [
-        "-n", namespace,
-        "exec", pod, "-c", sidecar_container,
-        "--", "bash", "-c",
+        "-n",
+        namespace,
+        "exec",
+        pod,
+        "-c",
+        sidecar_container,
+        "--",
+        "bash",
+        "-c",
         f"pgrep -f {shlex.quote(vllm_pid_pattern)} | head -1",
     ]
     result = _run_kubectl(args)
     pid_str = result.stdout.strip()
     if not pid_str:
-        raise RuntimeError(
-            f"find_vllm_pid: no process matching {vllm_pid_pattern!r} in pod "
-            f"{namespace}/{pod}"
-        )
+        raise RuntimeError(f"find_vllm_pid: no process matching {vllm_pid_pattern!r} in pod {namespace}/{pod}")
     return {
         "cmd": "kubectl " + " ".join(shlex.quote(a) for a in args),
         "vllm_pid": int(pid_str),
@@ -304,9 +310,16 @@ def _step_run_nsys_profile(
         f"--output=/profiling/{shlex.quote(capture_name)}"
     )
     args = [
-        "-n", namespace,
-        "exec", pod, "-c", sidecar_container,
-        "--", "bash", "-c", nsys_cmd,
+        "-n",
+        namespace,
+        "exec",
+        pod,
+        "-c",
+        sidecar_container,
+        "--",
+        "bash",
+        "-c",
+        nsys_cmd,
     ]
     _run_kubectl(args)
     return {
@@ -327,19 +340,20 @@ def _step_extract_artifacts(
     """``kubectl cp`` to extract .nsys-rep + summary CSVs into ``output_dir``."""
     output_dir.mkdir(parents=True, exist_ok=True)
     in_pod_to_local = {
-        f"/profiling/{capture_name}.nsys-rep":
-            output_dir / f"{capture_name}.nsys-rep",
-        f"/profiling/{capture_name}_gpu_kern_sum.csv":
-            output_dir / f"{capture_name}_gpu_kern_sum.csv",
-        f"/profiling/{capture_name}_cuda_api_sum.csv":
-            output_dir / f"{capture_name}_cuda_api_sum.csv",
+        f"/profiling/{capture_name}.nsys-rep": output_dir / f"{capture_name}.nsys-rep",
+        f"/profiling/{capture_name}_gpu_kern_sum.csv": output_dir / f"{capture_name}_gpu_kern_sum.csv",
+        f"/profiling/{capture_name}_cuda_api_sum.csv": output_dir / f"{capture_name}_cuda_api_sum.csv",
     }
     cmds: list[str] = []
     for in_pod_path, local_path in in_pod_to_local.items():
         args = [
-            "-n", namespace,
-            "cp", f"{pod}:{in_pod_path}", str(local_path),
-            "-c", sidecar_container,
+            "-n",
+            namespace,
+            "cp",
+            f"{pod}:{in_pod_path}",
+            str(local_path),
+            "-c",
+            sidecar_container,
         ]
         _run_kubectl(args)
         cmds.append("kubectl " + " ".join(shlex.quote(a) for a in args))
@@ -405,7 +419,7 @@ def capture_kernel_profile(
             PID not found, nsys exit error)
     """
     if captured_at is None:
-        captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     if sidecar_container is None:
         sidecar_container = f"nsys-debug-{int(time.time())}"
     if capture_name is None:
@@ -420,9 +434,7 @@ def capture_kernel_profile(
 
     # Step 1: validate pod (always runs, even in dry-run, so we fail fast on
     # bad inputs).
-    validate_out = step_fns.validate_pod(
-        namespace=namespace, pod=pod, target_container=target_container
-    )
+    validate_out = step_fns.validate_pod(namespace=namespace, pod=pod, target_container=target_container)
     step_commands.append({"step": "validate_pod", **validate_out})
 
     if dry_run:
@@ -559,9 +571,7 @@ def capture_kernel_profile(
         "method": "kubectl-debug-share-processes",
     }
     kernel_profile_json_path = output_dir / "kernel_profile.json"
-    kernel_profile_json_path.write_text(
-        json.dumps(kernel_profile_json, indent=2, sort_keys=True)
-    )
+    kernel_profile_json_path.write_text(json.dumps(kernel_profile_json, indent=2, sort_keys=True))
 
     # Step 7 (optional): patch the bundle's inference_perfbench_v1.json so
     # the renderer / aggregator picks up the kernel-profile artifact.

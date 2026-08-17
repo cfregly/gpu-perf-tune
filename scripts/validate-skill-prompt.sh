@@ -12,6 +12,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 SERVER="${REPO_ROOT}/plugins/profile-and-optimize/server"
 VENV_PY="${SERVER}/.venv/bin/python"
 OUT_DIR="${OUT_DIR:-/tmp/profile-and-optimize-validate}"
+PROJECT_VERSION="$(<"${REPO_ROOT}/VERSION")"
 
 mkdir -p "${OUT_DIR}"
 
@@ -20,7 +21,8 @@ if [[ ! -x "${VENV_PY}" ]]; then
   exit 2
 fi
 
-PROFILE_AND_OPTIMIZE_REPO_ROOT="${SERVER}" "${VENV_PY}" - "${OUT_DIR}" "${SERVER}" <<'PYEOF'
+PROFILE_AND_OPTIMIZE_REPO_ROOT="${SERVER}" PROJECT_VERSION="${PROJECT_VERSION}" \
+  "${VENV_PY}" - "${OUT_DIR}" "${SERVER}" <<'PYEOF'
 """Skill→prompt simulation via stdio MCP server.
 
 For each skill, drive the first MCP call its workflow specifies, and record
@@ -78,7 +80,7 @@ def call_tool(name, arguments):
         return None, resp
 
 
-rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "profile-and-optimize-skill-validate", "version": "0.2.1"}})
+rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "profile-and-optimize-skill-validate", "version": os.environ["PROJECT_VERSION"]}})
 notify("notifications/initialized", {})
 
 

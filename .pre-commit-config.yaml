@@ -25,14 +25,25 @@ repos:
     rev: v0.16.3
     hooks:
       - id: ruff
-        args: [--fix, --select, E4,E7,E9,F, --config, plugins/profile-and-optimize/server/pyproject.toml]
-        files: '^plugins/profile-and-optimize/server/(perf_baseline|evidence|slurm|tools/(perf_baseline|evidence|slurm))/'
+        args: [--fix, --config, plugins/profile-and-optimize/server/pyproject.toml]
+        files: '^(plugins/profile-and-optimize/|scripts/).*\.py$'
       - id: ruff-format
         args: [--config, plugins/profile-and-optimize/server/pyproject.toml]
-        files: '^plugins/profile-and-optimize/server/(perf_baseline|evidence|slurm|tools/(perf_baseline|evidence|slurm))/'
+        files: '^(plugins/profile-and-optimize/|scripts/).*\.py$'
 
   - repo: local
     hooks:
+      - id: pyright-production
+        name: pyright (production Python)
+        entry: make typecheck
+        language: system
+        pass_filenames: false
+        files: '(^plugins/profile-and-optimize/(server|hooks|skills)/.*\.py$|^scripts/.*\.py$|^pyrightconfig\.json$)'
+      - id: shellcheck
+        name: shellcheck (tracked shell scripts)
+        entry: bash scripts/check-shell.sh
+        language: system
+        types: [shell]
       - id: check-doc-links-no-network
         name: check-doc-links (no-network)
         entry: bash scripts/check-doc-links.sh --no-network --quiet
@@ -53,7 +64,7 @@ repos:
         files: '(^plugins/profile-and-optimize/skills/|^README\.md$|^CONTRIBUTING\.md$|^REVIEWERS\.md$|^SECURITY\.md$|^Makefile$|^plugins/profile-and-optimize/README\.md$|^plugins/profile-and-optimize/\.claude-plugin/plugin\.json$|^\.claude-plugin/marketplace\.json$)'
       - id: lint-tool-counts
         name: lint-tool-counts (single source of truth for MCP tool / library totals)
-        entry: python3 scripts/lint-tool-counts.py
+        entry: make lint-tool-counts
         language: system
         pass_filenames: false
         files: '(^plugins/profile-and-optimize/server/(mcp_surface\.py|README\.md|AGENTS\.md|docs/|tools/profile_and_optimize_mcp/README\.md)|^README\.md$|^CONTRIBUTING\.md$|^REVIEWERS\.md$|^SECURITY\.md$|^Makefile$|^plugins/profile-and-optimize/README\.md$|^plugins/profile-and-optimize/\.claude-plugin/plugin\.json$)'

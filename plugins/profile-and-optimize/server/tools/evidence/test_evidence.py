@@ -11,7 +11,6 @@ import pytest
 
 from tools.evidence.evidence_cli import CONTRACT, _operator_path, build_parser, main
 
-
 SERVER_ROOT = Path(__file__).resolve().parents[2]
 BASH = shutil.which("bash") or "/bin/bash"
 

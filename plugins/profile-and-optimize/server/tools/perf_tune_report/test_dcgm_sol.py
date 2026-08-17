@@ -32,7 +32,6 @@ from tools.perf_tune_report.renderer.render_report import (
 )
 from tools.perf_tune_report.schema import BACKEND_VLLM_SWEEP, STATUS_FULL, AtlasCell
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -94,8 +93,13 @@ _DCGM_PAYLOAD = {
         },
     ],
     "queries": [
-        {"peak_key": "hbm3e_tbps", "metric": "DCGM_FI_PROF_DRAM_ACTIVE",
-         "promql": "avg by (gpu) (DCGM_FI_PROF_DRAM_ACTIVE{...})", "unit": "ratio", "is_fallback": False},
+        {
+            "peak_key": "hbm3e_tbps",
+            "metric": "DCGM_FI_PROF_DRAM_ACTIVE",
+            "promql": "avg by (gpu) (DCGM_FI_PROF_DRAM_ACTIVE{...})",
+            "unit": "ratio",
+            "is_fallback": False,
+        },
     ],
     "dry_run": False,
 }
@@ -148,6 +152,7 @@ def _count_pdf_pages(pdf_bytes: bytes) -> int:
 
 def test_render_page_raises_when_empty():
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -162,6 +167,7 @@ def test_render_page_raises_when_empty():
 def test_render_page_handles_no_resources():
     """Payload exists but resources list is empty -> draws header + 'no resources' message."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -178,6 +184,7 @@ def test_render_page_handles_no_resources():
 def test_render_page_handles_counter_fallback_caveat():
     """group_level=counter triggers caveat text."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -192,6 +199,7 @@ def test_render_page_handles_counter_fallback_caveat():
 
 def test_render_page_handles_short_sweep_caveat():
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -338,6 +346,7 @@ def _attribution_payload() -> dict:
 
 def test_category_attribution_render_page_raises_when_empty_dict():
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -352,6 +361,7 @@ def test_category_attribution_render_page_raises_when_empty_dict():
 def test_category_attribution_render_page_raises_when_no_attribution():
     """Payload exists but per_category_attribution is empty -> ValueError."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -367,14 +377,13 @@ def test_category_attribution_render_page_raises_when_no_attribution():
 
 def test_category_attribution_render_page_happy_path():
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig = plt.figure(figsize=(8, 11))
     try:
-        dcgm_category_attribution.render_page(
-            fig, OrderedDict([("c1", _attribution_payload())])
-        )
+        dcgm_category_attribution.render_page(fig, OrderedDict([("c1", _attribution_payload())]))
     finally:
         plt.close(fig)
 
@@ -382,22 +391,26 @@ def test_category_attribution_render_page_happy_path():
 def test_category_attribution_render_handles_unmapped_category():
     """Unknown category still renders (appended after canonical order)."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     payload = _attribution_payload()
-    payload["per_category_attribution"] = list(payload["per_category_attribution"]) + [{
-        "category": "ExoticUnknownCategory",
-        "time_share_pct": 5.0,
-        "attributed_bytes_total": None,
-        "attributed_flops_total": None,
-        "effective_bw_during_category_window": None,
-        "effective_tflops_during_category_window": None,
-        "sol_pct_bw": None,
-        "sol_pct_compute": None,
-        "bound": None,
-        "ceiling_metric": None,
-    }]
+    payload["per_category_attribution"] = [
+        *payload["per_category_attribution"],
+        {
+            "category": "ExoticUnknownCategory",
+            "time_share_pct": 5.0,
+            "attributed_bytes_total": None,
+            "attributed_flops_total": None,
+            "effective_bw_during_category_window": None,
+            "effective_tflops_during_category_window": None,
+            "sol_pct_bw": None,
+            "sol_pct_compute": None,
+            "bound": None,
+            "ceiling_metric": None,
+        },
+    ]
 
     fig = plt.figure(figsize=(8, 11))
     try:

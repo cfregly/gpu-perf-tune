@@ -32,7 +32,6 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any
 
-
 _CATEGORY_DISPLAY_ORDER: tuple[str, ...] = (
     "NCCL",
     "MoE",
@@ -76,7 +75,7 @@ def _fmt_flops(f: float | None) -> str:
 
 def render_page(
     fig,
-    cell_dcgm: "OrderedDict[str, dict[str, Any]]",
+    cell_dcgm: OrderedDict[str, dict[str, Any]],
 ) -> None:
     """Draw the per-category attribution page onto a matplotlib Figure.
 
@@ -94,17 +93,12 @@ def render_page(
     payload = cell_dcgm[first_vid]
     attribution = payload.get("per_category_attribution") or []
     if not attribution:
-        raise ValueError(
-            "dcgm_category_attribution.render_page: per_category_attribution is empty"
-        )
+        raise ValueError("dcgm_category_attribution.render_page: per_category_attribution is empty")
 
-    import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib import gridspec
 
     hw_key = payload.get("hw_key", "?")
-    sweep_start = payload.get("sweep_start_utc", "?")
-    sweep_end = payload.get("sweep_end_utc", "?")
     duration_s = payload.get("duration_s", 0)
     n_gpus = payload.get("n_gpus", 0)
 
@@ -120,20 +114,32 @@ def render_page(
     ax_hdr = fig.add_subplot(gs[0, 0])
     ax_hdr.axis("off")
     ax_hdr.text(
-        0.5, 0.78,
+        0.5,
+        0.78,
         "DCGM x zymtrace Per-Category Attribution",
-        ha="center", va="center", fontsize=14, fontweight="bold",
+        ha="center",
+        va="center",
+        fontsize=14,
+        fontweight="bold",
     )
     ax_hdr.text(
-        0.5, 0.46,
-        f"variant: {first_vid}  |  hardware: {hw_key}  |  "
-        f"GPUs: {n_gpus}  |  sweep duration: {duration_s:.0f}s",
-        ha="center", va="center", fontsize=8, color="#555555",
+        0.5,
+        0.46,
+        f"variant: {first_vid}  |  hardware: {hw_key}  |  GPUs: {n_gpus}  |  sweep duration: {duration_s:.0f}s",
+        ha="center",
+        va="center",
+        fontsize=8,
+        color="#555555",
     )
     ax_hdr.text(
-        0.5, 0.18,
+        0.5,
+        0.18,
         "Measured DCGM workload bytes / FLOPS attributed to zymtrace categories via time-share weighting",
-        ha="center", va="center", fontsize=8, color="#777777", style="italic",
+        ha="center",
+        va="center",
+        fontsize=8,
+        color="#777777",
+        style="italic",
     )
 
     # --------------------------------- grouped bar chart (time-share + %SoL)
@@ -177,7 +183,8 @@ def render_page(
         ax.set_ylabel("percentage (%)", fontsize=8)
         ax.set_title(
             f"Time-share + Cross-attributed %SoL per Category (variant: {first_vid})",
-            fontsize=10, loc="left",
+            fontsize=10,
+            loc="left",
         )
         ax.tick_params(axis="y", labelsize=7)
         ax.axhline(100, color="#cc3333", linestyle="--", linewidth=0.7, alpha=0.6)
@@ -198,29 +205,46 @@ def render_page(
                 x[i],
                 -max(time_shares + sol_pcts, default=0) * 0.04,
                 f"{detail} [{kind}]",
-                ha="center", va="top", fontsize=6.5, color="#444444",
+                ha="center",
+                va="top",
+                fontsize=6.5,
+                color="#444444",
             )
 
     # ------------------------------------------------------------ caveat
     ax_cv = fig.add_subplot(gs[2, 0])
     ax_cv.axis("off")
     ax_cv.text(
-        0.5, 0.75,
+        0.5,
+        0.75,
         "How to read: time-share is the fraction of GPU time the category occupied "
         "(zymtrace samples). %SoL is the cross-attributed measured throughput "
         "during that window divided by the category's natural ceiling.",
-        ha="center", va="center", fontsize=7, color="#555555", wrap=True,
+        ha="center",
+        va="center",
+        fontsize=7,
+        color="#555555",
+        wrap=True,
     )
     ax_cv.text(
-        0.5, 0.42,
+        0.5,
+        0.42,
         "Caveat: cross-attribution assumes DCGM workload bytes/FLOPS distribute "
         "uniformly within each category's time window. For per-individual-kernel "
         "rigor see the L4 page (ncu scatter); for total workload truth see the L3 "
         "page (DCGM bars).",
-        ha="center", va="center", fontsize=7, style="italic", color="#666666",
+        ha="center",
+        va="center",
+        fontsize=7,
+        style="italic",
+        color="#666666",
     )
     ax_cv.text(
-        0.5, 0.10,
+        0.5,
+        0.10,
         "See AGENTS.md 'Speed-of-light framing' for the four-level rigor hierarchy.",
-        ha="center", va="center", fontsize=7, color="#777777",
+        ha="center",
+        va="center",
+        fontsize=7,
+        color="#777777",
     )

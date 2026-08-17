@@ -63,10 +63,10 @@ The renderer's ``kernel_breakdown.py`` module consumes this file directly.
 from __future__ import annotations
 
 import json
+import re as _re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
 
 # Expected TSV filenames. Order matches the five capture queries.
 _TSV_FILES = [
@@ -142,7 +142,7 @@ class KernelImportResult:
 
     bundle: Path
     kernels_json_path: Path | None  # None when manifest doesn't declare zymtrace
-    skipped_reason: str | None      # set when kernels_json_path is None
+    skipped_reason: str | None  # set when kernels_json_path is None
     top_kernel_count: int
     category_count: int
     gpu_count: int
@@ -197,17 +197,11 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
                 path,
                 reason=f"line {ln_no}: column count {len(cells)} != header {len(header)}",
             )
-        rows.append(dict(zip(header, cells)))
+        rows.append(dict(zip(header, cells, strict=True)))
     if not rows:
         raise ZymtraceTSVMalformed(path, reason="no data rows after header")
     return rows
 
-
-# CSV-friendly regex categorizer for top_kernels emission. Mirror of the
-# capture-query multiIf bucketing so
-# that JSON consumers can re-derive a kernel's category from its name
-# without re-querying the per-category TSV.
-import re as _re
 
 _CATEGORY_RULES: list[tuple[_re.Pattern[str], str]] = [
     (_re.compile(r"(?i)(multimem|allreduce|flashinfer.*allreduce|nccl)"), "NCCL"),
@@ -234,13 +228,9 @@ def _build_top_kernels(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
         try:
             samples = int(r["samples"])
         except (KeyError, ValueError) as e:
-            raise ZymtraceTSVMalformed(
-                Path("<top-gpu-frames.tsv>"), reason=f"bad samples cell in row {r}: {e}"
-            ) from e
+            raise ZymtraceTSVMalformed(Path("<top-gpu-frames.tsv>"), reason=f"bad samples cell in row {r}: {e}") from e
         if "kernel" not in r:
-            raise ZymtraceTSVMalformed(
-                Path("<top-gpu-frames.tsv>"), reason=f"missing kernel column in row {r}"
-            )
+            raise ZymtraceTSVMalformed(Path("<top-gpu-frames.tsv>"), reason=f"missing kernel column in row {r}")
         # An empty value is a legitimate UNSYMBOLIZED frame (profiling data, not
         # malformed) -- keep it as <unresolved> rather than crashing the import.
         name = r.get("kernel") or "<unresolved>"
@@ -254,14 +244,14 @@ def _build_per_gpu(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
         try:
             samples = int(r["samples"])
         except (KeyError, ValueError) as e:
-            raise ZymtraceTSVMalformed(
-                Path("<per-gpu.tsv>"), reason=f"bad samples cell in row {r}: {e}"
-            ) from e
-        out.append({
-            "gpu_name": r.get("gpu_name", ""),
-            "gpu_uuid": r.get("gpu_uuid", ""),
-            "samples": samples,
-        })
+            raise ZymtraceTSVMalformed(Path("<per-gpu.tsv>"), reason=f"bad samples cell in row {r}: {e}") from e
+        out.append(
+            {
+                "gpu_name": r.get("gpu_name", ""),
+                "gpu_uuid": r.get("gpu_uuid", ""),
+                "samples": samples,
+            }
+        )
     return out
 
 
@@ -270,15 +260,11 @@ def _build_per_category(rows: list[dict[str, str]]) -> dict[str, int]:
     for r in rows:
         cat = r.get("category", "")
         if not cat:
-            raise ZymtraceTSVMalformed(
-                Path("<per-category.tsv>"), reason=f"missing category column in row {r}"
-            )
+            raise ZymtraceTSVMalformed(Path("<per-category.tsv>"), reason=f"missing category column in row {r}")
         try:
             samples = int(r["samples"])
         except (KeyError, ValueError) as e:
-            raise ZymtraceTSVMalformed(
-                Path("<per-category.tsv>"), reason=f"bad samples cell in row {r}: {e}"
-            ) from e
+            raise ZymtraceTSVMalformed(Path("<per-category.tsv>"), reason=f"bad samples cell in row {r}: {e}") from e
         out[cat] = samples
     return out
 

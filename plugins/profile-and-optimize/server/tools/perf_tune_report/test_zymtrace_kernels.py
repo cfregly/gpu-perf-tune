@@ -42,17 +42,12 @@ from tools.perf_tune_report.schema import (
     AtlasCell,
 )
 
-
 # ---------------------------------------------------------------------------
 # Synthetic-bundle helpers
 # ---------------------------------------------------------------------------
 
 _VALID_TSVS = {
-    "kernel-class.tsv": (
-        "event_kind\tkind\tsamples\n"
-        "cuda\tnative\t1000\n"
-        "cuda\tcuda\t500\n"
-    ),
+    "kernel-class.tsv": ("event_kind\tkind\tsamples\ncuda\tnative\t1000\ncuda\tcuda\t500\n"),
     "top-gpu-frames.tsv": (
         "kernel\tsamples\n"
         "multimem_all_reduce_kernel<bfloat16>\t558\n"
@@ -67,12 +62,7 @@ _VALID_TSVS = {
         "NVIDIA B200\t92f929f2-1fea-72bb-7d96-834eb0f4e9c8\t35917\n"
     ),
     "per-category.tsv": (
-        "category\tsamples\n"
-        "cuBLAS\t119199\n"
-        "Triton-fused\t61950\n"
-        "NCCL\t16510\n"
-        "BMM-NVFP4\t19212\n"
-        "FMHA\t9226\n"
+        "category\tsamples\ncuBLAS\t119199\nTriton-fused\t61950\nNCCL\t16510\nBMM-NVFP4\t19212\nFMHA\t9226\n"
     ),
     "top-python-during-cuda.tsv": (
         "python_frame\tsamples\n"
@@ -163,15 +153,9 @@ def test_zymtrace_positive_path(tmp_path):
     assert "zymtrace" in payload["captured_sources"]
     assert payload["per_category"]["cuBLAS"] == 119199
     # category derivation: multimem_all_reduce_kernel -> NCCL
-    assert any(
-        k["name"].startswith("multimem_all_reduce") and k["category"] == "NCCL"
-        for k in payload["top_kernels"]
-    )
+    assert any(k["name"].startswith("multimem_all_reduce") and k["category"] == "NCCL" for k in payload["top_kernels"])
     # category derivation: bmm_E2m1E2m1 -> BMM-NVFP4
-    assert any(
-        k["name"].startswith("bmm_E2m1") and k["category"] == "BMM-NVFP4"
-        for k in payload["top_kernels"]
-    )
+    assert any(k["name"].startswith("bmm_E2m1") and k["category"] == "BMM-NVFP4" for k in payload["top_kernels"])
 
 
 def test_zymtrace_declared_but_empty_tsv_raises(tmp_path):

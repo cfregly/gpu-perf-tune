@@ -59,8 +59,8 @@ single query. Added for the durable-lineage workstream.
 from __future__ import annotations
 
 import re
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 SCHEMA = "experiment_provenance_v1"
 
@@ -218,9 +218,7 @@ def validate(prov: dict[str, Any]) -> list[str]:
         problems.append("identity.run_id is required (the immutable join key)")
     status = ident.get("status")
     if status and status not in STATUS_VALUES:
-        problems.append(
-            f"identity.status {status!r} not in {STATUS_VALUES}"
-        )
+        problems.append(f"identity.status {status!r} not in {STATUS_VALUES}")
     srcs = _sources(prov)
     if not srcs:
         problems.append("source: must list >=1 code-under-test entry (repo + commit)")
@@ -231,14 +229,10 @@ def validate(prov: dict[str, Any]) -> list[str]:
             problems.append(f"source[{i}].commit is required (the actual source SHA)")
         deliv = s.get("delivery")
         if deliv and deliv not in DELIVERY_KINDS:
-            problems.append(
-                f"source[{i}].delivery {deliv!r} not in {DELIVERY_KINDS}"
-            )
+            problems.append(f"source[{i}].delivery {deliv!r} not in {DELIVERY_KINDS}")
         omode = s.get("overlay_mode")
         if omode and omode not in OVERLAY_MODES:
-            problems.append(
-                f"source[{i}].overlay_mode {omode!r} not in {OVERLAY_MODES}"
-            )
+            problems.append(f"source[{i}].overlay_mode {omode!r} not in {OVERLAY_MODES}")
     verd = prov.get("verdict") or {}
     tier = verd.get("tier")
     if tier and tier not in VERDICT_TIERS:
@@ -313,9 +307,7 @@ def provenance_match_problems(
         cam_commit = str(cv.get("commit", "") or "")
     else:  # flattened lake / provenance.json form
         cam_delivery = str(campaign_prov.get("delivery", "") or "")
-        cam_commit = str(
-            campaign_prov.get("vllm_commit") or campaign_prov.get("code_sha") or ""
-        )
+        cam_commit = str(campaign_prov.get("vllm_commit") or campaign_prov.get("code_sha") or "")
     if not cam_delivery and not cam_commit:
         return []  # campaign provenance unknown -> nothing to assert (ungrounded check covers it)
     pfx = f"{label}: " if label else ""
@@ -404,16 +396,18 @@ def source_links(prov: dict[str, Any] | None, registry: dict[str, Any] | None = 
             patch = ", ".join(str(p) for p in patch_files)
         else:
             patch = str(patch_files)
-        out.append({
-            "repo": repo,
-            "branch": branch,
-            "commit": commit,
-            "delivery": str(s.get("delivery", "") or ""),
-            "overlay_mode": str(s.get("overlay_mode", "") or ""),
-            "image": str(s.get("image", "") or ""),
-            "image_digest": str(s.get("image_digest", "") or ""),
-            "url": github_url(repo, branch, commit),
-            "purpose": str(reg.get("purpose", "") or ""),
-            "patch": patch,
-        })
+        out.append(
+            {
+                "repo": repo,
+                "branch": branch,
+                "commit": commit,
+                "delivery": str(s.get("delivery", "") or ""),
+                "overlay_mode": str(s.get("overlay_mode", "") or ""),
+                "image": str(s.get("image", "") or ""),
+                "image_digest": str(s.get("image_digest", "") or ""),
+                "url": github_url(repo, branch, commit),
+                "purpose": str(reg.get("purpose", "") or ""),
+                "patch": patch,
+            }
+        )
     return out

@@ -6,8 +6,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -32,14 +30,13 @@ class _FakeS3List:
 
     def __init__(self, campaign_ids, page_size=2):
         self._keys = [
-            f"perflake/perf-report/campaign_v1/dt=2026-05-31/campaign={c}/part-0.parquet"
-            for c in campaign_ids
+            f"perflake/perf-report/campaign_v1/dt=2026-05-31/campaign={c}/part-0.parquet" for c in campaign_ids
         ]
         self._page = page_size
 
     def list_objects_v2(self, **kw):
         token = int(kw.get("ContinuationToken", 0))
-        chunk = self._keys[token:token + self._page]
+        chunk = self._keys[token : token + self._page]
         nxt = token + self._page
         more = nxt < len(self._keys)
         return {
@@ -51,9 +48,9 @@ class _FakeS3List:
 
 def test_enumerate_published_campaign_ids_paginates():
     ids = enumerate_published_campaign_ids(
-        cfg=None, bucket="perf-lake",
-        s3_client_factory=lambda _cfg: _FakeS3List(["a-20260531T010000Z", "b-20260531T020000Z",
-                                                    "c-20260531T030000Z"]),
+        cfg=None,
+        bucket="perf-lake",
+        s3_client_factory=lambda _cfg: _FakeS3List(["a-20260531T010000Z", "b-20260531T020000Z", "c-20260531T030000Z"]),
     )
     assert ids == {"a-20260531T010000Z", "b-20260531T020000Z", "c-20260531T030000Z"}
 
@@ -73,8 +70,15 @@ def test_build_index_published_defaults_false_when_not_checked(tmp_path: Path):
     assert rows[0]["published_to_lake"] is False
 
 
-def _stage(campaigns_root: Path, name: str, *, family: str = "", experiment_id: str | None = None,
-           rows: list[AtlasCell] | None = None, rendered: bool = True) -> Path:
+def _stage(
+    campaigns_root: Path,
+    name: str,
+    *,
+    family: str = "",
+    experiment_id: str | None = None,
+    rows: list[AtlasCell] | None = None,
+    rendered: bool = True,
+) -> Path:
     d = campaigns_root / name
     d.mkdir(parents=True)
     src = ["# Campaign", "", "- captured_at: x", "- config: /tmp/x.yaml"]
@@ -86,27 +90,55 @@ def _stage(campaigns_root: Path, name: str, *, family: str = "", experiment_id: 
     if rows is not None:
         write_jsonl(rows, d / "atlas.jsonl")
     if rendered:
-        (d / "report_status.json").write_text(json.dumps(
-            {"sol_complete": True, "plot_ready_points": 1, "omitted_pages": [],
-             "dcgm_grounded": True, "focus": "throughput", "sol_rigor": "L3"}))
+        (d / "report_status.json").write_text(
+            json.dumps(
+                {
+                    "sol_complete": True,
+                    "plot_ready_points": 1,
+                    "omitted_pages": [],
+                    "dcgm_grounded": True,
+                    "focus": "throughput",
+                    "sol_rigor": "L3",
+                }
+            )
+        )
     return d
 
 
 def _row(**kw) -> AtlasCell:
-    base = dict(cell_id="c1", model="GLM-5.1-NVFP4", hardware="B200", quant="NVFP4",
-                tensor_parallel=8, parallel_strategy="TP", mtp=False,
-                max_num_batched_tokens=8192, concurrency=1, status="full",
-                ttft_avg_ms=120.0, request_throughput_avg=0.2, output_tps_per_user=70.0,
-                output_tps_per_gpu=400.0, tpot_median_ms=13.0, backend="vllm-sweep")
+    base = dict(
+        cell_id="c1",
+        model="GLM-5.1-NVFP4",
+        hardware="B200",
+        quant="NVFP4",
+        tensor_parallel=8,
+        parallel_strategy="TP",
+        mtp=False,
+        max_num_batched_tokens=8192,
+        concurrency=1,
+        status="full",
+        ttft_avg_ms=120.0,
+        request_throughput_avg=0.2,
+        output_tps_per_user=70.0,
+        output_tps_per_gpu=400.0,
+        tpot_median_ms=13.0,
+        backend="vllm-sweep",
+    )
     base.update(kw)
     return AtlasCell(**base)
 
 
 def test_build_index_row_reads_join_keys_and_headline(tmp_path: Path):
-    d = _stage(tmp_path, "glm51-nvfp4kv-ab-20260531T120000Z", family="nvfp4-kv",
-               experiment_id="glm51-nvfp4kv-ab-20260531T120000Z",
-               rows=[_row(output_tps_per_gpu=400.0, ttft_avg_ms=120.0),
-                     _row(concurrency=8, output_tps_per_gpu=900.0, ttft_avg_ms=200.0)])
+    d = _stage(
+        tmp_path,
+        "glm51-nvfp4kv-ab-20260531T120000Z",
+        family="nvfp4-kv",
+        experiment_id="glm51-nvfp4kv-ab-20260531T120000Z",
+        rows=[
+            _row(output_tps_per_gpu=400.0, ttft_avg_ms=120.0),
+            _row(concurrency=8, output_tps_per_gpu=900.0, ttft_avg_ms=200.0),
+        ],
+    )
     r = build_index_row(d)
     assert r["experiment_id"] == "glm51-nvfp4kv-ab-20260531T120000Z"
     assert r["family"] == "nvfp4-kv"
@@ -129,8 +161,7 @@ def test_build_index_enumerates_and_sorts(tmp_path: Path):
     _stage(tmp_path, "a-20260531T010000Z", rows=[_row()])
     (tmp_path / "not-a-campaign").mkdir()  # ignored (no atlas/config/SOURCE)
     rows = build_index(tmp_path)
-    assert [r["campaign_id"] for r in rows] == [
-        "a-20260531T010000Z", "b-20260531T020000Z"]
+    assert [r["campaign_id"] for r in rows] == ["a-20260531T010000Z", "b-20260531T020000Z"]
 
 
 def test_write_index_emits_jsonl_and_md(tmp_path: Path):
@@ -154,9 +185,7 @@ def test_render_index_hides_absolute_bundle_prefix(tmp_path: Path):
     )
     private_prefix = "/Users/operator/private/workspace"
     with (campaign / "SOURCE.md").open("a", encoding="utf-8") as source:
-        source.write(
-            f"- evidence_bundle_path: {private_prefix}/bundle-20260531T030000Z\n"
-        )
+        source.write(f"- evidence_bundle_path: {private_prefix}/bundle-20260531T030000Z\n")
 
     markdown = render_index_md(build_index(tmp_path))
 
@@ -167,17 +196,27 @@ def test_render_index_hides_absolute_bundle_prefix(tmp_path: Path):
 def test_cli_experiments_index_family_filter(tmp_path: Path, capsys):
     _stage(tmp_path, "kv-20260531T040000Z", family="nvfp4-kv", rows=[_row()])
     _stage(tmp_path, "ep-20260531T050000Z", family="deepep", rows=[_row()])
-    rc = main(["experiments_index", "--campaigns-dir", str(tmp_path),
-               "--family", "nvfp4-kv", "--out", str(tmp_path / "o"), "--json"])
+    rc = main(
+        [
+            "experiments_index",
+            "--campaigns-dir",
+            str(tmp_path),
+            "--family",
+            "nvfp4-kv",
+            "--out",
+            str(tmp_path / "o"),
+            "--json",
+        ]
+    )
     assert rc == 0
     env = json.loads(capsys.readouterr().out)
     assert env["campaign_count"] == 1
-    rows = [json.loads(l) for l in
-            (tmp_path / "o" / "experiments-index.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (tmp_path / "o" / "experiments-index.jsonl").read_text().splitlines()]
     assert rows[0]["family"] == "nvfp4-kv"
 
 
 # --- experiment_inventory (canonical count: campaigns + bundles) ------------------------
+
 
 def _stage_bundle(root: Path, name: str, *, marker: str = "SOURCE.md") -> Path:
     """A run-id-stamped evidence bundle under a deploy-bundle-style tree."""
@@ -250,8 +289,18 @@ def test_cli_experiment_inventory(tmp_path: Path, capsys):
     deploy = tmp_path / "x-deploy"
     _stage_bundle(deploy / "cluster-probes", "shared-20260531T010000Z")
     _stage_bundle(deploy / "experiments" / "artifacts", "extra-20260531T040000Z")
-    rc = main(["experiment_inventory", "--campaigns-dir", str(campaigns),
-               "--bundle-root", str(deploy), "--out", str(tmp_path / "o"), "--json"])
+    rc = main(
+        [
+            "experiment_inventory",
+            "--campaigns-dir",
+            str(campaigns),
+            "--bundle-root",
+            str(deploy),
+            "--out",
+            str(tmp_path / "o"),
+            "--json",
+        ]
+    )
     assert rc == 0
     env = json.loads(capsys.readouterr().out)
     assert env["total_experiments"] == 2  # shared (deduped) + extra-bundle

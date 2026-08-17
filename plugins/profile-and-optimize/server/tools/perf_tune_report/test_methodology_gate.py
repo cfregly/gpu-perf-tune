@@ -136,23 +136,32 @@ def test_methodology_missing_gmu_flagged():
 def test_methodology_missing_isl_osl_flagged():
     """A vllm-bench (non-aa) measured row must record per-request ISL/OSL -- the
     workload shape, not just max_num_batched_tokens (docs/METHODOLOGY.md)."""
-    rows = [_make_atlas_row(cell_id="cellA", cache_mode="cold",
-                            mean_input_tokens=None, mean_output_tokens=None)]
+    rows = [_make_atlas_row(cell_id="cellA", cache_mode="cold", mean_input_tokens=None, mean_output_tokens=None)]
     p = methodology_problems(rows)
     assert any("mean_input_tokens/mean_output_tokens" in x and "cellA" in x for x in p)
 
 
 def test_methodology_isl_osl_exempt_aa_dataset():
     """aa-* workloads define their shape by the dataset name -> ISL/OSL exempt."""
-    rows = [_make_atlas_row(cell_id="cellA", cache_mode="cold", dataset="aa-10k",
-                            mean_input_tokens=None, mean_output_tokens=None)]
+    rows = [
+        _make_atlas_row(
+            cell_id="cellA", cache_mode="cold", dataset="aa-10k", mean_input_tokens=None, mean_output_tokens=None
+        )
+    ]
     assert methodology_problems(rows) == []
 
 
 def test_methodology_isl_osl_exempt_aiperf_backend():
     """aiperf / drive_load backends legitimately leave ISL/OSL None -> exempt."""
-    rows = [_make_atlas_row(cell_id="cellA", cache_mode="cold", bench_backend="drive_load",
-                            mean_input_tokens=None, mean_output_tokens=None)]
+    rows = [
+        _make_atlas_row(
+            cell_id="cellA",
+            cache_mode="cold",
+            bench_backend="drive_load",
+            mean_input_tokens=None,
+            mean_output_tokens=None,
+        )
+    ]
     assert methodology_problems(rows) == []
 
 
@@ -160,11 +169,18 @@ def test_methodology_descriptor_gate_exempts_failed_cell():
     """A failed cell carries no measurement -> descriptor not required."""
     rows = [
         _make_atlas_row(
-            cell_id="dead", status="failed",
-            ttft_avg_ms=None, request_throughput_avg=None,
-            output_tps_per_user=None, output_tps_per_gpu=None,
-            cache_mode="unknown", dataset="unknown", cudagraph_mode="unknown",
-            kv_cache_dtype="unknown", image="unknown", gpu_memory_utilization=None,
+            cell_id="dead",
+            status="failed",
+            ttft_avg_ms=None,
+            request_throughput_avg=None,
+            output_tps_per_user=None,
+            output_tps_per_gpu=None,
+            cache_mode="unknown",
+            dataset="unknown",
+            cudagraph_mode="unknown",
+            kv_cache_dtype="unknown",
+            image="unknown",
+            gpu_memory_utilization=None,
         )
     ]
     assert methodology_problems(rows) == []
@@ -175,8 +191,12 @@ def test_methodology_descriptor_gate_exempts_failed_cell():
 
 def _status(sol_rigor: str) -> RenderStatusSummary:
     return RenderStatusSummary(
-        rendered=True, sol_complete=True, plot_ready_points=1, omitted_pages="",
-        dcgm_grounded=True, sol_rigor=sol_rigor,
+        rendered=True,
+        sol_complete=True,
+        plot_ready_points=1,
+        omitted_pages="",
+        dcgm_grounded=True,
+        sol_rigor=sol_rigor,
     )
 
 
@@ -203,8 +223,7 @@ def test_krhpa_l4_missing_block_flagged(tmp_path: Path):
 
 def test_krhpa_l4_exempt_reason_ok(tmp_path: Path):
     (tmp_path / "config.yaml").write_text(
-        "name: test\n"
-        "krhpa_exempt_reason: engine/config profiling, not a custom-kernel comparison\n"
+        "name: test\nkrhpa_exempt_reason: engine/config profiling, not a custom-kernel comparison\n"
     )
     assert krhpa_problems(tmp_path, _status("L4")) == []
 
@@ -243,7 +262,10 @@ def test_publish_strict_refuses_unlabeled_cache_mode(tmp_path: Path):
     campaign_dir = _stage_campaign(tmp_path)  # default rows: cache_mode unknown
     with pytest.raises(CampaignIncompleteError, match="cache_mode=unknown"):
         publish(
-            campaign_dir, cfg=_stub_cfg(), dry_run=True, strict=True,
+            campaign_dir,
+            cfg=_stub_cfg(),
+            dry_run=True,
+            strict=True,
             s3_client_factory=lambda _cfg: _FakeS3Client(),
         )
 
@@ -253,7 +275,9 @@ def test_publish_no_strict_records_unlabeled_and_lands(tmp_path: Path):
     (strict=False) with the gap recorded (visible on atlas_v1.cache_mode)."""
     campaign_dir = _stage_campaign(tmp_path)
     result = publish(
-        campaign_dir, cfg=_stub_cfg(), dry_run=True,
+        campaign_dir,
+        cfg=_stub_cfg(),
+        dry_run=True,
         s3_client_factory=lambda _cfg: _FakeS3Client(),
     )
     assert result.campaign.row_count == 1
@@ -262,13 +286,19 @@ def test_publish_no_strict_records_unlabeled_and_lands(tmp_path: Path):
 def test_publish_strict_passes_when_all_labeled(tmp_path: Path):
     """All rows cold + dcgm_grounded -> --strict publishes cleanly."""
     campaign_dir = _stage_campaign(tmp_path)
-    _restage_atlas(campaign_dir, [
-        _make_atlas_row(cell_id="cellA", cache_mode="cold"),
-        _make_atlas_row(cell_id="cellB", cache_mode="cold"),
-    ])
+    _restage_atlas(
+        campaign_dir,
+        [
+            _make_atlas_row(cell_id="cellA", cache_mode="cold"),
+            _make_atlas_row(cell_id="cellB", cache_mode="cold"),
+        ],
+    )
     _write_status(campaign_dir, dcgm_grounded=True)  # clear the hard DCGM gate
     publish(
-        campaign_dir, cfg=_stub_cfg(), dry_run=True, strict=True,
+        campaign_dir,
+        cfg=_stub_cfg(),
+        dry_run=True,
+        strict=True,
         s3_client_factory=lambda _cfg: _FakeS3Client(),
     )  # must not raise
 
@@ -281,7 +311,10 @@ def test_publish_strict_refuses_l4_without_krhpa(tmp_path: Path):
     (campaign_dir / "config.yaml").write_text("name: test\n")  # no krhpa
     with pytest.raises(CampaignIncompleteError, match="krhpa"):
         publish(
-            campaign_dir, cfg=_stub_cfg(), dry_run=True, strict=True,
+            campaign_dir,
+            cfg=_stub_cfg(),
+            dry_run=True,
+            strict=True,
             s3_client_factory=lambda _cfg: _FakeS3Client(),
         )
 
@@ -292,6 +325,9 @@ def test_publish_strict_passes_l4_with_krhpa(tmp_path: Path):
     _write_status(campaign_dir, sol_rigor="L4", dcgm_grounded=True)
     (campaign_dir / "config.yaml").write_text(_KRHPA_VALID)
     publish(
-        campaign_dir, cfg=_stub_cfg(), dry_run=True, strict=True,
+        campaign_dir,
+        cfg=_stub_cfg(),
+        dry_run=True,
+        strict=True,
         s3_client_factory=lambda _cfg: _FakeS3Client(),
     )  # must not raise

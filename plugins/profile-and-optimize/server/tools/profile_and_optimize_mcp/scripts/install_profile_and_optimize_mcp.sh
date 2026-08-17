@@ -21,7 +21,7 @@ Installs the complete bundled server, then registers it with selected clients.
 
 Options:
   --client NAME       cursor | claude | codex | gemini | antigravity | all
-                      May be passed multiple times. Default: cursor.
+                      May be passed multiple times. Required.
   --repo-root PATH    Bundled server root. Default: auto-detected server directory.
   --venv PATH         Python venv path. Default: ~/.local/share/profile-and-optimize-mcp-venv.
   --python PATH       Python interpreter used to create the venv. Default: python3.
@@ -115,6 +115,12 @@ if [[ "${REGISTRATION}" != "auto" && "${REGISTRATION}" != "file" ]]; then
   exit 2
 fi
 
+if [[ "${#CLIENT_ARGS[@]}" -eq 0 ]]; then
+  printf '%s\n' 'missing required --client. Choose claude or codex for a first-class install.' >&2
+  usage >&2
+  exit 2
+fi
+
 if [[ ! -f "${SERVER_ROOT}/pyproject.toml" || ! -f "${SERVER_ROOT}/mcp_surface.py" || ! -d "${SERVER_ROOT}/tools/profile_and_optimize_mcp" || ! -f "${SERVER_ROOT}/install.sh" ]]; then
   printf 'FATAL: bundled server root is incomplete: %s\n' "${SERVER_ROOT}" >&2
   printf 'Expected pyproject.toml, mcp_surface.py, install.sh, and tools/profile_and_optimize_mcp/.\n' >&2
@@ -127,9 +133,7 @@ CONFIG_COMMAND_ARGS=(
   --registration "${REGISTRATION}"
   "${CONFIG_ARGS[@]}"
 )
-if [[ "${#CLIENT_ARGS[@]}" -gt 0 ]]; then
-  CONFIG_COMMAND_ARGS+=("${CLIENT_ARGS[@]}")
-fi
+CONFIG_COMMAND_ARGS+=("${CLIENT_ARGS[@]}")
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   printf '%s\n' '=== [dry-run] bundled server install ==='

@@ -82,10 +82,13 @@ Repeat with the alternate config to get `side-B.log`.
 
 ```python
 import re, pathlib
+
+
 def extract_fx_graphs(log_path):
     text = pathlib.Path(log_path).read_text(errors="replace")
     graphs = re.findall(r"=== FX GRAPH ===\n(.*?)\n=== END FX GRAPH ===", text, re.DOTALL)
     return graphs
+
 
 a_graphs = extract_fx_graphs("side-A.log")
 b_graphs = extract_fx_graphs("side-B.log")

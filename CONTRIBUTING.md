@@ -15,10 +15,11 @@ bash plugins/profile-and-optimize/server/install.sh --with-dev
 make all
 ```
 
-The development install includes the official Agent Skills validator, test
-tools, and every dependency required by the default test suite. `make all`
-runs the client-neutral checks. Use `make -j4 all` to run independent targets
-in parallel.
+The development install includes the official Agent Skills validator, Ruff,
+Pyright, ShellCheck, test tools, and every dependency required by the default
+test suite. `make quality` runs the language checks. `make all` adds docs,
+skill validation, the MCP smoke test, and pytest. Use `make -j4 all` to run
+independent targets in parallel.
 
 Claude Code packaging has a separate optional check:
 

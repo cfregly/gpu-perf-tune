@@ -39,33 +39,33 @@ Both back the ``mcp__profile_and_optimize__perf_tune_report_import_perf_bench`` 
 from pathlib import Path
 from typing import Any
 
-from tools.perf_tune_report.importers.inference_perf_bench import (
-    ImportResult,
-    import_perf_bench_bundle,
+from tools.perf_tune_report.importers.aiperf_export import (
+    AiperfImportResult,
+    detect_aiperf_bundle,
+    import_aiperf_bundle,
 )
 from tools.perf_tune_report.importers.inference_drive_load import (
     DriveLoadImportResult,
     detect_bundle_pattern,
     import_drive_load_bundle,
 )
+from tools.perf_tune_report.importers.inference_perf_bench import (
+    ImportResult,
+    import_perf_bench_bundle,
+)
 from tools.perf_tune_report.importers.lws_summary import (
     LwsSummaryImportResult,
     detect_lws_summary,
     import_lws_summary_bundle,
 )
-from tools.perf_tune_report.importers.aiperf_export import (
-    AiperfImportResult,
-    detect_aiperf_bundle,
-    import_aiperf_bundle,
+from tools.perf_tune_report.importers.roofline_sweep import (
+    RooflineSweepImportResult,
+    import_roofline_sweep_bundle,
 )
 from tools.perf_tune_report.importers.variant_ab import (
     VariantAbImportResult,
     detect_variant_ab,
     import_variant_ab_bundle,
-)
-from tools.perf_tune_report.importers.roofline_sweep import (
-    RooflineSweepImportResult,
-    import_roofline_sweep_bundle,
 )
 
 
@@ -78,7 +78,7 @@ def import_bundle_auto(
     captured_at: str | None = None,
     concurrency_override: int | None = None,
     require_plot_ready: bool = False,
-) -> ImportResult | DriveLoadImportResult | LwsSummaryImportResult:
+) -> ImportResult | DriveLoadImportResult | LwsSummaryImportResult | VariantAbImportResult | AiperfImportResult:
     """Detect the bundle pattern and dispatch to the right importer.
 
     Detection priority: lws_summary -> inference_perf_bench -> inference_drive_load.
@@ -153,21 +153,21 @@ def import_bundle_auto(
 
 
 __all__ = [
-    "ImportResult",
-    "DriveLoadImportResult",
-    "LwsSummaryImportResult",
     "AiperfImportResult",
-    "VariantAbImportResult",
-    "import_perf_bench_bundle",
-    "import_drive_load_bundle",
-    "import_lws_summary_bundle",
-    "import_aiperf_bundle",
-    "import_variant_ab_bundle",
-    "import_roofline_sweep_bundle",
+    "DriveLoadImportResult",
+    "ImportResult",
+    "LwsSummaryImportResult",
     "RooflineSweepImportResult",
-    "import_bundle_auto",
+    "VariantAbImportResult",
+    "detect_aiperf_bundle",
     "detect_bundle_pattern",
     "detect_lws_summary",
-    "detect_aiperf_bundle",
     "detect_variant_ab",
+    "import_aiperf_bundle",
+    "import_bundle_auto",
+    "import_drive_load_bundle",
+    "import_lws_summary_bundle",
+    "import_perf_bench_bundle",
+    "import_roofline_sweep_bundle",
+    "import_variant_ab_bundle",
 ]

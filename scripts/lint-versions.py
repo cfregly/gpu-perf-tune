@@ -76,8 +76,7 @@ def release_version() -> str:
     version = raw.removesuffix("\n")
     if not NUMERIC_SEMVER.fullmatch(version):
         print(
-            f"FATAL: {VERSION_FILE} must contain numeric SemVer X.Y.Z "
-            "with at most one final newline",
+            f"FATAL: {VERSION_FILE} must contain numeric SemVer X.Y.Z with at most one final newline",
             file=sys.stderr,
         )
         sys.exit(2)

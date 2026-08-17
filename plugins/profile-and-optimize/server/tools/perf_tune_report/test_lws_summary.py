@@ -101,9 +101,7 @@ def test_detect_lws_summary_empty_variants(tmp_path: Path):
 
 
 def test_detect_lws_summary_variant_missing_metrics_per_concurrency(tmp_path: Path):
-    (tmp_path / "summary.json").write_text(
-        json.dumps({"variants": [{"short": "x", "label": "x"}]})
-    )
+    (tmp_path / "summary.json").write_text(json.dumps({"variants": [{"short": "x", "label": "x"}]}))
     assert detect_lws_summary(tmp_path) is False
 
 
@@ -169,14 +167,12 @@ def test_import_lws_summary_max_num_batched_tokens_parsed_from_knob(tmp_path: Pa
 
 
 def test_import_lws_summary_raises_when_summary_missing(tmp_path: Path):
-    with pytest.raises(ValueError, match="summary.json not found"):
+    with pytest.raises(ValueError, match=r"summary\.json not found"):
         import_lws_summary_bundle(bundle=tmp_path, campaign_dir=tmp_path)
 
 
 def test_import_lws_summary_raises_when_no_rows_emitted(tmp_path: Path):
-    (tmp_path / "summary.json").write_text(
-        json.dumps({"variants": [{"short": "x", "metrics_per_concurrency": []}]})
-    )
+    (tmp_path / "summary.json").write_text(json.dumps({"variants": [{"short": "x", "metrics_per_concurrency": []}]}))
     with pytest.raises(ValueError, match="no rows emitted"):
         import_lws_summary_bundle(bundle=tmp_path, campaign_dir=tmp_path)
 

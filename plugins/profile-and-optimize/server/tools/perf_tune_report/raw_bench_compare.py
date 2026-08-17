@@ -62,7 +62,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 _SWEEP_C_RE = re.compile(r"^sweep-c(\d+)\.txt$")
 
 
@@ -119,9 +118,7 @@ class RawBenchCompareResult:
         }
 
 
-def _parse_sweep_file(
-    path: Path, *, concurrency: int | None = None
-) -> dict[str, float | int | str] | None:
+def _parse_sweep_file(path: Path, *, concurrency: int | None = None) -> dict[str, float | int | str] | None:
     """Parse one vllm-bench-serve output file's metrics.
 
     Reuses the regex set from ``importers.inference_perf_bench._REGEX`` so the parser
@@ -196,18 +193,12 @@ def load_manifest(manifest_path: Path) -> tuple[dict[str, Any], list[BundleSpec]
     try:
         data = _yaml.safe_load(manifest_path.read_text())
     except _yaml.YAMLError as e:
-        raise RawBenchCompareManifestMalformed(
-            manifest_path, reason=f"YAML parse error: {e}"
-        ) from e
+        raise RawBenchCompareManifestMalformed(manifest_path, reason=f"YAML parse error: {e}") from e
     if not isinstance(data, dict):
-        raise RawBenchCompareManifestMalformed(
-            manifest_path, reason="top-level not a mapping"
-        )
+        raise RawBenchCompareManifestMalformed(manifest_path, reason="top-level not a mapping")
     bundles_in = data.get("bundles")
     if not isinstance(bundles_in, list) or not bundles_in:
-        raise RawBenchCompareManifestMalformed(
-            manifest_path, reason="bundles[] missing or empty"
-        )
+        raise RawBenchCompareManifestMalformed(manifest_path, reason="bundles[] missing or empty")
 
     bundles_root_raw = data.get("bundles_root")
     if bundles_root_raw:
@@ -220,9 +211,7 @@ def load_manifest(manifest_path: Path) -> tuple[dict[str, Any], list[BundleSpec]
     specs: list[BundleSpec] = []
     for entry in bundles_in:
         if not isinstance(entry, dict):
-            raise RawBenchCompareManifestMalformed(
-                manifest_path, reason=f"bundle entry not a mapping: {entry!r}"
-            )
+            raise RawBenchCompareManifestMalformed(manifest_path, reason=f"bundle entry not a mapping: {entry!r}")
         for required in ("glob", "label", "short"):
             if required not in entry:
                 raise RawBenchCompareManifestMalformed(
@@ -270,10 +259,7 @@ def render_comparison(
 
     n_with_data = sum(1 for s in specs if s.rows)
     if n_with_data == 0:
-        raise ValueError(
-            f"render_comparison: no bundles in {manifest_path} yielded "
-            f"parseable rows; PDF would be empty"
-        )
+        raise ValueError(f"render_comparison: no bundles in {manifest_path} yielded parseable rows; PDF would be empty")
 
     # Lazy matplotlib import.
     import matplotlib
@@ -288,11 +274,13 @@ def render_comparison(
     notes = meta.get("notes", "")
 
     baseline = next((s for s in specs if s.is_baseline and s.rows), None)
-    baseline_peak_tps = (
-        max((row["output_tps"] for row in baseline.rows if "output_tps" in row), default=None)
-        if baseline
-        else None
-    )
+    baseline_tps_values: list[float] = []
+    if baseline:
+        for row in baseline.rows:
+            output_tps = row.get("output_tps")
+            if isinstance(output_tps, (int, float)):
+                baseline_tps_values.append(float(output_tps))
+    baseline_peak_tps = max(baseline_tps_values, default=None)
 
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
     peaks_summary: list[dict[str, Any]] = []
@@ -307,13 +295,21 @@ def render_comparison(
         ax.text(0.5, 0.78, sub, ha="center", fontsize=11)
         ax.text(0.5, 0.73, f"manifest: {manifest_path.name}", ha="center", fontsize=8, color="#666")
         ax.text(
-            0.5, 0.65,
+            0.5,
+            0.65,
             f"{n_with_data} of {len(specs)} bundles produced parseable data",
-            ha="center", fontsize=10,
+            ha="center",
+            fontsize=10,
         )
         if notes:
             ax.text(
-                0.5, 0.55, notes, ha="center", va="top", fontsize=9, color="#444",
+                0.5,
+                0.55,
+                notes,
+                ha="center",
+                va="top",
+                fontsize=9,
+                color="#444",
                 wrap=True,
             )
         pdf.savefig(fig)
@@ -321,7 +317,8 @@ def render_comparison(
 
         # Page 2: throughput vs concurrency
         _render_line_chart(
-            pdf, specs,
+            pdf,
+            specs,
             metric_key="output_tps",
             title=f"Output throughput vs concurrency ({campaign_name})",
             ylabel="Output tokens / sec",
@@ -329,7 +326,8 @@ def render_comparison(
         )
         # Page 3: TTFT vs concurrency
         _render_line_chart(
-            pdf, specs,
+            pdf,
+            specs,
             metric_key="ttft_med_ms",
             title="Median TTFT vs concurrency (lower = better)",
             ylabel="Median TTFT (ms)",
@@ -338,7 +336,8 @@ def render_comparison(
         )
         # Page 4: TPOT vs concurrency
         _render_line_chart(
-            pdf, specs,
+            pdf,
+            specs,
             metric_key="tpot_med_ms",
             title="Median TPOT vs concurrency (lower = better)",
             ylabel="Median TPOT (ms / token)",
@@ -378,8 +377,14 @@ def _render_line_chart(pdf, specs, *, metric_key, title, ylabel, logx=False, log
         lw = 2.5 if spec.is_baseline else 1.8
         ls = "--" if spec.is_baseline else "-"
         ax.plot(
-            xs, ys, color=spec.color, marker=spec.marker, label=spec.label,
-            linewidth=lw, linestyle=ls, markersize=8,
+            xs,
+            ys,
+            color=spec.color,
+            marker=spec.marker,
+            label=spec.label,
+            linewidth=lw,
+            linestyle=ls,
+            markersize=8,
         )
         plotted += 1
     ax.set_title(title, fontsize=12, fontweight="bold")
@@ -394,10 +399,14 @@ def _render_line_chart(pdf, specs, *, metric_key, title, ylabel, logx=False, log
         ax.legend(loc="best", fontsize=8, framealpha=0.9)
     else:
         ax.text(
-            0.5, 0.5,
+            0.5,
+            0.5,
             f"No bundles carry '{metric_key}' rows",
-            transform=ax.transAxes, ha="center", va="center",
-            fontsize=10, color="#aa3333",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=10,
+            color="#aa3333",
         )
     fig.tight_layout()
     pdf.savefig(fig)
@@ -431,33 +440,37 @@ def _render_peak_bars(pdf, specs, baseline_peak_tps: float | None) -> list[dict[
                 "peak_output_tps": float(best["output_tps"]),
                 "peak_c": int(best["c"]),
                 "pct_vs_baseline": (
-                    ((best["output_tps"] / baseline_peak_tps) - 1.0) * 100.0
-                    if baseline_peak_tps
-                    else None
+                    ((best["output_tps"] / baseline_peak_tps) - 1.0) * 100.0 if baseline_peak_tps else None
                 ),
             }
         )
     if not peaks:
         ax.text(
-            0.5, 0.5,
+            0.5,
+            0.5,
             "No bundle has output_tps rows; peak-bars chart skipped.",
-            transform=ax.transAxes, ha="center", va="center", color="#aa3333",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color="#aa3333",
         )
     else:
         bars = ax.bar(labels, peaks, color=colors, edgecolor="black", linewidth=0.8)
-        for bar, peak, pc in zip(bars, peaks, peak_cs):
+        for bar, peak, pc in zip(bars, peaks, peak_cs, strict=True):
             pct = ((peak / baseline_peak_tps) - 1.0) * 100.0 if baseline_peak_tps else 0.0
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height() * 1.01,
                 f"{peak:.0f}\n@ c={pc}" + (f"\n{pct:+.0f}%" if baseline_peak_tps else ""),
-                ha="center", va="bottom", fontsize=9,
+                ha="center",
+                va="bottom",
+                fontsize=9,
             )
         ax.set_ylim(0, max(peaks) * 1.18)
     ax.set_title(
-        "Peak output throughput per variant"
-        + (" (% gain vs baseline)" if baseline_peak_tps else ""),
-        fontsize=12, fontweight="bold",
+        "Peak output throughput per variant" + (" (% gain vs baseline)" if baseline_peak_tps else ""),
+        fontsize=12,
+        fontweight="bold",
     )
     ax.set_ylabel("Peak output tokens / sec")
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
@@ -484,11 +497,7 @@ def _render_summary_table(pdf, specs, baseline_peak_tps: float | None) -> None:
             rows_table.append([spec.short, spec.knob, "n/a", "n/a", "n/a"])
             continue
         best = max(ranked, key=lambda r: r["output_tps"])
-        pct = (
-            f"{((best['output_tps'] / baseline_peak_tps) - 1.0) * 100.0:+.1f}%"
-            if baseline_peak_tps
-            else "n/a"
-        )
+        pct = f"{((best['output_tps'] / baseline_peak_tps) - 1.0) * 100.0:+.1f}%" if baseline_peak_tps else "n/a"
         rows_table.append(
             [
                 spec.short,
@@ -504,7 +513,8 @@ def _render_summary_table(pdf, specs, baseline_peak_tps: float | None) -> None:
     table.scale(1.0, 1.5)
     ax.set_title(
         "Summary table (per-variant peak + % gain vs baseline)",
-        fontsize=12, fontweight="bold",
+        fontsize=12,
+        fontweight="bold",
     )
     fig.tight_layout()
     pdf.savefig(fig)

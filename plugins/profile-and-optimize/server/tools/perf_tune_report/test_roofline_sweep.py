@@ -1,7 +1,7 @@
 """Tests for the always-on prefill/decode roofline sweep importer + page."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from tools.perf_tune_report.importers.roofline_sweep import import_roofline_sweep_bundle
@@ -9,16 +9,30 @@ from tools.perf_tune_report.importers.roofline_sweep import import_roofline_swee
 
 def _cell(c, isl, osl, tpot, ttft, out_tps, sm, ten, dram):
     return {
-        "tag": f"c{c}", "c": c, "isl": isl, "osl": osl, "num_prompts": max(c, 6),
+        "tag": f"c{c}",
+        "c": c,
+        "isl": isl,
+        "osl": osl,
+        "num_prompts": max(c, 6),
         "bench": {
-            "duration": 20.0, "completed": c, "total_input_tokens": isl * c,
-            "total_output_tokens": osl * c, "request_throughput": out_tps / max(osl, 1),
-            "output_throughput": out_tps, "total_token_throughput": out_tps * 1.5,
-            "median_ttft_ms": ttft, "median_tpot_ms": tpot, "median_itl_ms": tpot,
+            "duration": 20.0,
+            "completed": c,
+            "total_input_tokens": isl * c,
+            "total_output_tokens": osl * c,
+            "request_throughput": out_tps / max(osl, 1),
+            "output_throughput": out_tps,
+            "total_token_throughput": out_tps * 1.5,
+            "median_ttft_ms": ttft,
+            "median_tpot_ms": tpot,
+            "median_itl_ms": tpot,
         },
         "dcgm_steady": {
-            "sm_active_mean": sm, "tensor_active_mean": ten, "dram_active_mean": dram,
-            "fp16_active_mean": 0.0, "nvlink_tx_Bps_mean": 1e9, "nvlink_rx_Bps_mean": 1e9,
+            "sm_active_mean": sm,
+            "tensor_active_mean": ten,
+            "dram_active_mean": dram,
+            "fp16_active_mean": 0.0,
+            "nvlink_tx_Bps_mean": 1e9,
+            "nvlink_rx_Bps_mean": 1e9,
             "dmon_samples": 100,
         },
     }
@@ -45,9 +59,15 @@ def test_import_roofline_sweep_writes_cells_and_dcgm_util(tmp_path):
     camp = tmp_path / "camp"
     camp.mkdir()
     r = import_roofline_sweep_bundle(
-        bundle, camp, overrides={"tensor_parallel": 4, "hardware": "GB300",
-                                 "quant": "NVFP4", "model": "zai-org/GLM-5.1",
-                                 "cell_id": "glm51-tp4"},
+        bundle,
+        camp,
+        overrides={
+            "tensor_parallel": 4,
+            "hardware": "GB300",
+            "quant": "NVFP4",
+            "model": "zai-org/GLM-5.1",
+            "cell_id": "glm51-tp4",
+        },
     )
     assert r.decode_points == 2 and r.prefill_points == 2
     dec = camp / "cells" / "glm51-tp4-decode" / "normalized.json"
@@ -83,9 +103,15 @@ def test_import_roofline_sweep_unknown_model_degrades_cleanly(tmp_path):
     camp = tmp_path / "camp"
     camp.mkdir()
     r = import_roofline_sweep_bundle(
-        bundle, camp, overrides={"tensor_parallel": 4, "hardware": "GB300",
-                                 "quant": "NVFP4", "model": "acme/Unknown-42B",
-                                 "cell_id": "unk"},
+        bundle,
+        camp,
+        overrides={
+            "tensor_parallel": 4,
+            "hardware": "GB300",
+            "quant": "NVFP4",
+            "model": "acme/Unknown-42B",
+            "cell_id": "unk",
+        },
     )
     assert r.decode_points == 2
     art = json.loads((camp / "cells" / "unk-decode" / "roofline_sweep.json").read_text())
@@ -98,7 +124,8 @@ def test_import_roofline_sweep_full_context_descriptor_overrides(tmp_path):
     camp = tmp_path / "camp"
     camp.mkdir()
     import_roofline_sweep_bundle(
-        bundle, camp,
+        bundle,
+        camp,
         overrides={
             "tensor_parallel": 4,
             "hardware": "GB300",
@@ -130,9 +157,8 @@ def test_import_roofline_sweep_full_context_descriptor_overrides(tmp_path):
 def test_build_roofline_v1_lake_table(tmp_path, monkeypatch):
     """roofline_v1 flattens every (c, ISL) point with analytical coords + ceilings
     so Superset can render the roofline scatter + util-vs-C lines from the lake."""
-    from tools.perf_tune_report import lake_writer
+    from tools.perf_tune_report import aggregator, lake_writer
     from tools.perf_tune_report.schema import read_jsonl
-    from tools.perf_tune_report import aggregator
 
     yaml_path = tmp_path / "perf-tune-report" / "configs" / "sol-ceilings.yaml"
     yaml_path.parent.mkdir(parents=True)
@@ -148,15 +174,20 @@ def test_build_roofline_v1_lake_table(tmp_path, monkeypatch):
     camp = tmp_path / "camp"
     camp.mkdir()
     import_roofline_sweep_bundle(
-        bundle, camp, overrides={"tensor_parallel": 4, "hardware": "GB300",
-                                 "quant": "NVFP4", "model": "zai-org/GLM-5.1",
-                                 "cell_id": "glm51-tp4"},
+        bundle,
+        camp,
+        overrides={
+            "tensor_parallel": 4,
+            "hardware": "GB300",
+            "quant": "NVFP4",
+            "model": "zai-org/GLM-5.1",
+            "cell_id": "glm51-tp4",
+        },
     )
     aggregator.aggregate(camp)
     rows = read_jsonl(camp / "atlas.jsonl")
-    now = datetime.now(timezone.utc)
-    table = lake_writer.build_roofline_table(camp, "camp", rows,
-                                             captured_at_utc=now, published_at_utc=now)
+    now = datetime.now(UTC)
+    table = lake_writer.build_roofline_table(camp, "camp", rows, captured_at_utc=now, published_at_utc=now)
     # 2 decode + 2 prefill points
     assert table.num_rows == 4
     d = table.to_pylist()
@@ -176,19 +207,27 @@ def test_build_roofline_v1_lake_table(tmp_path, monkeypatch):
 
 def test_source_links_from_provenance_and_registry():
     from tools.perf_tune_report import provenance
+
     prov = {
         "schema": "experiment_provenance_v1",
         "identity": {"run_id": "x", "title": "GLM-5.1 nvfp4-KV roofline"},
         "source": [
-            {"repo": "example/vllm", "branch": "feature/nvfp4-kv",
-             "commit": "6554db7dc", "delivery": "overlay",
-             "image": "infr/vllm:v2.12.3"},
+            {
+                "repo": "example/vllm",
+                "branch": "feature/nvfp4-kv",
+                "commit": "6554db7dc",
+                "delivery": "overlay",
+                "image": "infr/vllm:v2.12.3",
+            },
             {"repo": "example/perf-tune-glm51", "commit": "eafb4b4"},
         ],
     }
-    registry = {"repo": "example/vllm", "branches": [
-        {"branch": "feature/nvfp4-kv", "purpose": "NVFP4 KV + sparse-MLA decode"},
-    ]}
+    registry = {
+        "repo": "example/vllm",
+        "branches": [
+            {"branch": "feature/nvfp4-kv", "purpose": "NVFP4 KV + sparse-MLA decode"},
+        ],
+    }
     links = provenance.source_links(prov, registry)
     assert len(links) == 2
     assert links[0]["url"] == "https://github.com/example/vllm/commit/6554db7dc"
@@ -201,6 +240,7 @@ def test_source_links_from_provenance_and_registry():
 
 def test_source_page_renders_when_provenance_present(tmp_path, monkeypatch):
     import matplotlib
+
     matplotlib.use("Agg")
     from tools.perf_tune_report import aggregator
     from tools.perf_tune_report.renderer import render_report
@@ -217,17 +257,28 @@ def test_source_page_renders_when_provenance_present(tmp_path, monkeypatch):
     camp = tmp_path / "camp"
     camp.mkdir()
     import_roofline_sweep_bundle(
-        bundle, camp, overrides={"tensor_parallel": 4, "hardware": "GB300",
-                                 "quant": "NVFP4", "model": "zai-org/GLM-5.1",
-                                 "cell_id": "glm51-tp4"},
+        bundle,
+        camp,
+        overrides={
+            "tensor_parallel": 4,
+            "hardware": "GB300",
+            "quant": "NVFP4",
+            "model": "zai-org/GLM-5.1",
+            "cell_id": "glm51-tp4",
+        },
     )
     # campaign_init normally writes provenance.json; stage it directly here
-    (camp / "provenance.json").write_text(json.dumps({
-        "schema": "experiment_provenance_v1",
-        "identity": {"run_id": "glm51-roofline", "title": "GLM-5.1 roofline"},
-        "source": [{"repo": "example/vllm", "branch": "feature/nvfp4-kv",
-                    "commit": "6554db7dc", "delivery": "overlay"}],
-    }))
+    (camp / "provenance.json").write_text(
+        json.dumps(
+            {
+                "schema": "experiment_provenance_v1",
+                "identity": {"run_id": "glm51-roofline", "title": "GLM-5.1 roofline"},
+                "source": [
+                    {"repo": "example/vllm", "branch": "feature/nvfp4-kv", "commit": "6554db7dc", "delivery": "overlay"}
+                ],
+            }
+        )
+    )
     aggregator.aggregate(camp)
     status = render_report.render_report(camp / "atlas.jsonl", camp / "report.pdf", title="t")
     assert "source under test" in status.to_dict()["rendered_pages"]
@@ -240,29 +291,35 @@ def test_roofline_mandatory_gate():
 
     omitted = "Prefill/Decode roofline (page 7)"
     # throughput campaign with plot-ready points but page 7 omitted -> gated
-    rs = RenderStatusSummary(rendered=True, sol_complete=True, plot_ready_points=9,
-                             omitted_pages=omitted, focus="throughput")
+    rs = RenderStatusSummary(
+        rendered=True, sol_complete=True, plot_ready_points=9, omitted_pages=omitted, focus="throughput"
+    )
     assert roofline_problems(rs)
     # mixed focus too
-    rs_mixed = RenderStatusSummary(rendered=True, sol_complete=True, plot_ready_points=5,
-                                   omitted_pages=omitted, focus="mixed")
+    rs_mixed = RenderStatusSummary(
+        rendered=True, sol_complete=True, plot_ready_points=5, omitted_pages=omitted, focus="mixed"
+    )
     assert roofline_problems(rs_mixed)
     # latency-only run -> exempt
-    rs_lat = RenderStatusSummary(rendered=True, sol_complete=True, plot_ready_points=0,
-                                 omitted_pages=omitted, focus="latency")
+    rs_lat = RenderStatusSummary(
+        rendered=True, sol_complete=True, plot_ready_points=0, omitted_pages=omitted, focus="latency"
+    )
     assert roofline_problems(rs_lat) == []
     # throughput but 0 plot-ready points (e.g. all cells failed) -> exempt
-    rs_zero = RenderStatusSummary(rendered=True, sol_complete=False, plot_ready_points=0,
-                                  omitted_pages=omitted, focus="throughput")
+    rs_zero = RenderStatusSummary(
+        rendered=True, sol_complete=False, plot_ready_points=0, omitted_pages=omitted, focus="throughput"
+    )
     assert roofline_problems(rs_zero) == []
     # page 7 present (not omitted) -> no problem
-    rs_ok = RenderStatusSummary(rendered=True, sol_complete=True, plot_ready_points=9,
-                                omitted_pages="", focus="throughput")
+    rs_ok = RenderStatusSummary(
+        rendered=True, sol_complete=True, plot_ready_points=9, omitted_pages="", focus="throughput"
+    )
     assert roofline_problems(rs_ok) == []
 
 
 def test_roofline_page_renders_and_sets_sol_l3(tmp_path, monkeypatch):
     import matplotlib
+
     matplotlib.use("Agg")
     from tools.perf_tune_report import aggregator
     from tools.perf_tune_report.renderer import render_report
@@ -285,13 +342,18 @@ def test_roofline_page_renders_and_sets_sol_l3(tmp_path, monkeypatch):
     camp = tmp_path / "camp"
     camp.mkdir()
     import_roofline_sweep_bundle(
-        bundle, camp, overrides={"tensor_parallel": 4, "hardware": "GB300",
-                                 "quant": "NVFP4", "model": "zai-org/GLM-5.1",
-                                 "cell_id": "glm51-tp4"},
+        bundle,
+        camp,
+        overrides={
+            "tensor_parallel": 4,
+            "hardware": "GB300",
+            "quant": "NVFP4",
+            "model": "zai-org/GLM-5.1",
+            "cell_id": "glm51-tp4",
+        },
     )
     aggregator.aggregate(camp)
-    status = render_report.render_report(camp / "atlas.jsonl", camp / "report.pdf",
-                                         title="roofline test")
+    status = render_report.render_report(camp / "atlas.jsonl", camp / "report.pdf", title="roofline test")
     d = status.to_dict()
     assert "prefill/decode roofline (page 7)" in d["rendered_pages"]
     assert d["sol_complete"] is True
@@ -302,6 +364,7 @@ def test_roofline_page_renders_and_sets_sol_l3(tmp_path, monkeypatch):
 
 def test_per_arm_coverage_uses_extra_arm_artifact_dir(tmp_path, monkeypatch):
     import matplotlib
+
     matplotlib.use("Agg")
     from tools.perf_tune_report import aggregator
     from tools.perf_tune_report.renderer import render_report
@@ -321,16 +384,31 @@ def test_per_arm_coverage_uses_extra_arm_artifact_dir(tmp_path, monkeypatch):
     camp = tmp_path / "camp"
     camp.mkdir()
     import_roofline_sweep_bundle(
-        bundle, camp, overrides={"tensor_parallel": 4, "hardware": "GB300",
-                                 "quant": "NVFP4", "model": "zai-org/GLM-5.1",
-                                 "cell_id": "physical-arm"},
+        bundle,
+        camp,
+        overrides={
+            "tensor_parallel": 4,
+            "hardware": "GB300",
+            "quant": "NVFP4",
+            "model": "zai-org/GLM-5.1",
+            "cell_id": "physical-arm",
+        },
     )
     logical = {
-        "cell_id": "physical-arm-Kengine", "model": "zai-org/GLM-5.1", "hardware": "GB300",
-        "quant": "NVFP4", "tensor_parallel": 4, "parallel_strategy": "TP",
-        "mtp": False, "max_num_batched_tokens": 12288, "concurrency": 64,
-        "status": "full", "ttft_avg_ms": 1.0, "request_throughput_avg": 1.0,
-        "output_tps_per_gpu": 1.0, "backend": "vllm-sweep",
+        "cell_id": "physical-arm-Kengine",
+        "model": "zai-org/GLM-5.1",
+        "hardware": "GB300",
+        "quant": "NVFP4",
+        "tensor_parallel": 4,
+        "parallel_strategy": "TP",
+        "mtp": False,
+        "max_num_batched_tokens": 12288,
+        "concurrency": 64,
+        "status": "full",
+        "ttft_avg_ms": 1.0,
+        "request_throughput_avg": 1.0,
+        "output_tps_per_gpu": 1.0,
+        "backend": "vllm-sweep",
         "extra": {"arm": "physical-arm"},
     }
     logical_dir = camp / "cells" / "logical"

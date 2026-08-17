@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from tools.perf_tune_report.importers import import_bundle_auto
 from tools.perf_tune_report.importers.aiperf_export import (
     AiperfImportResult,
+    _parse_aiperf_csv,
     detect_aiperf_bundle,
     import_aiperf_bundle,
-    _parse_aiperf_csv,
 )
-from tools.perf_tune_report.importers import import_bundle_auto
 
 # Minimal AIPerf profile_export_aiperf.csv (two sections), matching the real
 # 2026-05-31 campaign export shape.
@@ -65,9 +65,7 @@ def test_import_and_status(tmp_path: Path) -> None:
     v = _make_variant(tmp_path)
     campaign = tmp_path / "campaign"
     campaign.mkdir()
-    res = import_aiperf_bundle(
-        v, campaign, overrides={"model": "zai-org/GLM-5.1", "mtp": True}
-    )
+    res = import_aiperf_bundle(v, campaign, overrides={"model": "zai-org/GLM-5.1", "mtp": True})
     assert isinstance(res, AiperfImportResult)
     assert res.cell_id == "mtpk3"
     assert res.concurrencies == [1, 8]
@@ -125,7 +123,8 @@ def test_aiperf_isl_osl_total_prefix_cache_and_cache_mode(tmp_path: Path) -> Non
     campaign = tmp_path / "campaign"
     campaign.mkdir()
     res = import_aiperf_bundle(
-        v, campaign,
+        v,
+        campaign,
         overrides={"model": "zai-org/GLM-5.1", "tensor_parallel": 8, "cache_mode": "warm"},
     )
     row = json.loads(res.normalized_path.read_text())[0]

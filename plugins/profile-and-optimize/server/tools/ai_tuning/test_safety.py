@@ -56,11 +56,7 @@ class ForbiddenPatternsTests(unittest.TestCase):
         # uses \b after sbatch.
         for snippet in benign:
             with self.subTest(snippet=snippet):
-                hits = [
-                    code
-                    for code, pattern in safety.FORBIDDEN_PATCH_PATTERNS
-                    if re.search(pattern, snippet)
-                ]
+                hits = [code for code, pattern in safety.FORBIDDEN_PATCH_PATTERNS if re.search(pattern, snippet)]
                 # benign cases should not match the *submit* pattern.
                 self.assertNotIn("submit_slurm_job", hits, snippet)
 

@@ -10,9 +10,11 @@ can launch a command with environment variables can use the manual stdio form.
 - Python 3.11 or newer with `venv` support.
 - Bash and network access for the Python package install.
 - A clone of this repository.
-- `rg` for the two read-only MCP search tools.
 - GPU, cluster, profiler, and credential access only for workflows that need
   them. The local install and MCP handshake do not need a GPU.
+
+The two read-only MCP search tools prefer `rg` when it is available. They fall
+back to `grep`, so `rg` is not required.
 
 ## Install from the repository root
 

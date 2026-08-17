@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import pytest
@@ -86,7 +85,9 @@ def test_diff_detects_new_resolved_and_status_changes(tmp_path: Path) -> None:
     f._record(_record_args(tmp_path, findings_yaml=str(base), id="a", severity="critical", headline="A"))
     f._record(_record_args(tmp_path, findings_yaml=str(base), id="b", severity="high", headline="B"))
     # current: drop b, add c, mark a as in_progress
-    f._record(_record_args(tmp_path, findings_yaml=str(cur), id="a", severity="critical", headline="A", status="in_progress"))
+    f._record(
+        _record_args(tmp_path, findings_yaml=str(cur), id="a", severity="critical", headline="A", status="in_progress")
+    )
     f._record(_record_args(tmp_path, findings_yaml=str(cur), id="c", severity="medium", headline="C"))
 
     args = argparse.Namespace(

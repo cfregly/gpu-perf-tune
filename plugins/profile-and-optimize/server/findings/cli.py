@@ -18,6 +18,7 @@ from tools.findings.findings_cli import (  # noqa: E402
     main,
 )
 
+__all__ = ["CONTRACT", "build_parser", "main"]
 
 if __name__ == "__main__":
     sys.exit(main())

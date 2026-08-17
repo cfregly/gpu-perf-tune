@@ -80,6 +80,7 @@ WORD_TO_INT = {
     "forty-four": 44,
 }
 
+
 def count_on_disk() -> int:
     """Return the on-disk installable skill count."""
     if not SKILLS_DIR.is_dir():
@@ -112,26 +113,21 @@ def lint_doc(path: Path, expected: int) -> list[str]:
                 if num == expected or num in seen_nums:
                     continue
                 seen_nums.add(num)
-                findings.append(
-                    f"{path}:{line_no}: "
-                    f"reports {num} skills (expected {expected}): {line.strip()[:160]}"
-                )
+                findings.append(f"{path}:{line_no}: reports {num} skills (expected {expected}): {line.strip()[:160]}")
         for m in SPELLED_OUT_PATTERN.finditer(line):
             num = WORD_TO_INT[m.group(1).lower()]
             if num == expected or num in seen_nums:
                 continue
             seen_nums.add(num)
             findings.append(
-                f"{path}:{line_no}: "
-                f"reports {m.group(0)} ({num}) skills (expected {expected}): {line.strip()[:160]}"
+                f"{path}:{line_no}: reports {m.group(0)} ({num}) skills (expected {expected}): {line.strip()[:160]}"
             )
     return findings
 
 
 def main() -> int:
     expected = count_on_disk()
-    print(f"[lint-skill-counts] on-disk count: {expected} skills "
-          f"(under {SKILLS_DIR.relative_to(REPO_ROOT)})")
+    print(f"[lint-skill-counts] on-disk count: {expected} skills (under {SKILLS_DIR.relative_to(REPO_ROOT)})")
     all_findings: list[str] = []
     for rel in DOCS_TO_LINT:
         all_findings.extend(lint_doc(REPO_ROOT / rel, expected))

@@ -14,7 +14,7 @@ When SLA thresholds were supplied but no sweep point met them, an explicit
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from tools.perf_tune_report.renderer.style import color_for
 from tools.perf_tune_report.schema import AtlasCell
@@ -24,10 +24,17 @@ HEADER_BG = "#f3f3f3"
 SLA_MISS_BG = "#fde8e8"
 
 _COL_LABELS = [
-    "Variant", "Point", "Conc",
-    "Out TPM/GPU", "Out TPM/repl", "Out TPM/node",
-    "Tot TPM/GPU", "Tot TPM/repl", "Tot TPM/node",
-    "$/1M out", "$/1M tot",
+    "Variant",
+    "Point",
+    "Conc",
+    "Out TPM/GPU",
+    "Out TPM/repl",
+    "Out TPM/node",
+    "Tot TPM/GPU",
+    "Tot TPM/repl",
+    "Tot TPM/node",
+    "$/1M out",
+    "$/1M tot",
 ]
 _N_COLS = len(_COL_LABELS)
 
@@ -86,11 +93,7 @@ def shape_label_problems(groups: Sequence[TpmGroup]) -> list[str]:
     shape (no smoothing)").
     """
     shapes = sorted(
-        {
-            (g.mean_isl, g.mean_osl)
-            for g in groups
-            if g.mean_isl is not None or g.mean_osl is not None
-        },
+        {(g.mean_isl, g.mean_osl) for g in groups if g.mean_isl is not None or g.mean_osl is not None},
         key=lambda s: (s[0] or 0.0, s[1] or 0.0),
     )
     if len(shapes) <= 1:
@@ -114,11 +117,7 @@ def _shape_caption(groups: Sequence[TpmGroup]) -> list[str]:
     if shape_label_problems(groups):
         bits.append("ISL/OSL: per-row (varies)")
     else:
-        shapes = {
-            (g.mean_isl, g.mean_osl)
-            for g in groups
-            if g.mean_isl is not None or g.mean_osl is not None
-        }
+        shapes = {(g.mean_isl, g.mean_osl) for g in groups if g.mean_isl is not None or g.mean_osl is not None}
         if shapes:
             isl, osl = next(iter(shapes))
             if isl is not None:
@@ -149,8 +148,7 @@ def render_page(
     power_by_cell = power_by_cell or {}
 
     if not summary.groups:
-        fig.text(0.5, 0.5, "No throughput-bearing atlas rows for TPM rollup.",
-                 ha="center", va="center")
+        fig.text(0.5, 0.5, "No throughput-bearing atlas rows for TPM rollup.", ha="center", va="center")
         return False
 
     hardwares: list[str] = []
@@ -160,9 +158,14 @@ def render_page(
 
     n = len(hardwares)
     gs = fig.add_gridspec(
-        n + 1, 1,
+        n + 1,
+        1,
         height_ratios=[0.5] + [1.0] * n,
-        hspace=0.55, left=0.04, right=0.98, top=0.95, bottom=0.04,
+        hspace=0.55,
+        left=0.04,
+        right=0.98,
+        top=0.95,
+        bottom=0.04,
     )
 
     header_ax = fig.add_subplot(gs[0, 0])
@@ -174,13 +177,17 @@ def render_page(
     )
     ctx = f"\nData source / shape: {summary.context_line}" if summary.context_line else ""
     header_ax.text(
-        0.0, 1.0,
+        0.0,
+        1.0,
         "TPM supported across hardware types\n"
         "TPM = tok/s * 60. 'peak' = warm sweep best-case (NOT cold steady-state); "
         "'sla' = highest tok/s/GPU meeting the latency SLA. Total-TPM is n/a when "
         "the backend emits no total-token line.\n"
         f"{sla_line}  |  per-node basis = {summary.gpus_per_node} GPUs{ctx}",
-        fontsize=7.5, va="top", ha="left", linespacing=1.5,
+        fontsize=7.5,
+        va="top",
+        ha="left",
+        linespacing=1.5,
     )
 
     for hi, hw in enumerate(hardwares, start=1):
@@ -222,7 +229,7 @@ def render_page(
         tbl.set_fontsize(6.0)
         tbl.scale(1.0, 1.3)
 
-        for r_idx, (color, is_miss) in enumerate(zip(label_colors, miss_flags), start=1):
+        for r_idx, (color, is_miss) in enumerate(zip(label_colors, miss_flags, strict=True), start=1):
             tbl[(r_idx, 0)].set_text_props(color=color, weight="bold")
             if is_miss:
                 for c_idx in range(len(_COL_LABELS)):

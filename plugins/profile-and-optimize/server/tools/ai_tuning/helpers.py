@@ -23,8 +23,6 @@ from tools.ai_tuning.optimizer import space as space_module
 from tools.ai_tuning.optimizer import tpe as tpe_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-from tools.shared.jsonutil import load_json
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for
@@ -35,12 +33,14 @@ from tools.ai_tuning.safety import (
     FORBIDDEN_PATCH_PATTERNS,
     TEMPLATE_PATCH_SCHEMA_VERSION,
 )
+from tools.shared.jsonutil import load_json
 
 
 def load_validate_artifacts() -> Any:
     from tools.ai_tuning import artifact_validation
 
     return artifact_validation
+
 
 def write_json(payload: Any, output: Path | None) -> None:
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
@@ -50,20 +50,25 @@ def write_json(payload: Any, output: Path | None) -> None:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(text, encoding="utf-8")
 
+
 def append_jsonl(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
+
 def utc_timestamp() -> str:
     return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
 
 def stable_hash(payload: Any) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
+
 def short_hash(payload: Any) -> str:
     return stable_hash(payload)[:12]
+
 
 def error_code(message: str) -> str:
     lowered = message.lower()
@@ -89,12 +94,14 @@ def error_code(message: str) -> str:
         return "missing_jsonl"
     return re.sub(r"[^a-z0-9]+", "_", lowered).strip("_")[:80] or "validation_error"
 
+
 def parameter_index(space: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {
         str(param["name"]): param
         for param in space.get("parameters", [])
         if isinstance(param, dict) and "name" in param
     }
+
 
 def objective_index(space: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {
@@ -103,8 +110,10 @@ def objective_index(space: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if isinstance(objective, dict) and "name" in objective
     }
 
+
 def objective_catalog(space: dict[str, Any]) -> list[dict[str, Any]]:
     return [objective for objective in space.get("objectives", []) if isinstance(objective, dict)]
+
 
 def choose_objective(space: dict[str, Any], requested: str | None = None) -> dict[str, Any] | None:
     objectives = objective_catalog(space)
@@ -117,12 +126,14 @@ def choose_objective(space: dict[str, Any], requested: str | None = None) -> dic
         raise SystemExit(f"unknown objective {requested!r}")
     return selected
 
+
 def config_contract_index(space: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {
         str(contract["parameter"]): contract
         for contract in space.get("config_mutation_contracts", [])
         if isinstance(contract, dict) and "parameter" in contract
     }
+
 
 def normalize_config_patches(candidate: dict[str, Any]) -> dict[str, dict[str, Any]]:
     patches = candidate.get("config_patches", [])
@@ -133,6 +144,7 @@ def normalize_config_patches(candidate: dict[str, Any]) -> dict[str, dict[str, A
         if isinstance(patch, dict) and patch.get("parameter"):
             normalized[str(patch["parameter"])] = patch
     return normalized
+
 
 def normalize_candidate_parameters(candidate: dict[str, Any]) -> dict[str, str]:
     raw = candidate.get("parameters", {})
@@ -147,6 +159,7 @@ def normalize_candidate_parameters(candidate: dict[str, Any]) -> dict[str, str]:
                 normalized[str(item["name"])] = str(item["value"])
         return normalized
     return {}
+
 
 def value_allowed(param: dict[str, Any], value: str) -> tuple[bool, str | None]:
     kind = param.get("kind", "string")
@@ -177,6 +190,7 @@ def value_allowed(param: dict[str, Any], value: str) -> tuple[bool, str | None]:
         return False, f"value {value!r} is not a boolean"
     return True, None
 
+
 def run_validator(args: argparse.Namespace) -> list[str]:
     validator = load_validate_artifacts()
     errors: list[str] = []
@@ -191,14 +205,13 @@ def run_validator(args: argparse.Namespace) -> list[str]:
                 require_nccl_runtime=require_nccl_runtime,
             )
         for fabric_dir in args.gb300_fabric_dir:
-            validator.validate_fabric_evidence(
-                errors, Path(fabric_dir).resolve(), args.gb300_fabric_require_clean
-            )
+            validator.validate_fabric_evidence(errors, Path(fabric_dir).resolve(), args.gb300_fabric_require_clean)
         for selection_dir in args.gb300_node_selection_dir:
             validator.validate_node_selection_dir(errors, Path(selection_dir).resolve())
         for localization_dir in args.gb300_fabric_localization_dir:
             validator.validate_fabric_localization_dir(errors, Path(localization_dir).resolve())
     return errors
+
 
 def summarize_raw_dir(raw_dir: Path, benchmark: str) -> dict[str, Any]:
     validator = load_validate_artifacts()
@@ -206,9 +219,7 @@ def summarize_raw_dir(raw_dir: Path, benchmark: str) -> dict[str, Any]:
     for run_log in sorted(raw_dir.glob("*_1.log")):
         per_run_errors: list[str] = []
         with contextlib.redirect_stdout(io.StringIO()):
-            status, elapsed_minutes, final_metric = validator.validate_result_file(
-                per_run_errors, benchmark, run_log
-            )
+            status, elapsed_minutes, final_metric = validator.validate_result_file(per_run_errors, benchmark, run_log)
         run_id = validator.run_id_from_log_path(run_log)
         compliance_path = raw_dir / f"compliance_{run_id}.out"
         audit_path = raw_dir / f"audit_{run_id}.out"
@@ -221,9 +232,7 @@ def summarize_raw_dir(raw_dir: Path, benchmark: str) -> dict[str, Any]:
                 "final_log_ppl": final_metric,
                 "compliance_output": str(compliance_path),
                 "audit_output": str(audit_path),
-                "errors": [
-                    {"code": error_code(message), "message": message} for message in per_run_errors
-                ],
+                "errors": [{"code": error_code(message), "message": message} for message in per_run_errors],
             }
         )
     return {
@@ -232,16 +241,18 @@ def summarize_raw_dir(raw_dir: Path, benchmark: str) -> dict[str, Any]:
         "run_log_count": len(run_summaries),
         "config_count": len(list(raw_dir.glob("config_*.sh"))),
         "launcher_count": len(list(raw_dir.glob("*.hyp"))) + int((raw_dir / "run.sub").is_file()),
-        "env_log_count": len(list(raw_dir.glob("container-env-*.log")))
-        + len(list(raw_dir.glob("*_env.log"))),
+        "env_log_count": len(list(raw_dir.glob("container-env-*.log"))) + len(list(raw_dir.glob("*_env.log"))),
         "runs": run_summaries,
     }
+
 
 def mean_or_none(values: list[float]) -> float | None:
     return statistics.fmean(values) if values else None
 
+
 def stdev_or_none(values: list[float]) -> float | None:
     return statistics.stdev(values) if len(values) >= 2 else None
+
 
 def effective_quality_target(target: dict[str, Any], objective: dict[str, Any] | None) -> float | int | None:
     if objective and isinstance(objective.get("quality_target"), int | float):
@@ -249,6 +260,7 @@ def effective_quality_target(target: dict[str, Any], objective: dict[str, Any] |
     if isinstance(target.get("quality_target"), int | float):
         return target["quality_target"]
     return None
+
 
 def effective_required_runs(
     raw_benchmark: str,
@@ -263,6 +275,7 @@ def effective_required_runs(
         return 5
     return 1
 
+
 def build_trial_analysis(
     raw_summaries: list[dict[str, Any]],
     target: dict[str, Any],
@@ -273,15 +286,9 @@ def build_trial_analysis(
 ) -> dict[str, Any]:
     runs = [run for raw in raw_summaries for run in raw.get("runs", [])]
     elapsed_values = [
-        float(run["elapsed_minutes"])
-        for run in runs
-        if isinstance(run.get("elapsed_minutes"), int | float)
+        float(run["elapsed_minutes"]) for run in runs if isinstance(run.get("elapsed_minutes"), int | float)
     ]
-    metric_values = [
-        float(run["final_log_ppl"])
-        for run in runs
-        if isinstance(run.get("final_log_ppl"), int | float)
-    ]
+    metric_values = [float(run["final_log_ppl"]) for run in runs if isinstance(run.get("final_log_ppl"), int | float)]
     quality_target = effective_quality_target(target, objective)
     if isinstance(quality_target, int | float):
         quality_pass_count = sum(value <= float(quality_target) for value in metric_values)
@@ -307,12 +314,8 @@ def build_trial_analysis(
             "primary_objective": objective_name,
             "primary_metric": objective.get("primary_metric") if isinstance(objective, dict) else "submission_ready",
             "direction": objective.get("direction") if isinstance(objective, dict) else "maximize",
-            "objective_progress_ratio": min(successful_runs / required_runs, 1.0)
-            if required_runs
-            else None,
-            "submission_readiness_score": min(successful_runs / required_runs, 1.0)
-            if required_runs
-            else None,
+            "objective_progress_ratio": min(successful_runs / required_runs, 1.0) if required_runs else None,
+            "submission_readiness_score": min(successful_runs / required_runs, 1.0) if required_runs else None,
             "mean_elapsed_minutes": mean_or_none(elapsed_values),
             "mean_final_log_ppl": mean_or_none(metric_values),
             "quality_target": quality_target,
@@ -352,6 +355,7 @@ def build_trial_analysis(
         },
     }
 
+
 def build_objective_catalog(space: dict[str, Any]) -> list[dict[str, Any]]:
     objectives = objective_catalog(space)
     if objectives:
@@ -368,6 +372,7 @@ def build_objective_catalog(space: dict[str, Any]) -> list[dict[str, Any]]:
         }
     ]
 
+
 def run_id_from_log(path: Path) -> str:
     stem = path.stem
     if stem.endswith("_1"):
@@ -375,6 +380,7 @@ def run_id_from_log(path: Path) -> str:
     if stem.endswith("_01"):
         return stem[:-3]
     return stem
+
 
 def discover_finalize_logs(log_dir: Path, run_ids: list[str]) -> list[Path]:
     if run_ids:
@@ -385,6 +391,7 @@ def discover_finalize_logs(log_dir: Path, run_ids: list[str]) -> list[Path]:
     if missing:
         raise SystemExit(f"missing run log(s): {', '.join(missing)}")
     return logs
+
 
 def validate_finalize_run(log_dir: Path, log_path: Path, benchmark: str) -> dict[str, Any]:
     validator = load_validate_artifacts()
@@ -407,6 +414,7 @@ def validate_finalize_run(log_dir: Path, log_path: Path, benchmark: str) -> dict
         "valid": not errors,
         "errors": [{"code": error_code(message), "message": message} for message in errors],
     }
+
 
 def finalize_copy_candidates(
     log_dir: Path,
@@ -450,6 +458,7 @@ def finalize_copy_candidates(
             deduped.append((src, dst))
     return deduped
 
+
 def summarize_json_file(path: Path) -> Any:
     if not path.is_file():
         return None
@@ -457,6 +466,7 @@ def summarize_json_file(path: Path) -> Any:
         return load_json(path)
     except json.JSONDecodeError as exc:
         return {"error": f"malformed JSON: {exc}"}
+
 
 def summarize_optional_dirs(paths: list[str], filenames: list[str]) -> list[dict[str, Any]]:
     summaries = []
@@ -467,6 +477,7 @@ def summarize_optional_dirs(paths: list[str], filenames: list[str]) -> list[dict
             summary["files"][filename] = summarize_json_file(directory / filename)
         summaries.append(summary)
     return summaries
+
 
 def finite_parameter_domains(space: dict[str, Any]) -> list[dict[str, Any]]:
     domains = []
@@ -490,9 +501,8 @@ def finite_parameter_domains(space: dict[str, Any]) -> list[dict[str, Any]]:
     domains.sort(key=lambda item: item["name"])
     return domains
 
-def build_parameter_coverage(
-    domains: list[dict[str, Any]], states: dict[str, dict[str, Any]]
-) -> list[dict[str, Any]]:
+
+def build_parameter_coverage(domains: list[dict[str, Any]], states: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     coverage = []
     for domain in domains:
         observed_counts = {value: 0 for value in domain["values"]}
@@ -517,6 +527,7 @@ def build_parameter_coverage(
         )
     return coverage
 
+
 def build_remaining_candidates(
     domains: list[dict[str, Any]],
     states: dict[str, dict[str, Any]],
@@ -539,10 +550,7 @@ def build_remaining_candidates(
     for values in itertools.product(*(domain["values"] for domain in domains)):
         if len(candidates) >= limit:
             break
-        parameters = {
-            domains[index]["name"]: values[index]
-            for index in range(len(domains))
-        }
+        parameters = {domains[index]["name"]: values[index] for index in range(len(domains))}
         key = candidate_key(parameters)
         if key in tried_keys:
             continue
@@ -559,6 +567,7 @@ def build_remaining_candidates(
         "truncated": estimated_remaining > len(candidates),
         "candidates": candidates,
     }
+
 
 def build_circuit_breakers(
     counts: dict[str, int], coverage: list[dict[str, Any]], remaining: dict[str, Any]
@@ -605,6 +614,7 @@ def build_circuit_breakers(
         )
     return breakers
 
+
 def split_name_value(value: str) -> tuple[str | None, str | None]:
     if "=" in value:
         name, parsed = value.split("=", 1)
@@ -613,6 +623,7 @@ def split_name_value(value: str) -> tuple[str | None, str | None]:
     if len(parts) == 2:
         return parts[0].strip() or None, parts[1].strip().strip('"') or None
     return value.strip() or None, None
+
 
 def parse_template_hint_line(line: str, line_number: int) -> dict[str, Any] | None:
     trimmed = line.strip()
@@ -637,6 +648,7 @@ def parse_template_hint_line(line: str, line_number: int) -> dict[str, Any] | No
         name, value = split_name_value(trimmed.rstrip("\\").strip())
         return {"kind": "argument", "name": name, "value": value, "line_number": line_number, "raw": line}
     return None
+
 
 def build_template_hints(paths: list[str], limit: int) -> dict[str, Any]:
     if limit < 0:
@@ -667,6 +679,7 @@ def build_template_hints(paths: list[str], limit: int) -> dict[str, Any]:
         "truncated": len(hints) > limit,
         "hints": hints[:limit],
     }
+
 
 def build_agent_session_report(
     space: dict[str, Any],
@@ -731,6 +744,7 @@ def build_agent_session_report(
         },
     }
 
+
 def candidate_seen(parameters: dict[str, str], states: dict[str, dict[str, Any]]) -> bool:
     key = candidate_key(parameters)
     for record in states.values():
@@ -740,6 +754,7 @@ def candidate_seen(parameters: dict[str, str], states: dict[str, dict[str, Any]]
                 return True
     return False
 
+
 def decode_combination(index: int, domains: list[dict[str, Any]]) -> dict[str, str]:
     values: list[str] = []
     remaining = index
@@ -748,10 +763,8 @@ def decode_combination(index: int, domains: list[dict[str, Any]]) -> dict[str, s
         remaining, offset = divmod(remaining, len(domain_values))
         values.append(domain_values[offset])
     values.reverse()
-    return {
-        domains[position]["name"]: values[position]
-        for position in range(len(domains))
-    }
+    return {domains[position]["name"]: values[position] for position in range(len(domains))}
+
 
 def iter_candidate_parameters(
     domains: list[dict[str, Any]],
@@ -762,6 +775,7 @@ def iter_candidate_parameters(
     for domain in domains:
         total_possible *= len(domain["values"])
     if strategy == "random":
+
         def iterator() -> Any:
             seen_indices: set[int] = set()
             while len(seen_indices) < total_possible:
@@ -775,18 +789,17 @@ def iter_candidate_parameters(
 
     def iterator() -> Any:
         for values in itertools.product(*(domain["values"] for domain in domains)):
-            yield {
-                domains[index]["name"]: values[index]
-                for index in range(len(domains))
-            }
+            yield {domains[index]["name"]: values[index] for index in range(len(domains))}
 
     return total_possible, iterator()
+
 
 def _build_optimizer_space(
     space: dict[str, Any],
     selected_names: list[str] | None,
 ) -> space_module.Space:
     return space_module.Space.from_manifest(space, parameter_names=selected_names)
+
 
 def _observations_from_states(
     optimizer_space: space_module.Space,
@@ -811,6 +824,7 @@ def _observations_from_states(
         observations.append(tpe_engine.Observation(vector=vector, value=value))
     return observations
 
+
 def _objective_direction(space: dict[str, Any], objective_name: str) -> str:
     for objective in space.get("objectives", []):
         if isinstance(objective, dict) and str(objective.get("name")) == objective_name:
@@ -819,13 +833,21 @@ def _objective_direction(space: dict[str, Any], objective_name: str) -> str:
                 return direction
     return "maximize"
 
-def _resolve_hyperband_config(space: dict[str, Any], variant: str, args: argparse.Namespace) -> hb_engine.HyperbandConfig:
-    optimizer_block = space.get("optimizer", {}) if isinstance(space.get("optimizer"), dict) else {}
-    block = optimizer_block.get(variant) if isinstance(optimizer_block.get(variant), dict) else {}
+
+def _resolve_hyperband_config(
+    space: dict[str, Any], variant: str, args: argparse.Namespace
+) -> hb_engine.HyperbandConfig:
+    raw_optimizer_block = space.get("optimizer")
+    optimizer_block = raw_optimizer_block if isinstance(raw_optimizer_block, dict) else {}
+    raw_variant_block = optimizer_block.get(variant)
+    block = raw_variant_block if isinstance(raw_variant_block, dict) else {}
     eta = int(args.eta) if args.eta is not None else int(block.get("eta", 3))
     min_budget = float(args.min_budget) if args.min_budget is not None else float(block.get("min_budget", 1.0))
-    max_budget = float(args.max_budget) if args.max_budget is not None else float(block.get("max_budget", min_budget * (eta ** 3)))
+    max_budget = (
+        float(args.max_budget) if args.max_budget is not None else float(block.get("max_budget", min_budget * (eta**3)))
+    )
     return hb_engine.HyperbandConfig(eta=eta, min_budget=min_budget, max_budget=max_budget)
+
 
 def _experiment_state_value(record: dict[str, Any]) -> float | None:
     raw = record.get("result_value")
@@ -835,6 +857,7 @@ def _experiment_state_value(record: dict[str, Any]) -> float | None:
         return float(raw)
     except (TypeError, ValueError):
         return None
+
 
 def load_history_keys(paths: list[str]) -> set[str]:
     keys: set[str] = set()
@@ -854,6 +877,7 @@ def load_history_keys(paths: list[str]) -> set[str]:
                 keys.add(candidate_key({str(k): str(v) for k, v in parameters.items()}))
     return keys
 
+
 def load_ledger_keys(path: Path | None) -> set[str]:
     if path is None:
         return set()
@@ -864,11 +888,14 @@ def load_ledger_keys(path: Path | None) -> set[str]:
             keys.add(candidate_key({str(k): str(v) for k, v in parameters.items()}))
     return keys
 
+
 def candidate_key(parameters: dict[str, str]) -> str:
     return "|".join(f"{name}={parameters[name]}" for name in sorted(parameters))
 
+
 def experiment_id(space_id: str, index: int, parameters: dict[str, str]) -> str:
     return f"exp-{short_hash({'space': space_id, 'index': index, 'parameters': parameters})}"
+
 
 def normalize_priority(candidate: dict[str, Any], default: int) -> int:
     raw_priority = candidate.get("priority", default)
@@ -881,6 +908,7 @@ def normalize_priority(candidate: dict[str, Any], default: int) -> int:
     if priority < 1:
         raise SystemExit("candidate priority must be at least 1")
     return priority
+
 
 def infer_experiment_shape(parameters: dict[str, str], space: dict[str, Any]) -> dict[str, Any]:
     target = space.get("target", {})
@@ -898,6 +926,7 @@ def infer_experiment_shape(parameters: dict[str, str], space: dict[str, Any]) ->
         "benchmark": target.get("benchmark"),
     }
 
+
 def read_ledger_records(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
@@ -914,6 +943,7 @@ def read_ledger_records(path: Path) -> list[dict[str, Any]]:
         records.append(record)
     return records
 
+
 def latest_experiment_states(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     states: dict[str, dict[str, Any]] = {}
     for record in records:
@@ -928,6 +958,7 @@ def latest_experiment_states(records: list[dict[str, Any]]) -> dict[str, dict[st
                 if value is not None:
                     current[key] = value
     return states
+
 
 def append_experiment_update(
     ledger: Path,
@@ -956,6 +987,7 @@ def append_experiment_update(
     append_jsonl(ledger, record)
     return record
 
+
 def planned_submit_command(record: dict[str, Any], script: Path, extra_args: list[str]) -> list[str]:
     shape = record.get("shape", {}) if isinstance(record.get("shape"), dict) else {}
     command = ["sbatch", "--parsable"]
@@ -969,8 +1001,10 @@ def planned_submit_command(record: dict[str, Any], script: Path, extra_args: lis
     command.append(str(script))
     return command
 
+
 def shell_quote(value: str) -> str:
     return "'" + value.replace("'", "'\"'\"'") + "'"
+
 
 def extract_sbatch_directives(script: Path) -> list[str]:
     directives = []
@@ -980,10 +1014,12 @@ def extract_sbatch_directives(script: Path) -> list[str]:
             directives.append(line)
     return directives
 
+
 def patch_target_name(raw_path: str | None) -> str | None:
     if not raw_path:
         return None
     return Path(str(raw_path)).name
+
 
 def load_patch_request_from_descriptor(patch: dict[str, Any], script: Path) -> dict[str, Any]:
     patch_file = patch.get("patch_file")
@@ -1008,6 +1044,7 @@ def load_patch_request_from_descriptor(patch: dict[str, Any], script: Path) -> d
     if descriptor_target and not request.get("target_file"):
         request["target_file"] = patch.get("target_file")
     return request
+
 
 def materialize_record_config_patches(
     record: dict[str, Any],
@@ -1051,6 +1088,7 @@ def materialize_record_config_patches(
         else:
             source_lines.append(f"source {shell_quote(str(output))}")
     return source_lines, target_script_override, derived_files
+
 
 def materialize_submit_wrapper(
     record: dict[str, Any],
@@ -1116,13 +1154,14 @@ def materialize_submit_wrapper(
             if local_script.exists() and local_script.read_bytes() != script.read_bytes() and not overwrite:
                 raise SystemExit(f"wrapper script copy already exists with different contents: {local_script}")
             shutil.copy2(script, local_script)
-        target_script = f"$(cd -- \"$(dirname -- \"$0\")\" && pwd)/{script.name}"
+        target_script = f'$(cd -- "$(dirname -- "$0")" && pwd)/{script.name}'
     for derived_path in derived_patch_files:
         lines.append(f"# derived_patch={derived_path}")
-    lines.append(f"exec bash {shell_quote(target_script)} \"$@\"")
+    lines.append(f'exec bash {shell_quote(target_script)} "$@"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     path.chmod(0o755)
     return path
+
 
 def select_submit_candidates(
     states: dict[str, dict[str, Any]],
@@ -1137,11 +1176,7 @@ def select_submit_candidates(
         if missing:
             raise SystemExit(f"unknown experiment id(s): {', '.join(missing)}")
         return [states[exp_id] for exp_id in experiment_ids]
-    candidates = [
-        record
-        for record in states.values()
-        if str(record.get("status", "")) in statuses
-    ]
+    candidates = [record for record in states.values() if str(record.get("status", "")) in statuses]
     candidates.sort(
         key=lambda record: (
             int(record.get("priority", 1_000_000)),
@@ -1149,6 +1184,7 @@ def select_submit_candidates(
         )
     )
     return candidates[:capacity]
+
 
 def slurm_state_to_status(state: str) -> str:
     normalized = state.upper().split()[0]
@@ -1164,6 +1200,7 @@ def slurm_state_to_status(state: str) -> str:
         return "failed"
     return "blocked"
 
+
 def load_poll_statuses(path: Path) -> dict[str, dict[str, Any]]:
     payload = load_json(path)
     if isinstance(payload, dict) and isinstance(payload.get("jobs"), list):
@@ -1178,6 +1215,7 @@ def load_poll_statuses(path: Path) -> dict[str, dict[str, Any]]:
             continue
         statuses[str(row["slurm_job_id"])] = row
     return statuses
+
 
 def query_slurm_statuses(job_ids: list[str]) -> dict[str, dict[str, Any]]:
     if not job_ids:
@@ -1210,6 +1248,7 @@ def query_slurm_statuses(job_ids: list[str]) -> dict[str, dict[str, Any]]:
         }
     return statuses
 
+
 def copy_artifacts(source: Path, destination: Path, overwrite: bool) -> None:
     if not source.is_dir():
         raise SystemExit(f"missing artifact source directory: {source}")
@@ -1224,6 +1263,7 @@ def copy_artifacts(source: Path, destination: Path, overwrite: bool) -> None:
             if target.exists() and not overwrite:
                 raise SystemExit(f"artifact destination file exists: {target}")
             shutil.copy2(child, target)
+
 
 def validate_collected_artifacts(destination: Path, benchmark: str, min_runs: int) -> list[str]:
     validator = load_validate_artifacts()
@@ -1242,6 +1282,7 @@ def validate_collected_artifacts(destination: Path, benchmark: str, min_runs: in
         )
     return errors
 
+
 FAILURE_PATTERNS: tuple[tuple[str, str, str], ...] = (
     ("failure", "nccl_ib_create_ah_no_device", "ibv_create_ah failed with error No such device"),
     ("failure", "nccl_ib_modify_qp_no_device", "ibv_modify_qp failed with 19 No such device"),
@@ -1259,6 +1300,7 @@ FAILURE_PATTERNS: tuple[tuple[str, str, str], ...] = (
     ("failure", "slurm_node_fail", "NODE_FAIL"),
 )
 
+
 def classify_failure_text(text: str) -> list[dict[str, Any]]:
     findings = []
     for severity, code, pattern in FAILURE_PATTERNS:
@@ -1267,16 +1309,13 @@ def classify_failure_text(text: str) -> list[dict[str, Any]]:
             findings.append({"severity": severity, "code": code, "pattern": pattern, "count": count})
     return findings
 
+
 def classify_artifacts(path: Path) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     if path.is_file():
         paths = [path]
     elif path.is_dir():
-        paths = sorted(
-            item
-            for item in path.rglob("*")
-            if item.is_file() and item.suffix in {".out", ".log", ".txt"}
-        )
+        paths = sorted(item for item in path.rglob("*") if item.is_file() and item.suffix in {".out", ".log", ".txt"})
     else:
         return findings
     for item in paths:
@@ -1286,6 +1325,7 @@ def classify_artifacts(path: Path) -> list[dict[str, Any]]:
             finding["path"] = str(item)
             findings.append(finding)
     return findings
+
 
 def _proposal_candidate_index(proposal: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Index candidates by experiment_id_prefix for diffing."""
@@ -1297,14 +1337,12 @@ def _proposal_candidate_index(proposal: dict[str, Any]) -> dict[str, dict[str, A
         if not isinstance(candidate, dict):
             continue
         key = str(
-            candidate.get("experiment_id_prefix")
-            or candidate.get("experiment_id")
-            or candidate.get("id")
-            or ""
+            candidate.get("experiment_id_prefix") or candidate.get("experiment_id") or candidate.get("id") or ""
         ).strip()
         if key:
             out[key] = candidate
     return out
+
 
 def _proposal_diff_payload(
     *,
@@ -1316,12 +1354,8 @@ def _proposal_diff_payload(
 
     before = load_json(before_path)
     after = load_json(after_path)
-    before_hash = hashlib.sha256(
-        json.dumps(before, sort_keys=True).encode("utf-8")
-    ).hexdigest()
-    after_hash = hashlib.sha256(
-        json.dumps(after, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    before_hash = hashlib.sha256(json.dumps(before, sort_keys=True).encode("utf-8")).hexdigest()
+    after_hash = hashlib.sha256(json.dumps(after, sort_keys=True).encode("utf-8")).hexdigest()
     if before_hash == after_hash:
         return {
             "schema_version": 1,
@@ -1347,20 +1381,13 @@ def _proposal_diff_payload(
             continue
         added_params = sorted(set(a_params) - set(b_params))
         removed_params = sorted(set(b_params) - set(a_params))
-        changed_params = sorted(
-            k
-            for k in set(a_params) & set(b_params)
-            if str(a_params[k]) != str(b_params[k])
-        )
+        changed_params = sorted(k for k in set(a_params) & set(b_params) if str(a_params[k]) != str(b_params[k]))
         changed.append(
             {
                 "experiment_id_prefix": key,
                 "added_parameters": [{"name": k, "value": a_params[k]} for k in added_params],
                 "removed_parameters": [{"name": k, "value": b_params[k]} for k in removed_params],
-                "changed_parameters": [
-                    {"name": k, "from": b_params[k], "to": a_params[k]}
-                    for k in changed_params
-                ],
+                "changed_parameters": [{"name": k, "from": b_params[k], "to": a_params[k]} for k in changed_params],
             }
         )
     return {
@@ -1369,14 +1396,13 @@ def _proposal_diff_payload(
         "after": str(after_path),
         "before_hash": before_hash,
         "after_hash": after_hash,
-        "schema_version_match": (
-            before.get("schema_version") == after.get("schema_version")
-        ),
+        "schema_version_match": (before.get("schema_version") == after.get("schema_version")),
         "added_candidates": added,
         "removed_candidates": removed,
         "changed_candidates": changed,
         "unchanged": False,
     }
+
 
 def _proposal_diff_markdown(diff: dict[str, Any]) -> str:
     lines = []
@@ -1404,29 +1430,26 @@ def _proposal_diff_markdown(diff: dict[str, Any]) -> str:
         for entry in diff["changed_candidates"]:
             lines.append(f"### {entry['experiment_id_prefix']}")
             if entry["added_parameters"]:
-                added = ", ".join(
-                    f"{p['name']}={p['value']}" for p in entry["added_parameters"]
-                )
+                added = ", ".join(f"{p['name']}={p['value']}" for p in entry["added_parameters"])
                 lines.append(f"- added: {added}")
             if entry["removed_parameters"]:
-                removed = ", ".join(
-                    f"{p['name']}={p['value']}" for p in entry["removed_parameters"]
-                )
+                removed = ", ".join(f"{p['name']}={p['value']}" for p in entry["removed_parameters"])
                 lines.append(f"- removed: {removed}")
             if entry["changed_parameters"]:
-                changed = ", ".join(
-                    f"{p['name']}: {p['from']}->{p['to']}" for p in entry["changed_parameters"]
-                )
+                changed = ", ".join(f"{p['name']}: {p['from']}->{p['to']}" for p in entry["changed_parameters"])
                 lines.append(f"- changed: {changed}")
             lines.append("")
     return "\n".join(lines) + "\n"
 
+
 def line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
+
 
 def default_derived_path(target: Path) -> Path:
     timestamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
     return target.with_name(f"{target.stem}.cursor-{timestamp}{target.suffix}")
+
 
 def resolve_path_with_bases(raw_path: str, bases: list[Path]) -> Path:
     path = Path(raw_path)
@@ -1437,6 +1460,7 @@ def resolve_path_with_bases(raw_path: str, bases: list[Path]) -> Path:
         if candidate.exists():
             return candidate
     return (bases[0] / path).resolve()
+
 
 def validate_patch_safety(original: str, patched: str) -> list[dict[str, Any]]:
     errors = []
@@ -1452,6 +1476,7 @@ def validate_patch_safety(original: str, patched: str) -> list[dict[str, Any]]:
                 }
             )
     return errors
+
 
 def validate_patched_template_structure(original: str, patched: str) -> list[dict[str, Any]]:
     errors = []
@@ -1473,6 +1498,7 @@ def validate_patched_template_structure(original: str, patched: str) -> list[dic
                 }
             )
     return errors
+
 
 def evaluate_template_patch_request(
     request: dict[str, Any],
@@ -1524,9 +1550,7 @@ def evaluate_template_patch_request(
     patched = original
     changes = request.get("changes", [])
     if not isinstance(changes, list) or not changes:
-        errors.append(
-            {"code": "no_changes", "message": "patch must include at least one change", "change_index": None}
-        )
+        errors.append({"code": "no_changes", "message": "patch must include at least one change", "change_index": None})
         changes = []
     for index, change in enumerate(changes):
         match_context = str(change.get("match_context", ""))
@@ -1630,4 +1654,109 @@ def evaluate_template_patch_request(
         )
     return report
 
-__all__ = [name for name in globals() if not name.startswith('__')]
+
+__all__ = [
+    "EXPERIMENT_LEDGER_SCHEMA_VERSION",
+    "EXPERIMENT_STATUSES",
+    "FAILURE_PATTERNS",
+    "FORBIDDEN_PATCH_PATTERNS",
+    "REPO_ROOT",
+    "TEMPLATE_PATCH_SCHEMA_VERSION",
+    "Any",
+    "Path",
+    "_build_optimizer_space",
+    "_experiment_state_value",
+    "_objective_direction",
+    "_observations_from_states",
+    "_proposal_candidate_index",
+    "_proposal_diff_markdown",
+    "_proposal_diff_payload",
+    "_resolve_hyperband_config",
+    "annotations",
+    "append_experiment_update",
+    "append_jsonl",
+    "argparse",
+    "build_agent_session_report",
+    "build_circuit_breakers",
+    "build_objective_catalog",
+    "build_parameter_coverage",
+    "build_remaining_candidates",
+    "build_template_hints",
+    "build_trial_analysis",
+    "candidate_key",
+    "candidate_seen",
+    "choose_objective",
+    "classify_artifacts",
+    "classify_failure_text",
+    "config_contract_index",
+    "contextlib",
+    "copy_artifacts",
+    "decode_combination",
+    "default_derived_path",
+    "discover_finalize_logs",
+    "dt",
+    "effective_quality_target",
+    "effective_required_runs",
+    "error_code",
+    "evaluate_template_patch_request",
+    "experiment_id",
+    "extract_sbatch_directives",
+    "finalize_copy_candidates",
+    "finite_parameter_domains",
+    "hashlib",
+    "hb_engine",
+    "infer_experiment_shape",
+    "io",
+    "iter_candidate_parameters",
+    "itertools",
+    "json",
+    "latest_experiment_states",
+    "line_number",
+    "load_history_keys",
+    "load_json",
+    "load_ledger_keys",
+    "load_patch_request_from_descriptor",
+    "load_poll_statuses",
+    "load_validate_artifacts",
+    "materialize_record_config_patches",
+    "materialize_submit_wrapper",
+    "mean_or_none",
+    "normalize_candidate_parameters",
+    "normalize_config_patches",
+    "normalize_priority",
+    "objective_catalog",
+    "objective_index",
+    "parameter_index",
+    "parse_template_hint_line",
+    "patch_target_name",
+    "planned_submit_command",
+    "query_slurm_statuses",
+    "random",
+    "re",
+    "read_ledger_records",
+    "resolve_path_with_bases",
+    "run_id_from_log",
+    "run_validator",
+    "select_submit_candidates",
+    "shell_quote",
+    "short_hash",
+    "shutil",
+    "slurm_state_to_status",
+    "space_module",
+    "split_name_value",
+    "stable_hash",
+    "statistics",
+    "stdev_or_none",
+    "subprocess",
+    "summarize_json_file",
+    "summarize_optional_dirs",
+    "summarize_raw_dir",
+    "tpe_engine",
+    "utc_timestamp",
+    "validate_collected_artifacts",
+    "validate_finalize_run",
+    "validate_patch_safety",
+    "validate_patched_template_structure",
+    "value_allowed",
+    "write_json",
+]

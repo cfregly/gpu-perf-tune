@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -24,6 +27,20 @@ class AiTuningModuleSplitTest(unittest.TestCase):
         self.assertTrue(callable(tuner_io.write_json))
         self.assertTrue(callable(proposals.command_proposal_validate))
         self.assertTrue(safety.FORBIDDEN_PATCH_PATTERNS)
+
+    def test_proposals_direct_import_from_ai_tuning_path(self) -> None:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(HERE)
+        with tempfile.TemporaryDirectory() as workdir:
+            proc = subprocess.run(
+                [sys.executable, "-S", "-c", "import proposals"],
+                cwd=workdir,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
 
 
 if __name__ == "__main__":

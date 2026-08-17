@@ -15,8 +15,6 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-from tools.shared.jsonutil import load_json
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for
@@ -48,6 +46,7 @@ from tools.ai_tuning.safety import (
     EXPERIMENT_LEDGER_SCHEMA_VERSION,
     EXPERIMENT_STATUSES,
 )
+from tools.shared.jsonutil import load_json
 
 
 def command_experiment_create(args: argparse.Namespace) -> int:
@@ -59,9 +58,7 @@ def command_experiment_create(args: argparse.Namespace) -> int:
         raise SystemExit("proposal must contain a non-empty candidates list")
 
     existing_ids = {
-        str(record.get("experiment_id"))
-        for record in read_ledger_records(args.ledger)
-        if record.get("experiment_id")
+        str(record.get("experiment_id")) for record in read_ledger_records(args.ledger) if record.get("experiment_id")
     }
     records = []
     for index, candidate in enumerate(candidates):
@@ -108,6 +105,7 @@ def command_experiment_create(args: argparse.Namespace) -> int:
     write_json(report, args.output)
     return 0
 
+
 def command_experiment_update(args: argparse.Namespace) -> int:
     if args.status not in EXPERIMENT_STATUSES:
         raise SystemExit(f"unknown status {args.status!r}; expected one of {sorted(EXPERIMENT_STATUSES)}")
@@ -124,6 +122,7 @@ def command_experiment_update(args: argparse.Namespace) -> int:
     append_jsonl(args.ledger, record)
     write_json(record, args.output)
     return 0
+
 
 def command_experiment_summary(args: argparse.Namespace) -> int:
     records = read_ledger_records(args.ledger)
@@ -153,14 +152,11 @@ def command_experiment_summary(args: argparse.Namespace) -> int:
     write_json(report, args.output)
     return 0
 
+
 def command_experiment_submit(args: argparse.Namespace) -> int:
     records = read_ledger_records(args.ledger)
     states = latest_experiment_states(records)
-    active = sum(
-        1
-        for record in states.values()
-        if record.get("status") in {"submitted", "running"}
-    )
+    active = sum(1 for record in states.values() if record.get("status") in {"submitted", "running"})
     capacity = max(args.max_concurrent - active, 0)
     statuses = set(args.status)
     candidates = select_submit_candidates(states, statuses, capacity, args.experiment_id)
@@ -231,7 +227,11 @@ def command_experiment_submit(args: argparse.Namespace) -> int:
                         "blocked",
                         artifact_dir=record.get("artifact_dir"),
                         notes="sbatch failed during gated submit",
-                        extra={"submit_command": command, "wrapper": str(wrapper) if wrapper else None, "submit_result": result},
+                        extra={
+                            "submit_command": command,
+                            "wrapper": str(wrapper) if wrapper else None,
+                            "submit_result": result,
+                        },
                     )
                 )
         submissions.append(result)
@@ -251,21 +251,17 @@ def command_experiment_submit(args: argparse.Namespace) -> int:
     write_json(report, args.output)
     return 0
 
+
 def command_experiment_poll(args: argparse.Namespace) -> int:
     records = read_ledger_records(args.ledger)
     states = latest_experiment_states(records)
     tracked = [
         record
         for record in states.values()
-        if record.get("slurm_job_id")
-        and (not args.status or record.get("status") in set(args.status))
+        if record.get("slurm_job_id") and (not args.status or record.get("status") in set(args.status))
     ]
     job_ids = sorted({str(record["slurm_job_id"]) for record in tracked})
-    slurm_statuses = (
-        load_poll_statuses(args.status_file)
-        if args.status_file
-        else query_slurm_statuses(job_ids)
-    )
+    slurm_statuses = load_poll_statuses(args.status_file) if args.status_file else query_slurm_statuses(job_ids)
     updates = []
     observations = []
     for record in tracked:
@@ -273,9 +269,7 @@ def command_experiment_poll(args: argparse.Namespace) -> int:
         job_id = str(record["slurm_job_id"])
         slurm = slurm_statuses.get(job_id)
         if slurm is None:
-            observations.append(
-                {"experiment_id": exp_id, "slurm_job_id": job_id, "found": False}
-            )
+            observations.append({"experiment_id": exp_id, "slurm_job_id": job_id, "found": False})
             continue
         new_status = str(slurm.get("status") or slurm_state_to_status(str(slurm.get("slurm_state", ""))))
         observation = {
@@ -309,15 +303,14 @@ def command_experiment_poll(args: argparse.Namespace) -> int:
     write_json(report, args.output)
     return 0
 
+
 def command_experiment_collect(args: argparse.Namespace) -> int:
     records = read_ledger_records(args.ledger)
     states = latest_experiment_states(records)
     record = states.get(args.experiment_id)
     if record is None:
         raise SystemExit(f"unknown experiment id: {args.experiment_id}")
-    destination = args.destination or (
-        Path(str(record["artifact_dir"])) if record.get("artifact_dir") else None
-    )
+    destination = args.destination or (Path(str(record["artifact_dir"])) if record.get("artifact_dir") else None)
     if destination is None:
         raise SystemExit("collect requires --destination or an artifact_dir in the ledger")
     copy_artifacts(args.source, destination, args.overwrite)
@@ -340,10 +333,7 @@ def command_experiment_collect(args: argparse.Namespace) -> int:
                 "source": str(args.source),
                 "destination": str(destination),
                 "raw_benchmark": args.raw_benchmark,
-                "validation_errors": [
-                    {"code": error_code(message), "message": message}
-                    for message in errors
-                ],
+                "validation_errors": [{"code": error_code(message), "message": message} for message in errors],
                 "failure_classifications": failure_classifications,
             }
         },
@@ -355,10 +345,7 @@ def command_experiment_collect(args: argparse.Namespace) -> int:
         "artifact_dir": str(destination),
         "validation_passed": not errors,
         "failure_classifications": failure_classifications,
-        "validation_errors": [
-            {"code": error_code(message), "message": message}
-            for message in errors
-        ],
+        "validation_errors": [{"code": error_code(message), "message": message} for message in errors],
         "update": update,
     }
     write_json(report, args.output)

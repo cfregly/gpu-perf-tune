@@ -13,8 +13,6 @@ import argparse
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-from tools.shared.jsonutil import load_json
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for
@@ -36,6 +34,7 @@ from tools.ai_tuning.helpers import (
 from tools.ai_tuning.safety import (
     REPORT_SCHEMA_VERSION,
 )
+from tools.shared.jsonutil import load_json
 
 
 def command_report(args: argparse.Namespace) -> int:
@@ -46,15 +45,9 @@ def command_report(args: argparse.Namespace) -> int:
     validator_args = argparse.Namespace(**vars(args))
     validator_args.min_runs = required_runs
     validation_errors = run_validator(validator_args)
-    raw_summaries = [
-        summarize_raw_dir(Path(raw_dir).resolve(), args.raw_benchmark)
-        for raw_dir in args.raw_results_dir
-    ]
+    raw_summaries = [summarize_raw_dir(Path(raw_dir).resolve(), args.raw_benchmark) for raw_dir in args.raw_results_dir]
     successful_runs = sum(
-        1
-        for raw in raw_summaries
-        for run in raw["runs"]
-        if run.get("status") == "success" and not run.get("errors")
+        1 for raw in raw_summaries for run in raw["runs"] if run.get("status") == "success" and not run.get("errors")
     )
     quality_target = effective_quality_target(target, selected_objective)
     report = {
@@ -73,8 +66,7 @@ def command_report(args: argparse.Namespace) -> int:
             "passed": not validation_errors,
             "error_count": len(validation_errors),
             "errors": [
-                {"code": error_code(message), "message": message}
-                for message in validation_errors[: args.error_limit]
+                {"code": error_code(message), "message": message} for message in validation_errors[: args.error_limit]
             ],
             "truncated": len(validation_errors) > args.error_limit,
         },
@@ -95,9 +87,7 @@ def command_report(args: argparse.Namespace) -> int:
             validation_errors,
         ),
         "raw_results": raw_summaries,
-        "gb300_fabric": summarize_optional_dirs(
-            args.gb300_fabric_dir, ["evidence.json", "run-context.json"]
-        ),
+        "gb300_fabric": summarize_optional_dirs(args.gb300_fabric_dir, ["evidence.json", "run-context.json"]),
         "gb300_node_selection": summarize_optional_dirs(
             args.gb300_node_selection_dir, ["selector-config.json", "node-scores.json"]
         ),

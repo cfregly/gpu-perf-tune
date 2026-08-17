@@ -27,14 +27,15 @@ Env (perflake-s3-creds supplies the creds):
 Usage:
   stage-model-parallel.py s3://perf-lake/saved_experiments/cluster-pvcs/glm51-cache/target /models/glm51
 """
+
 import os
-import sys
-import time
 import socket
+import sys
 import threading
-from urllib.parse import urlparse
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from urllib.parse import urlparse
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -102,13 +103,9 @@ def _download_path(destination_root: Path, prefix: str, object_key: str) -> Path
     key_prefix = f"{prefix}/"
     if not object_key.startswith(key_prefix):
         raise RuntimeError(f"object key is outside requested prefix: {object_key!r}")
-    relative_key = object_key[len(key_prefix):]
+    relative_key = object_key[len(key_prefix) :]
     parts = relative_key.split("/")
-    if (
-        not relative_key
-        or "\\" in relative_key
-        or any(part in {"", ".", ".."} for part in parts)
-    ):
+    if not relative_key or "\\" in relative_key or any(part in {"", ".", ".."} for part in parts):
         raise RuntimeError(f"unsafe object key below requested prefix: {object_key!r}")
     output = destination_root.joinpath(*parts).resolve()
     if not output.is_relative_to(destination_root):
@@ -118,8 +115,11 @@ def _download_path(destination_root: Path, prefix: str, object_key: str) -> Path
 
 def make_client(endpoint: str):
     return boto3.client(
-        "s3", endpoint_url=endpoint, aws_access_key_id=AK,
-        aws_secret_access_key=SK, region_name=REGION,
+        "s3",
+        endpoint_url=endpoint,
+        aws_access_key_id=AK,
+        aws_secret_access_key=SK,
+        region_name=REGION,
         config=Config(
             s3={"addressing_style": "virtual"},  # some providers reject path-style on ListObjectsV2
             retries={"max_attempts": 5, "mode": "adaptive"},
@@ -159,16 +159,14 @@ def main():
             output = _download_path(destination_root, prefix, key)
             previous_key = output_keys.get(output)
             if previous_key is not None:
-                raise RuntimeError(
-                    f"object keys map to the same destination: {previous_key!r} and {key!r}"
-                )
+                raise RuntimeError(f"object keys map to the same destination: {previous_key!r} and {key!r}")
             output_keys[output] = key
             keys.append((key, size, output))
             total += size
     if not keys:
         raise SystemExit(f"FATAL: no objects under s3://{bucket}/{prefix}/")
 
-    print(f"[stage] {len(keys)} objects, {total/1e9:.1f} GB  ->  {destination_root}", flush=True)
+    print(f"[stage] {len(keys)} objects, {total / 1e9:.1f} GB  ->  {destination_root}", flush=True)
     print(f"[stage] shards={SHARD_CONCURRENCY} multipart={MULTIPART_CONCURRENCY}x{CHUNK_MB}MB", flush=True)
 
     t0 = time.time()
@@ -189,8 +187,11 @@ def main():
             done["n"] += 1
             done["bytes"] += size
             el = max(time.time() - t0, 1e-6)
-            print(f"[stage] {done['n']}/{len(keys)} {rel} ({size/1e9:.2f}GB) | "
-                  f"{done['bytes']/1e9:.1f}/{total/1e9:.1f}GB  {done['bytes']/1e6/el:.0f} MB/s agg", flush=True)
+            print(
+                f"[stage] {done['n']}/{len(keys)} {rel} ({size / 1e9:.2f}GB) | "
+                f"{done['bytes'] / 1e9:.1f}/{total / 1e9:.1f}GB  {done['bytes'] / 1e6 / el:.0f} MB/s agg",
+                flush=True,
+            )
 
     with ThreadPoolExecutor(max_workers=SHARD_CONCURRENCY) as ex:
         futs = [ex.submit(fetch, key, size, output) for key, size, output in keys]
@@ -199,8 +200,8 @@ def main():
 
     el = max(time.time() - t0, 1e-6)
     print(
-        f"[stage] DONE {total/1e9:.1f} GB in {el:.0f}s = "
-        f"{total/1e6/el:.0f} MB/s aggregate  ->  {destination_root}",
+        f"[stage] DONE {total / 1e9:.1f} GB in {el:.0f}s = "
+        f"{total / 1e6 / el:.0f} MB/s aggregate  ->  {destination_root}",
         flush=True,
     )
 

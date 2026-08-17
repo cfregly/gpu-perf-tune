@@ -23,6 +23,7 @@ and then double-streams (~16min). boto3 parallel-multipart (~0.5 GB/s) is domina
 s3fs FUSE was RETIRED 2026-06-09 (~50min single-stream, ~4x slower than hf-pull): the
 S3-only + no-runai-image case now returns `none` instead of the slow s3fs fallback.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,18 +63,26 @@ def resolve(
     """Encode the loader decision tree. Inputs are booleans knowable from the tier's serve
     config (mtp) + cluster/image facts (the other three)."""
     gates = [
-        Gate("mtp", "info",
-             "tier uses an MTP / in-checkpoint spec-decode drafter" if mtp
-             else "no in-checkpoint spec-decode drafter"),
-        Gate("hf_egress", "pass" if hf_egress_ok else "fail",
-             "HuggingFace egress available at (re)start" if hf_egress_ok
-             else "no HuggingFace egress (air-gap / policy)"),
-        Gate("runai_image", "pass" if image_has_runai else "fail",
-             "serve image carries runai_model_streamer" if image_has_runai
-             else "serve image lacks runai_model_streamer"),
-        Gate("s3", "pass" if s3_available else "fail",
-             "S3 S3 mirror + creds available" if s3_available
-             else "no S3 S3 mirror"),
+        Gate(
+            "mtp",
+            "info",
+            "tier uses an MTP / in-checkpoint spec-decode drafter" if mtp else "no in-checkpoint spec-decode drafter",
+        ),
+        Gate(
+            "hf_egress",
+            "pass" if hf_egress_ok else "fail",
+            "HuggingFace egress available at (re)start" if hf_egress_ok else "no HuggingFace egress (air-gap / policy)",
+        ),
+        Gate(
+            "runai_image",
+            "pass" if image_has_runai else "fail",
+            "serve image carries runai_model_streamer" if image_has_runai else "serve image lacks runai_model_streamer",
+        ),
+        Gate(
+            "s3",
+            "pass" if s3_available else "fail",
+            "S3 S3 mirror + creds available" if s3_available else "no S3 S3 mirror",
+        ),
     ]
     reasons: list[str] = []
     rec, tier, needs_patch = "none", "none", False
@@ -84,12 +93,14 @@ def resolve(
             reasons.append(
                 "non-MTP tier: RunAI streamer streams the S3 byte-identical weights to GPU "
                 "(~10min, no HF dependency, no 700Gi emptyDir, no privileged FUSE) -- the clean win "
-                "over hf-pull.")
+                "over hf-pull."
+            )
         elif hf_egress_ok:
             rec, tier = "hf-pull", "ok"
             reasons.append(
                 "non-MTP but RunAI is unavailable (no runai-capable image and/or no S3 mirror) "
-                "-> hf-pull (~12-13min via xet; needs HF egress + a 700Gi emptyDir).")
+                "-> hf-pull (~12-13min via xet; needs HF egress + a 700Gi emptyDir)."
+            )
         # (s3fs FUSE fallback retired 2026-06-09: S3-only + no runai image now -> none)
     else:  # MTP tier
         if hf_egress_ok:
@@ -97,19 +108,22 @@ def resolve(
             reasons.append(
                 "MTP tier: hf-pull is MTP-native (~12-13min). RunAI needs the drafter patch AND "
                 "double-streams the checkpoint (~16min), so hf-pull is preferred when HF egress "
-                "is available.")
+                "is available."
+            )
         elif image_has_runai and s3_available:
             rec, tier, needs_patch = "runai", "tradeoff", True
             reasons.append(
                 "MTP + no HF egress -> RunAI streamer + the MTP-drafter patch (S3, no HF "
                 "dependency) but ~16min due to the drafter double-stream. Tradeoff: "
-                "provenance/air-gap over cold-start speed.")
+                "provenance/air-gap over cold-start speed."
+            )
         # (s3fs FUSE fallback retired 2026-06-09: S3-only + no runai image now -> none)
 
     if rec == "none":
         reasons.append(
             "No viable loader for these constraints: need at least HF egress, or a S3 mirror "
-            "plus a S3-capable loader. Provide --hf-egress yes, or --s3 yes (+ a runai image).")
+            "plus a S3-capable loader. Provide --hf-egress yes, or --s3 yes (+ a runai image)."
+        )
 
     return LoaderResult(rec, LOADER_FRAGMENT.get(rec, ""), needs_patch, tier, gates, reasons)
 
@@ -127,8 +141,8 @@ def render_md(r: LoaderResult, mtp: bool) -> str:
     else:
         patch = " + MTP-drafter patch" if r.needs_mtp_patch else ""
         lines.append(
-            f"**RECOMMENDED LOADER: `{r.recommended}`{patch}  [{r.tier}]**  "
-            f"(deploy fragment: `{r.fragment_key}`)")
+            f"**RECOMMENDED LOADER: `{r.recommended}`{patch}  [{r.tier}]**  (deploy fragment: `{r.fragment_key}`)"
+        )
     lines += ["", "## Inputs / gates"]
     for g in r.gates:
         mark = {"pass": "[pass]", "fail": "[fail]", "info": "[info]"}[g.status]
@@ -137,9 +151,12 @@ def render_md(r: LoaderResult, mtp: bool) -> str:
     for x in r.reasons:
         lines.append(f"- {x}")
     if r.needs_mtp_patch:
-        lines += ["", "## Note",
-                  "- The runai+MTP path requires the speculative.py drafter patch "
-                  "(the runai-mtp-drafter speculative.py patch)."]
+        lines += [
+            "",
+            "## Note",
+            "- The runai+MTP path requires the speculative.py drafter patch "
+            "(the runai-mtp-drafter speculative.py patch).",
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -148,14 +165,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--mtp", dest="mtp", action="store_true", help="tier uses an MTP/spec-decode drafter")
     p.add_argument("--no-mtp", dest="mtp", action="store_false")
     p.set_defaults(mtp=None)
-    p.add_argument("--serve-args", default="",
-                   help="vLLM serve args; auto-detects MTP when --mtp/--no-mtp not given")
+    p.add_argument("--serve-args", default="", help="vLLM serve args; auto-detects MTP when --mtp/--no-mtp not given")
     p.add_argument("--hf-egress", choices=["yes", "no"], default="yes")
     p.add_argument("--image-has-runai", choices=["yes", "no"], default="yes")
     p.add_argument("--s3", choices=["yes", "no"], default="yes")
     p.add_argument("--emit", default="", help="directory to write loader_advisor.json + LOADER.md")
-    p.add_argument("--print-fragment", action="store_true",
-                   help="print only the fragment_key (for the scaffolder) and exit")
+    p.add_argument(
+        "--print-fragment", action="store_true", help="print only the fragment_key (for the scaffolder) and exit"
+    )
     args = p.parse_args(argv)
 
     mtp = args.mtp if args.mtp is not None else mtp_from_serve_args(args.serve_args)

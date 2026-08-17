@@ -63,17 +63,22 @@ def _fmt(v: Any, nd: int = 1) -> str:
         return str(v)
 
 
-def _draw_roofline(axR, payload: dict[str, Any], ceilings: dict[str, Any] | None,
-                   hardware_key: str | None) -> None:
+def _draw_roofline(axR, payload: dict[str, Any], ceilings: dict[str, Any] | None, hardware_key: str | None) -> None:
     overlay = payload.get("roofline_overlay") or {}
     if not overlay or not ceilings or not hardware_key:
         axR.axis("off")
-        axR.text(0.5, 0.5,
-                 "Roofline overlay unavailable\n(no roofline_sweep.json for the "
-                 "selected variants,\nor no sol-ceilings.yaml for this hardware).\n"
-                 "Capture and import a roofline bundle for each variant.",
-                 ha="center", va="center", fontsize=8, color="#a33",
-                 transform=axR.transAxes)
+        axR.text(
+            0.5,
+            0.5,
+            "Roofline overlay unavailable\n(no roofline_sweep.json for the "
+            "selected variants,\nor no sol-ceilings.yaml for this hardware).\n"
+            "Capture and import a roofline bundle for each variant.",
+            ha="center",
+            va="center",
+            fontsize=8,
+            color="#a33",
+            transform=axR.transAxes,
+        )
         return
 
     hw = ceilings.get(hardware_key, {})
@@ -83,8 +88,13 @@ def _draw_roofline(axR, payload: dict[str, Any], ceilings: dict[str, Any] | None
     ridge = (comp_pf * 1e15) / (hbm_tb * 1e12)
 
     ai = [10 ** (i / 8) for i in range(0, 33)]
-    axR.plot(ai, [min(a * hbm_tb, comp_ceil) for a in ai], "k-", lw=2,
-             label=f"roofline ({comp_pf:.0f} PFLOPS / {hbm_tb:.0f} TB/s per GPU)")
+    axR.plot(
+        ai,
+        [min(a * hbm_tb, comp_ceil) for a in ai],
+        "k-",
+        lw=2,
+        label=f"roofline ({comp_pf:.0f} PFLOPS / {hbm_tb:.0f} TB/s per GPU)",
+    )
     axR.axvline(ridge, color="#bbb", ls=":", lw=1)
 
     rec = payload.get("recommended_cell")
@@ -101,9 +111,16 @@ def _draw_roofline(axR, payload: dict[str, Any], ceilings: dict[str, Any] | None
             dy.append(t * comp_ceil)
             dx.append((t / d) * ridge)
         if dx:
-            axR.scatter(dx, dy, s=90 if is_rec else 55, marker=mk,
-                        edgecolor="k", linewidth=1.1 if is_rec else 0.4,
-                        zorder=6 if is_rec else 5, label=f"decode {lab}")
+            axR.scatter(
+                dx,
+                dy,
+                s=90 if is_rec else 55,
+                marker=mk,
+                edgecolor="k",
+                linewidth=1.1 if is_rec else 0.4,
+                zorder=6 if is_rec else 5,
+                label=f"decode {lab}",
+            )
         px, py = [], []
         for pt in p.get("prefill", []):
             t, d = pt.get("tensor_active"), pt.get("dram_active")
@@ -112,22 +129,23 @@ def _draw_roofline(axR, payload: dict[str, Any], ceilings: dict[str, Any] | None
             py.append(t * comp_ceil)
             px.append((t / d) * ridge)
         if px:
-            axR.scatter(px, py, s=95 if is_rec else 60, marker=mk, facecolor="none",
-                        edgecolor="#d33", linewidth=1.2, zorder=6)
+            axR.scatter(
+                px, py, s=95 if is_rec else 60, marker=mk, facecolor="none", edgecolor="#d33", linewidth=1.2, zorder=6
+            )
 
     axR.set_xscale("log")
     axR.set_yscale("log")
     axR.set_xlabel("arithmetic intensity (FLOP/byte)", fontsize=8)
     axR.set_ylabel("achieved compute per GPU (TFLOP/s)", fontsize=8)
-    axR.set_title("Roofline overlay: baseline + all selected variants (per-GPU, DCGM)",
-                  fontsize=9, loc="left")
+    axR.set_title("Roofline overlay: baseline + all selected variants (per-GPU, DCGM)", fontsize=9, loc="left")
     axR.grid(True, which="both", ls=":", alpha=0.35)
     axR.legend(fontsize=6, loc="lower right")
     axR.set_ylim(comp_ceil / 1e3, comp_ceil * 2)
 
 
-def render_page(fig, payload: dict[str, Any], ceilings: dict[str, Any] | None = None,
-                hardware_key: str | None = None) -> None:
+def render_page(
+    fig, payload: dict[str, Any], ceilings: dict[str, Any] | None = None, hardware_key: str | None = None
+) -> None:
     """Draw the champion-selection page onto ``fig`` from a champion_select.json
     ``payload``. ``ceilings`` + ``hardware_key`` (optional) enable the roofline
     overlay panel; absent, the page renders the banner + table only."""
@@ -151,51 +169,77 @@ def render_page(fig, payload: dict[str, Any], ceilings: dict[str, Any] | None = 
 
     # ---- header / banner ----
     axHdr.axis("off")
-    axHdr.text(0.0, 0.92, "Production recommendation", fontsize=13, fontweight="bold",
-               va="top", transform=axHdr.transAxes)
-    banner_color = "#1a7a1a" if tier == "VERDICT" else "#b06a00"
-    axHdr.text(0.0, 0.60, f"RECOMMENDED: {rec}  ({eng})   [{tier}]",
-               fontsize=12, fontweight="bold", color=banner_color, va="top",
-               transform=axHdr.transAxes)
-    axHdr.text(0.0, 0.30,
-               f"focus={payload.get('focus','?')}  metric={metric_label}  "
-               f"c={payload.get('focus_c','?')}  hw={payload.get('hardware','?')} "
-               f"TP={payload.get('tensor_parallel','?')}  "
-               f"SLO={_fmt(payload.get('slo_ms'))} ms  baseline={payload.get('baseline_cell','?')}",
-               fontsize=8, color="#444", va="top", transform=axHdr.transAxes)
-    gates = payload.get("gates") or []
-    gate_str = "   ".join(
-        f"{g.get('name')}={g.get('status','?').upper()}" for g in gates
+    axHdr.text(
+        0.0, 0.92, "Production recommendation", fontsize=13, fontweight="bold", va="top", transform=axHdr.transAxes
     )
-    axHdr.text(0.0, 0.06, f"gates:  {gate_str}", fontsize=8, color="#333",
-               va="top", transform=axHdr.transAxes)
+    banner_color = "#1a7a1a" if tier == "VERDICT" else "#b06a00"
+    axHdr.text(
+        0.0,
+        0.60,
+        f"RECOMMENDED: {rec}  ({eng})   [{tier}]",
+        fontsize=12,
+        fontweight="bold",
+        color=banner_color,
+        va="top",
+        transform=axHdr.transAxes,
+    )
+    axHdr.text(
+        0.0,
+        0.30,
+        f"focus={payload.get('focus', '?')}  metric={metric_label}  "
+        f"c={payload.get('focus_c', '?')}  hw={payload.get('hardware', '?')} "
+        f"TP={payload.get('tensor_parallel', '?')}  "
+        f"SLO={_fmt(payload.get('slo_ms'))} ms  baseline={payload.get('baseline_cell', '?')}",
+        fontsize=8,
+        color="#444",
+        va="top",
+        transform=axHdr.transAxes,
+    )
+    gates = payload.get("gates") or []
+    gate_str = "   ".join(f"{g.get('name')}={g.get('status', '?').upper()}" for g in gates)
+    axHdr.text(0.0, 0.06, f"gates:  {gate_str}", fontsize=8, color="#333", va="top", transform=axHdr.transAxes)
 
     # ---- table: baseline + top-X ----
     axTbl.axis("off")
-    cols = ["variant", "engine", metric_label, "%win", "TPOT ms", "SLO",
-            "sol_rigor", "HBM%", "tensor%", "SM%", "roofline"]
+    cols = [
+        "variant",
+        "engine",
+        metric_label,
+        "%win",
+        "TPOT ms",
+        "SLO",
+        "sol_rigor",
+        "HBM%",
+        "tensor%",
+        "SM%",
+        "roofline",
+    ]
     cell_text: list[list[str]] = []
     row_colors: list[str] = []
     for v in payload.get("variants", []):
         sol = v.get("sol") or {}
         is_base = v.get("is_baseline")
         is_rec = v.get("cell_id") == payload.get("recommended_cell")
-        win = "--" if is_base else (
-            f"{v['pct_win_vs_baseline']:+.1f}%" if v.get("pct_win_vs_baseline") is not None else "n/a"
+        win = (
+            "--"
+            if is_base
+            else (f"{v['pct_win_vs_baseline']:+.1f}%" if v.get("pct_win_vs_baseline") is not None else "n/a")
         )
-        cell_text.append([
-            (v.get("cell_id", "?") + (" *" if is_rec else "")),
-            v.get("engine", "?"),
-            _fmt(v.get("focus_metric")),
-            win,
-            _fmt(v.get("tpot_median_ms")),
-            v.get("slo_verdict", "?"),
-            sol.get("sol_rigor", "none"),
-            _fmt(sol.get("hbm_pct_sol")),
-            _fmt(sol.get("tensor_pct_sol")),
-            _fmt(sol.get("sm_active_pct")),
-            "yes" if v.get("has_roofline") else "no",
-        ])
+        cell_text.append(
+            [
+                (v.get("cell_id", "?") + (" *" if is_rec else "")),
+                v.get("engine", "?"),
+                _fmt(v.get("focus_metric")),
+                win,
+                _fmt(v.get("tpot_median_ms")),
+                v.get("slo_verdict", "?"),
+                sol.get("sol_rigor", "none"),
+                _fmt(sol.get("hbm_pct_sol")),
+                _fmt(sol.get("tensor_pct_sol")),
+                _fmt(sol.get("sm_active_pct")),
+                "yes" if v.get("has_roofline") else "no",
+            ]
+        )
         row_colors.append("#d6f0d6" if is_rec else ("#eef3f8" if is_base else "#ffffff"))
 
     if cell_text:
@@ -218,6 +262,5 @@ def render_page(fig, payload: dict[str, Any], ceilings: dict[str, Any] | None = 
     note = _TIER_NOTE
     if reasons:
         note = "Not a VERDICT: " + "; ".join(reasons[:3]) + ".   " + note
-    fig.text(0.5, 0.012, note, ha="center", va="bottom", fontsize=6.5, color="#666",
-             wrap=True)
-    fig.suptitle(f"Champion selection -- {payload.get('campaign_id','')}", fontsize=12, y=0.985)
+    fig.text(0.5, 0.012, note, ha="center", va="bottom", fontsize=6.5, color="#666", wrap=True)
+    fig.suptitle(f"Champion selection -- {payload.get('campaign_id', '')}", fontsize=12, y=0.985)

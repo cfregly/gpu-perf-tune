@@ -15,7 +15,6 @@ from tools.perf_tune_report.kernel_profile import (
     capture_kernel_profile,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fake step-fn implementation for testing — records calls + returns canned data
 # ---------------------------------------------------------------------------
@@ -55,9 +54,7 @@ class _FakeSteps:
         self._maybe_fail("attach_sidecar")
         return {"cmd": f"FAKE kubectl debug {pod}", "sidecar_container": sidecar_container}
 
-    def wait_for_sidecar(
-        self, *, namespace: str, pod: str, sidecar_container: str
-    ) -> dict[str, Any]:
+    def wait_for_sidecar(self, *, namespace: str, pod: str, sidecar_container: str) -> dict[str, Any]:
         self.calls.append(("wait_for_sidecar", locals().copy()))
         self._maybe_fail("wait_for_sidecar")
         return {"cmd": "FAKE poll", "state": "running", "ready_after_s": 2}
@@ -341,6 +338,7 @@ def test_custom_nsys_args_passed_to_step(tmp_path: Path) -> None:
 def test_cli_kernel_profile_refuses_without_ack(tmp_path: Path, capsys) -> None:
     """Live invocation without ack flag returns FATAL (does not run kubectl)."""
     import argparse
+
     from tools.perf_tune_report.perf_tune_report_cli import cmd_kernel_profile
 
     ns = argparse.Namespace(

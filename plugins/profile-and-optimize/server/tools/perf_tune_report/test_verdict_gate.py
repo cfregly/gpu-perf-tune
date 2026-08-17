@@ -60,8 +60,12 @@ def test_verdict_problems_verdict_incomplete_lists_each_gap():
 
 def test_verdict_problems_latency_claim_requires_tpot_or_itl():
     v = VerdictSummary(
-        tier="verdict", trials=3, same_node=True, baseline_named=True,
-        latency_claim=True, decode_metric="throughput",
+        tier="verdict",
+        trials=3,
+        same_node=True,
+        baseline_named=True,
+        latency_claim=True,
+        decode_metric="throughput",
     )
     assert any("decode_metric in tpot|itl" in x for x in verdict_problems(v))
     v.decode_metric = "tpot"
@@ -70,8 +74,12 @@ def test_verdict_problems_latency_claim_requires_tpot_or_itl():
 
 def test_verdict_problems_which_kernel_requires_per_kernel_ref():
     v = VerdictSummary(
-        tier="verdict", trials=3, same_node=True, baseline_named=True,
-        which_kernel_claim=True, per_kernel_ref=False,
+        tier="verdict",
+        trials=3,
+        same_node=True,
+        baseline_named=True,
+        which_kernel_claim=True,
+        per_kernel_ref=False,
     )
     assert any("per_kernel_ref" in x for x in verdict_problems(v))
 
@@ -104,8 +112,13 @@ def test_publish_verdict_incomplete_strict_raises(tmp_path: Path):
 def test_publish_verdict_complete_passes(tmp_path: Path):
     cd = _stage_campaign(tmp_path)
     _write_verdict(
-        cd, tier="verdict", trials=3, same_node=True, baseline_named=True,
-        latency_claim=True, decode_metric="tpot",
+        cd,
+        tier="verdict",
+        trials=3,
+        same_node=True,
+        baseline_named=True,
+        latency_claim=True,
+        decode_metric="tpot",
     )
     publish(cd, cfg=_stub_cfg(), dry_run=True)  # must not raise
 
@@ -119,8 +132,13 @@ def test_publish_verdict_incomplete_allow_incomplete_lands_as_draft(tmp_path: Pa
 def test_campaign_row_records_verdict_tier(tmp_path: Path):
     cd = _stage_campaign(tmp_path)
     _write_verdict(
-        cd, tier="verdict", trials=3, same_node=True, baseline_named=True,
-        latency_claim=True, decode_metric="tpot",
+        cd,
+        tier="verdict",
+        trials=3,
+        same_node=True,
+        baseline_named=True,
+        latency_claim=True,
+        decode_metric="tpot",
     )
     table = build_campaign_row(cd, [_make_atlas_row()])
     assert table.column("verdict_tier")[0].as_py() == "verdict"

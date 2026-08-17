@@ -38,7 +38,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "plugins" / "profile-and-optimize" / "skills"
@@ -76,6 +75,7 @@ SERVER_REMAP = {
     "zymtrace": "user-zymtrace",
 }
 
+
 def optional_servers() -> set[str]:
     """Servers that frontmatter `allowed-tools` MAY reference even when they
     are NOT declared in `.mcp.json`.
@@ -110,11 +110,11 @@ def iter_skill_md_files() -> list[Path]:
     return sorted(SKILLS_DIR.glob("*/SKILL.md"))
 
 
-def remap_server(server: str) -> Optional[str]:
+def remap_server(server: str) -> str | None:
     return SERVER_REMAP.get(server)
 
 
-def list_profile_and_optimize_surface() -> Optional[set[str]]:
+def list_profile_and_optimize_surface() -> set[str] | None:
     """Use mcp_surface.py to enumerate the bundled profile_and_optimize MCP tool names."""
     surface_py = SERVER_DIR / "mcp_surface.py"
     if not surface_py.exists():
@@ -124,7 +124,10 @@ def list_profile_and_optimize_surface() -> Optional[set[str]]:
     try:
         out = subprocess.run(
             [py, str(surface_py), "list"],
-            capture_output=True, text=True, check=True, cwd=str(SERVER_DIR),
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=str(SERVER_DIR),
         ).stdout
     except subprocess.CalledProcessError:
         return None
@@ -144,14 +147,12 @@ def list_profile_and_optimize_surface() -> Optional[set[str]]:
     return names
 
 
-def load_descriptor(server: str, tool: str) -> Optional[dict]:
+def load_descriptor(server: str, tool: str) -> dict | None:
     remapped = remap_server(server)
     if remapped is None or not re.fullmatch(r"[A-Za-z0-9_]+", tool):
         return None
     root = os.path.realpath(os.fspath(MCP_CACHE))
-    desc_path_text = os.path.realpath(
-        os.path.join(root, remapped, "tools", f"{tool}.json")
-    )
+    desc_path_text = os.path.realpath(os.path.join(root, remapped, "tools", f"{tool}.json"))
     prefix = root if root.endswith(os.sep) else root + os.sep
     if not desc_path_text.startswith(prefix):
         return None
@@ -217,7 +218,7 @@ def parse_frontmatter(text: str) -> dict:
         return {}
     fm_text = text[4:end]
     fm: dict = {}
-    cur_key: Optional[str] = None
+    cur_key: str | None = None
     for line in fm_text.splitlines():
         if not line.strip():
             continue
@@ -234,7 +235,7 @@ def parse_frontmatter(text: str) -> dict:
     return fm
 
 
-def lint_skill(skill_md: Path, profile_and_optimize_surface: Optional[set[str]]) -> list[dict]:
+def lint_skill(skill_md: Path, profile_and_optimize_surface: set[str] | None) -> list[dict]:
     text = skill_md.read_text()
     fm = parse_frontmatter(text)
     body_start = text.find("\n---\n", 4)
@@ -261,11 +262,23 @@ def lint_skill(skill_md: Path, profile_and_optimize_surface: Optional[set[str]])
             continue
         if server == "profile_and_optimize":
             if profile_and_optimize_surface is not None and tool not in profile_and_optimize_surface:
-                findings.append({"severity": "RED", "skill": skill_name, "msg": f"frontmatter references mcp__profile_and_optimize__{tool}; tool not in bundled MCP surface (run `make mcp-surface` to inspect)"})
+                findings.append(
+                    {
+                        "severity": "RED",
+                        "skill": skill_name,
+                        "msg": f"frontmatter references mcp__profile_and_optimize__{tool}; tool not in bundled MCP surface (run `make mcp-surface` to inspect)",
+                    }
+                )
             continue
         desc = load_descriptor(server, tool)
         if desc is None:
-            findings.append({"severity": "RED", "skill": skill_name, "msg": f"frontmatter references mcp__{server}__{tool}; descriptor JSON not found in {MCP_CACHE / (remap_server(server) or server) / 'tools' / (tool + '.json')}"})
+            findings.append(
+                {
+                    "severity": "RED",
+                    "skill": skill_name,
+                    "msg": f"frontmatter references mcp__{server}__{tool}; descriptor JSON not found in {MCP_CACHE / (remap_server(server) or server) / 'tools' / (tool + '.json')}",
+                }
+            )
 
     # 2. Validate body `with:` arg names against the descriptor schema.
     for server, tool, args, lineno in extract_with_blocks(body):
@@ -283,12 +296,14 @@ def lint_skill(skill_md: Path, profile_and_optimize_surface: Optional[set[str]])
         valid_args = set(props.keys())
         for arg in args:
             if arg not in valid_args:
-                findings.append({
-                    "severity": "RED",
-                    "skill": skill_name,
-                    "line": lineno,
-                    "msg": f"body line {lineno}: mcp__{server}__{tool} with: '{arg}'; valid args are {sorted(valid_args)}",
-                })
+                findings.append(
+                    {
+                        "severity": "RED",
+                        "skill": skill_name,
+                        "line": lineno,
+                        "msg": f"body line {lineno}: mcp__{server}__{tool} with: '{arg}'; valid args are {sorted(valid_args)}",
+                    }
+                )
     return findings
 
 
@@ -298,14 +313,20 @@ def main() -> int:
         return 2
     if not MCP_CACHE.exists():
         print(f"FATAL: MCP descriptor folder not found at {MCP_CACHE}", file=sys.stderr)
-        print(f"       Bundled fallback expected at {BUNDLED_DESCRIPTORS} (see mcp-descriptors/README.md).", file=sys.stderr)
+        print(
+            f"       Bundled fallback expected at {BUNDLED_DESCRIPTORS} (see mcp-descriptors/README.md).",
+            file=sys.stderr,
+        )
         return 2
     if MCP_CACHE == BUNDLED_DESCRIPTORS:
         print(f"[info] using bundled MCP descriptors at {MCP_CACHE} (no Cursor cache found)")
 
     profile_and_optimize_surface = list_profile_and_optimize_surface()
     if profile_and_optimize_surface is None:
-        print(f"WARN: could not load bundled profile_and_optimize MCP surface (run `bash {SERVER_DIR}/install.sh --with-dev`)", file=sys.stderr)
+        print(
+            f"WARN: could not load bundled profile_and_optimize MCP surface (run `bash {SERVER_DIR}/install.sh --with-dev`)",
+            file=sys.stderr,
+        )
 
     red_total = 0
     warn_total = 0

@@ -10,12 +10,14 @@ SERVER_DIR := $(PLUGIN_DIR)/server
 SCRIPTS_DIR := scripts
 SERVER_PY := $(SERVER_DIR)/.venv/bin/python
 PYTHON ?= $(if $(wildcard $(SERVER_PY)),$(SERVER_PY),python3)
+RUFF ?= $(if $(wildcard $(SERVER_DIR)/.venv/bin/ruff),$(SERVER_DIR)/.venv/bin/ruff,ruff)
+CURRENT_VERSION := $(strip $(shell cat VERSION 2>/dev/null))
 
 # Default VERSION for `make release-notes`. Override on the command line:
-#   make release-notes VERSION=v0.3.1
+#   make release-notes VERSION=v$(CURRENT_VERSION)
 VERSION ?=
 
-.PHONY: help demo check validate validate-agent-skills validate-claude-plugin validate-claude-plugin-uncached validate-uncached smoke-test smoke-mcp-runtime check-doc-links workload-proof-check lint-skill-mcp-args lint-skill-counts lint-tool-counts lint-versions check-version-transition test-release-gates pytest pytest-mcp pytest-xdist all freshness bootstrap print-mcp-snippet doctor install-mcp install-skills install-into-codex install-into-cursor refresh-symlinks release release-notes mcp-surface clean-pycache
+.PHONY: help demo check quality lint typecheck lint-shell validate validate-agent-skills validate-claude-plugin validate-claude-plugin-uncached validate-uncached smoke-test smoke-mcp-runtime check-doc-links workload-proof-check lint-skill-mcp-args lint-skill-counts lint-tool-counts lint-versions check-version-transition test-release-gates pytest pytest-mcp pytest-xdist all freshness bootstrap print-mcp-snippet doctor install-mcp install-skills install-into-codex install-into-cursor refresh-symlinks release release-notes mcp-surface clean-pycache
 
 help:
 	@printf 'profile-and-optimize operator commands\n\n'
@@ -23,6 +25,10 @@ help:
 	@printf '  make demo                     List all skills and a sample of the MCP surface. No GPU required\n'
 	@printf '  make check                    Run the public static gates, including Agent Skills and all Markdown links\n'
 	@printf '  make all                      Run the full client-neutral local test suite. Use `make -j4 all` for parallel execution\n'
+	@printf '  make quality                  Run Ruff, Pyright, and ShellCheck\n'
+	@printf '  make lint                     Check Python lint and formatting with Ruff\n'
+	@printf '  make typecheck                Type-check production Python with Pyright\n'
+	@printf '  make lint-shell               Check every tracked shell script with ShellCheck\n'
 	@printf '  make validate-agent-skills    Validate every skill with the official Agent Skills reference validator\n'
 	@printf '  make validate-claude-plugin   Run the optional Claude Code package validator\n'
 	@printf '  make smoke-test               Validate skills, canonical counts, versions, and MCP argument references\n'
@@ -50,11 +56,11 @@ help:
 	@printf '  make bootstrap               Set up the best-effort Cursor adapter from a clone\n'
 	@printf '  make print-mcp-snippet       Print a Cursor MCP config block without writing it\n'
 	@printf '  make doctor                  Diagnose a Cursor MCP entry. Read-only unless FIX=1\n'
-	@printf '  make release-notes VERSION=v0.3.1   Extract the CHANGELOG section for v0.3.1\n'
+	@printf '  make release-notes VERSION=v%s   Extract the CHANGELOG section for the current release\n' '$(CURRENT_VERSION)'
 	@printf '  make clean-pycache           Remove __pycache__ + *.pyc under server/\n'
 	@printf '\n'
 	@printf 'Variables (override on command line):\n'
-	@printf '  VERSION                      Version tag for release-notes (e.g. v0.3.1)\n'
+	@printf '  VERSION                      Version tag for release-notes (e.g. v%s)\n' '$(CURRENT_VERSION)'
 
 validate: validate-agent-skills
 
@@ -85,15 +91,40 @@ smoke-test: validate-agent-skills
 	@$(PYTHON) $(SCRIPTS_DIR)/lint-tool-counts.py
 	@echo '--- version-header lint ---'
 	@$(PYTHON) $(SCRIPTS_DIR)/lint-versions.py
+	@$(PYTHON) $(SCRIPTS_DIR)/extract-release-notes.py "v$(CURRENT_VERSION)" CHANGELOG.md >/dev/null
 	@echo '--- skill MCP argument lint ---'
 	@$(PYTHON) $(SCRIPTS_DIR)/lint-skill-mcp-args.py
 
-check: smoke-test
+check: smoke-test lint lint-shell
 	@$(PYTHON) scripts/check-version-transition.py
 	@$(PYTHON) scripts/test_release_gates.py
 	@$(PYTHON) scripts/check_docs.py
 	@$(PYTHON) scripts/check_workload_proof_packets.py --self-test --require-workflow-handoff
 	@bash scripts/check-doc-links.sh --no-network --quiet
+
+quality: lint typecheck lint-shell
+	@echo '[ok] Python and shell quality checks passed'
+
+lint:
+	@if ! command -v "$(RUFF)" >/dev/null 2>&1 && [ ! -x "$(RUFF)" ]; then \
+		echo '[FAIL] Ruff is not installed. Run: bash $(SERVER_DIR)/install.sh --with-dev'; \
+		exit 2; \
+	fi
+	@$(RUFF) check --config $(SERVER_DIR)/pyproject.toml $(PLUGIN_DIR) $(SCRIPTS_DIR)
+	@$(RUFF) format --check --config $(SERVER_DIR)/pyproject.toml $(PLUGIN_DIR) $(SCRIPTS_DIR)
+
+typecheck:
+	@if [ -x "$(SERVER_DIR)/.venv/bin/pyright" ]; then \
+		$(SERVER_DIR)/.venv/bin/pyright --project pyrightconfig.json; \
+	elif command -v pyright >/dev/null 2>&1; then \
+		pyright --project pyrightconfig.json; \
+	else \
+		echo '[FAIL] Pyright is not installed. Run: bash $(SERVER_DIR)/install.sh --with-dev'; \
+		exit 2; \
+	fi
+
+lint-shell:
+	@bash $(SCRIPTS_DIR)/check-shell.sh
 
 demo:
 	@printf '== gpu-perf-tune: 32 Agent Skills ==\n'
@@ -186,7 +217,7 @@ freshness:
 # These targets are independent and can run in parallel with `make -j4 all`.
 # The static check includes offline Markdown links. Scheduled CI checks live
 # external URLs so local validation does not depend on network availability.
-all: check smoke-mcp-runtime pytest
+all: check typecheck smoke-mcp-runtime pytest
 	@echo '[ok] all client-neutral checks passed'
 
 lint-skill-mcp-args:

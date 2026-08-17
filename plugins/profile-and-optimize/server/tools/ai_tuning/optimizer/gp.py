@@ -29,7 +29,7 @@ def _matrix_zeros(n: int) -> list[list[float]]:
 
 def _rbf(a: list[float], b: list[float], length_scale: float, signal_variance: float) -> float:
     sq = 0.0
-    for ai, bi in zip(a, b):
+    for ai, bi in zip(a, b, strict=True):
         diff = ai - bi
         sq += diff * diff
     return signal_variance * math.exp(-sq / max(2.0 * length_scale * length_scale, 1e-12))
@@ -113,7 +113,7 @@ def _log_marginal_likelihood(
         diag = max(L[index][index], 1e-12)
         log_det += math.log(diag)
     log_det *= 2.0
-    data_fit = sum(t * a for t, a in zip(targets, alpha))
+    data_fit = sum(t * a for t, a in zip(targets, alpha, strict=True))
     return -0.5 * data_fit - 0.5 * log_det - 0.5 * n * math.log(2.0 * math.pi)
 
 
@@ -180,10 +180,7 @@ def predict(model: GpModel, query: list[float]) -> tuple[float, float]:
     expected_dim = len(model.vectors[0])
     if len(query) != expected_dim:
         raise ValueError(f"query dimension mismatch: expected {expected_dim}, got {len(query)}")
-    k_star = [
-        _rbf(train, query, model.length_scale, model.signal_variance)
-        for train in model.vectors
-    ]
+    k_star = [_rbf(train, query, model.length_scale, model.signal_variance) for train in model.vectors]
     mean = sum(k_star[i] * model.alpha[i] for i in range(len(k_star)))
     v = _solve_lower(model.L, k_star)
     k_self = _rbf(query, query, model.length_scale, model.signal_variance) + JITTER
@@ -292,4 +289,4 @@ def propose(
     return decoded, state
 
 
-__all__ = ["GpModel", "fit", "predict", "expected_improvement", "propose"]
+__all__ = ["GpModel", "expected_improvement", "fit", "predict", "propose"]

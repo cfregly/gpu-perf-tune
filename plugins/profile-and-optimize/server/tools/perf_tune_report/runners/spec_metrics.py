@@ -35,9 +35,7 @@ SCRAPE_PREFIXES = (
     "vllm:iteration_tokens",
 )
 
-_METRIC_RE = re.compile(
-    r"^(?P<name>vllm:spec_decode_[^\s{]+)(?:\{(?P<labels>[^}]*)\})?\s+(?P<value>[-+0-9.eE]+)$"
-)
+_METRIC_RE = re.compile(r"^(?P<name>vllm:spec_decode_[^\s{]+)(?:\{(?P<labels>[^}]*)\})?\s+(?P<value>[-+0-9.eE]+)$")
 _LABEL_RE = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="([^"]*)"')
 
 SPEC_METRICS_DIRNAME = "spec_metrics"
@@ -91,9 +89,7 @@ def parse_spec_totals(text: str) -> dict:
             labels = dict(_LABEL_RE.findall(match.group("labels") or ""))
             pos = labels.get("position")
             if pos is not None:
-                accepted_per_pos[int(pos)] = (
-                    accepted_per_pos.get(int(pos), 0.0) + value
-                )
+                accepted_per_pos[int(pos)] = accepted_per_pos.get(int(pos), 0.0) + value
     return {**totals, "accepted_per_pos": accepted_per_pos}
 
 
@@ -109,11 +105,7 @@ def compute_spec_window(pre_text: str, post_text: str) -> dict | None:
         return None
     positions = sorted(set(pre["accepted_per_pos"]) | set(post["accepted_per_pos"]))
     per_pos_accept_rate = {
-        str(pos): (
-            post["accepted_per_pos"].get(pos, 0.0)
-            - pre["accepted_per_pos"].get(pos, 0.0)
-        )
-        / drafts
+        str(pos): (post["accepted_per_pos"].get(pos, 0.0) - pre["accepted_per_pos"].get(pos, 0.0)) / drafts
         for pos in positions
     }
     return {
@@ -126,9 +118,7 @@ def compute_spec_window(pre_text: str, post_text: str) -> dict | None:
     }
 
 
-def attach_windows_to_rows(
-    rows: list[AtlasCell], windows: dict[int, dict]
-) -> list[AtlasCell]:
+def attach_windows_to_rows(rows: list[AtlasCell], windows: dict[int, dict]) -> list[AtlasCell]:
     """Set ``acceptance_length`` / ``spec_accept_rate`` on each row from its
     concurrency's window; raw counter deltas go to ``extra`` for provenance.
     Rows whose concurrency has no window pass through unchanged."""
@@ -179,18 +169,13 @@ class SpecMetricsCapture:
         returns False (and logs) on failure instead of raising."""
         self.dir.mkdir(parents=True, exist_ok=True)
         try:
-            proc = self._runner(
-                self._command, capture_output=True, text=True, check=False
-            )
+            proc = self._runner(self._command, capture_output=True, text=True, check=False)
         except OSError as exc:
             self._log.append(f"{tag} FAILED exec: {exc}")
             return False
         if proc.returncode != 0 or not (proc.stdout or "").strip():
             err = (proc.stderr or "").strip().splitlines()
-            self._log.append(
-                f"{tag} FAILED exit={proc.returncode}"
-                + (f" stderr={err[-1]}" if err else "")
-            )
+            self._log.append(f"{tag} FAILED exit={proc.returncode}" + (f" stderr={err[-1]}" if err else ""))
             return False
         (self.dir / f"metrics-{tag}.prom").write_text(proc.stdout)
         self._texts[tag] = proc.stdout

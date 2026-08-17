@@ -29,13 +29,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from tools.perf_tune_report.helpers import resolve_cell_dir, safe_path_segment
-
 from tools.perf_tune_report import roofline_math
+from tools.perf_tune_report.helpers import resolve_cell_dir, safe_path_segment
 from tools.perf_tune_report.schema import (
     BACKEND_VLLM_SWEEP,
     STATUS_FULL,
@@ -52,7 +51,7 @@ MODEL_CONFIG_FILE = "model_config.json"
 
 def _resolve_shape(
     bundle: Path, identity: dict[str, Any], overrides: dict[str, Any]
-) -> "roofline_math.ModelShape | None":
+) -> roofline_math.ModelShape | None:
     """Resolve the analytical ModelShape used to embed FLOP/byte + byte-grounded
     fields. Priority: explicit --model-config path > a model_config.json captured
     in the bundle > the built-in registry (by served model name)."""
@@ -123,7 +122,7 @@ def _dcgm_util(cell: dict[str, Any]) -> dict[str, float | int | None]:
 def _point_analytics(
     cell: dict[str, Any],
     phase: str,
-    shape: "roofline_math.ModelShape | None",
+    shape: roofline_math.ModelShape | None,
     quant: str,
     tp: int,
     kv_dtype: str,
@@ -136,28 +135,23 @@ def _point_analytics(
     delivered HBM bytes/s / GPU. The %-of-peak is computed downstream where the
     sol-ceilings.yaml peaks are loaded (renderer + lake_writer)."""
     if shape is None:
-        return {"arithmetic_intensity": None, "achieved_tflops_per_gpu": None,
-                "hbm_delivered_Bps_per_gpu": None}
+        return {"arithmetic_intensity": None, "achieved_tflops_per_gpu": None, "hbm_delivered_Bps_per_gpu": None}
     b = cell.get("bench", {}) or {}
     if phase == "decode":
         c = cell.get("c") or 1
         rate = b.get("output_throughput")
         if not rate:
-            return {"arithmetic_intensity": None, "achieved_tflops_per_gpu": None,
-                    "hbm_delivered_Bps_per_gpu": None}
+            return {"arithmetic_intensity": None, "achieved_tflops_per_gpu": None, "hbm_delivered_Bps_per_gpu": None}
         ctx = int((cell.get("isl") or 256) + (cell.get("osl") or 512) // 2)
         ai = shape.decode_arithmetic_intensity(c, ctx, quant, kv_dtype)
-        union = (min(shape.n_routed_experts, shape.n_experts_per_tok * c)
-                 if shape.is_moe else 0)
-        bytes_per_tok = shape.active_weight_bytes(union, quant) / c \
-            + shape.kv_bytes_per_token(ctx, kv_dtype)
+        union = min(shape.n_routed_experts, shape.n_experts_per_tok * c) if shape.is_moe else 0
+        bytes_per_tok = shape.active_weight_bytes(union, quant) / c + shape.kv_bytes_per_token(ctx, kv_dtype)
     else:  # prefill
         isl = cell.get("isl")
         inp, dur = b.get("total_input_tokens"), b.get("duration")
         rate = (inp / dur) if (inp and dur) else None
         if not rate or not isl:
-            return {"arithmetic_intensity": None, "achieved_tflops_per_gpu": None,
-                    "hbm_delivered_Bps_per_gpu": None}
+            return {"arithmetic_intensity": None, "achieved_tflops_per_gpu": None, "hbm_delivered_Bps_per_gpu": None}
         ai = shape.prefill_arithmetic_intensity(isl, quant)
         experts = shape.n_routed_experts if shape.is_moe else 0
         bytes_per_tok = shape.active_weight_bytes(experts, quant) / max(int(isl), 1)
@@ -175,7 +169,7 @@ def _atlas_row(
     identity: dict[str, Any],
     captured_at: str,
     raw_path: str,
-    shape: "roofline_math.ModelShape | None" = None,
+    shape: roofline_math.ModelShape | None = None,
 ) -> AtlasCell | None:
     b = cell.get("bench", {}) or {}
     if not b:
@@ -185,8 +179,7 @@ def _atlas_row(
     out_tps = b.get("output_throughput")
     total_tps = b.get("total_token_throughput")
     util = _dcgm_util(cell)
-    analytics = _point_analytics(cell, phase, shape, identity["quant"], tp,
-                                 identity.get("kv_dtype", "fp8"))
+    analytics = _point_analytics(cell, phase, shape, identity["quant"], tp, identity.get("kv_dtype", "fp8"))
     _c = cell.get("c") or 0
     _np = cell.get("num_prompts") or 0
     # decode steady-window guard: num_prompts must be >= 2*c so the bench's
@@ -249,7 +242,7 @@ def _roofline_artifact(
     decode: list[dict[str, Any]],
     prefill: list[dict[str, Any]],
     identity: dict[str, Any],
-    shape: "roofline_math.ModelShape | None" = None,
+    shape: roofline_math.ModelShape | None = None,
 ) -> dict[str, Any]:
     """The phase-tagged operating points the renderer page consumes. Carries the
     embedded ``analytical_shape`` (so the renderer + lake are self-contained,
@@ -281,6 +274,7 @@ def _roofline_artifact(
             "achieved_tflops_per_gpu": a["achieved_tflops_per_gpu"],
             "hbm_delivered_Bps_per_gpu": a["hbm_delivered_Bps_per_gpu"],
         }
+
     art: dict[str, Any] = {
         "schema": "roofline_sweep_points_v1",
         "hardware": identity["hardware"],
@@ -327,16 +321,22 @@ def _resolve_identity(bundle: Path, overrides: dict[str, Any]) -> dict[str, Any]
     if cudagraph_mode == "unknown" and pick("enforce_eager") is True:
         cudagraph_mode = "eager"
     gmu = pick("gpu_memory_utilization")
+    tensor_parallel = pick("tensor_parallel", default=4)
+    if tensor_parallel is None:
+        tensor_parallel = 4
+    max_num_batched_tokens = pick("max_num_batched_tokens", default=12288)
+    if max_num_batched_tokens is None:
+        max_num_batched_tokens = 12288
     return {
         "cell_id": overrides.get("cell_id") or bundle.name,
         "model": model,
         "hardware": hardware,
         "quant": quant,
         "kv_dtype": pick("kv_dtype", "kv_cache_dtype", default="fp8"),
-        "tensor_parallel": int(pick("tensor_parallel", default=4)),
+        "tensor_parallel": int(tensor_parallel),
         "parallel_strategy": pick("parallel_strategy", default="TP"),
         "mtp": bool(pick("mtp", default=False)),
-        "max_num_batched_tokens": int(pick("max_num_batched_tokens", default=12288)),
+        "max_num_batched_tokens": int(max_num_batched_tokens),
         "cache_mode": pick("cache_mode", default="unknown"),
         "dataset": pick("dataset", default="random"),
         "cudagraph_mode": cudagraph_mode,
@@ -361,8 +361,7 @@ def _steady_window_warnings(decode: list[dict[str, Any]]) -> list[dict[str, Any]
         c = cell.get("c") or 0
         npr = cell.get("num_prompts") or 0
         if c >= 16 and npr and npr < 2 * c:
-            warns.append({"c": c, "num_prompts": npr, "min_required": 2 * c,
-                          "tag": cell.get("tag")})
+            warns.append({"c": c, "num_prompts": npr, "min_required": 2 * c, "tag": cell.get("tag")})
     return warns
 
 
@@ -382,8 +381,8 @@ def import_roofline_sweep_bundle(
     steady_warns = _steady_window_warnings(decode)
     if steady_warns:
         import sys as _sys
-        cells = ", ".join(f"c={w['c']}(num={w['num_prompts']}<{w['min_required']})"
-                          for w in steady_warns)
+
+        cells = ", ".join(f"c={w['c']}(num={w['num_prompts']}<{w['min_required']})" for w in steady_warns)
         print(
             f"WARN: steady-window undercount in {len(steady_warns)} decode cell(s) "
             f"[{cells}] -- num_prompts < 2*c, so output_throughput is ramp/drain-"
@@ -393,14 +392,12 @@ def import_roofline_sweep_bundle(
             file=_sys.stderr,
         )
     if not decode and not prefill:
-        raise ValueError(
-            f"import_roofline_sweep: no points in {bundle}/{DECODE_FILE} or {PREFILL_FILE}"
-        )
+        raise ValueError(f"import_roofline_sweep: no points in {bundle}/{DECODE_FILE} or {PREFILL_FILE}")
     overrides = overrides or {}
     identity = _resolve_identity(bundle, overrides)
     shape = _resolve_shape(bundle, identity, overrides)
     if captured_at is None:
-        captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     base = safe_path_segment(identity["cell_id"], label="cell-id")
     cell_dirs: list[str] = []
@@ -409,11 +406,14 @@ def import_roofline_sweep_bundle(
         if not cells:
             continue
         rows = [
-            r for r in (
-                _atlas_row(c, phase, f"{base}-{phase}", identity, captured_at,
-                           str(bundle / f"{phase}_sweep.jsonl"), shape)
+            r
+            for r in (
+                _atlas_row(
+                    c, phase, f"{base}-{phase}", identity, captured_at, str(bundle / f"{phase}_sweep.jsonl"), shape
+                )
                 for c in cells
-            ) if r is not None
+            )
+            if r is not None
         ]
         if not rows:
             continue
@@ -422,9 +422,7 @@ def import_roofline_sweep_bundle(
         if dry_run:
             continue
         cell_dir.mkdir(parents=True, exist_ok=True)
-        (cell_dir / "normalized.json").write_text(
-            json.dumps([r.to_dict() for r in rows], indent=2, sort_keys=True)
-        )
+        (cell_dir / "normalized.json").write_text(json.dumps([r.to_dict() for r in rows], indent=2, sort_keys=True))
         (cell_dir / "status.txt").write_text(STATUS_FULL + "\n")
         (cell_dir / "backend.txt").write_text(BACKEND_VLLM_SWEEP + "\n")
         # the renderer-page input artifact (written on the decode cell, carrying both phases)

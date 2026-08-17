@@ -19,11 +19,7 @@ def find_repo_root(start: Path | None = None) -> Path:
     """Return the bundled server root using product files as markers."""
 
     env_root = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
-    current = (
-        _operator_path(env_root, label="PROFILE_AND_OPTIMIZE_REPO_ROOT")
-        if env_root
-        else (start or Path.cwd())
-    )
+    current = _operator_path(env_root, label="PROFILE_AND_OPTIMIZE_REPO_ROOT") if env_root else (start or Path.cwd())
     current = current.resolve()
     if current.is_file():
         current = current.parent
@@ -35,9 +31,7 @@ def find_repo_root(start: Path | None = None) -> Path:
         ):
             return current
         current = current.parent
-    raise RuntimeError(
-        "cannot locate the profile-and-optimize server root. Set PROFILE_AND_OPTIMIZE_REPO_ROOT"
-    )
+    raise RuntimeError("cannot locate the profile-and-optimize server root. Set PROFILE_AND_OPTIMIZE_REPO_ROOT")
 
 
 def repo_path(*parts: str) -> Path:

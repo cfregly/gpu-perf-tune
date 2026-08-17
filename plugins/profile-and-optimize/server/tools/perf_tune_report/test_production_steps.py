@@ -3,29 +3,27 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from tools.perf_tune_report.orchestrator import production_step_fns
+from tools.perf_tune_report.orchestrator.campaign_run import CellPlan, StepFns
 from tools.perf_tune_report.orchestrator.production_steps import (
     _run_cmd,
     step_aggregate,
     step_baseline_diff,
     step_baseline_record,
     step_bench,
+    step_dcgm_correlate,
     step_drain,
     step_helm_upgrade,
     step_import,
     step_render,
     step_resume,
-    step_warmup,
     step_zymtrace,
 )
-from tools.perf_tune_report.orchestrator.campaign_run import CellPlan, StepFns
-
 
 # ---------------------------------------------------------------------------
 # 1. production_step_fns() returns a fully populated StepFns
@@ -104,9 +102,7 @@ def test_step_drain_kubectl_success_returns_true(monkeypatch: pytest.MonkeyPatch
         calls.append(cmd)
         return True
 
-    monkeypatch.setattr(
-        "tools.perf_tune_report.orchestrator.production_steps._run_cmd", fake
-    )
+    monkeypatch.setattr("tools.perf_tune_report.orchestrator.production_steps._run_cmd", fake)
     assert step_drain(["node-1", "node-2"], "cell-x") is True
     assert calls == [
         ["kubectl", "cordon", "node-1"],
@@ -126,9 +122,7 @@ def test_step_helm_upgrade_with_path_overlay(monkeypatch: pytest.MonkeyPatch) ->
         captured.append(cmd)
         return True
 
-    monkeypatch.setattr(
-        "tools.perf_tune_report.orchestrator.production_steps._run_cmd", fake
-    )
+    monkeypatch.setattr("tools.perf_tune_report.orchestrator.production_steps._run_cmd", fake)
     ok = step_helm_upgrade(
         namespace="inference",
         release="basic-inference",
@@ -153,9 +147,7 @@ def test_step_helm_upgrade_with_set_overrides(monkeypatch: pytest.MonkeyPatch) -
         captured.append(cmd)
         return True
 
-    monkeypatch.setattr(
-        "tools.perf_tune_report.orchestrator.production_steps._run_cmd", fake
-    )
+    monkeypatch.setattr("tools.perf_tune_report.orchestrator.production_steps._run_cmd", fake)
     step_helm_upgrade(
         namespace="inference",
         release="basic-inference",
@@ -231,7 +223,9 @@ def test_step_bench_vllm_uses_canonical_cell_shape(
 def test_step_bench_aiperf_returns_false() -> None:
     """aiperf backend is intentionally a no-op in production_steps."""
     cell = CellPlan(
-        id="test-cell", backend="aiperf", concurrencies=(8,),
+        id="test-cell",
+        backend="aiperf",
+        concurrencies=(8,),
     )
     assert step_bench(Path("/tmp"), cell) is False
 
@@ -239,7 +233,9 @@ def test_step_bench_aiperf_returns_false() -> None:
 def test_step_bench_trtllm_returns_false() -> None:
     """trtllm backend is a stub - run_cell raises NotImplementedError."""
     cell = CellPlan(
-        id="test-cell", backend="trtllm", concurrencies=(8,),
+        id="test-cell",
+        backend="trtllm",
+        concurrencies=(8,),
     )
     assert step_bench(Path("/tmp"), cell) is False
 
@@ -292,6 +288,20 @@ def test_step_render_returns_false_when_no_atlas(tmp_path: Path) -> None:
     assert step_render(campaign, tmp_path / "out.pdf") is False
 
 
+def test_step_dcgm_correlate_returns_false_for_malformed_frozen_yaml(
+    tmp_path: Path,
+) -> None:
+    campaign = tmp_path / "campaign"
+    cell = campaign / "cells" / "c1"
+    cell.mkdir(parents=True)
+    (cell / "dcgm-frozen.yaml").write_text("[]\n")
+    ceilings = tmp_path / "perf-tune-report" / "configs" / "sol-ceilings.yaml"
+    ceilings.parent.mkdir(parents=True)
+    ceilings.write_text("{}\n")
+
+    assert step_dcgm_correlate(campaign, "c1") is False
+
+
 # ---------------------------------------------------------------------------
 # 8. production baseline wiring uses one directional scalar headline
 # ---------------------------------------------------------------------------
@@ -333,10 +343,19 @@ def _write_headline_campaign(
         }
         for concurrency, value in zip((1, 2), values, strict=True)
     ]
-    (campaign / "atlas.jsonl").write_text(
-        "".join(json.dumps(row) + "\n" for row in rows)
-    )
+    (campaign / "atlas.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
     return campaign
+
+
+@pytest.mark.parametrize("payload_name", ["kernels.json", "dcgm_correlation.json"])
+def test_step_render_returns_false_for_malformed_domain_payload(
+    tmp_path: Path,
+    payload_name: str,
+) -> None:
+    campaign = _write_headline_campaign(tmp_path, (80.0, 100.0))
+    (campaign / "cells" / "c1" / payload_name).write_text("{bad")
+
+    assert step_render(campaign, tmp_path / "out.pdf") is False
 
 
 def test_step_baseline_record_extracts_supported_scalar_headline(
@@ -348,19 +367,8 @@ def test_step_baseline_record_extracts_supported_scalar_headline(
 
     assert step_baseline_record(campaign, "c1") is True
 
-    measurement_dir = (
-        root
-        / "experiments"
-        / "artifacts"
-        / "perf-baselines"
-        / "inference"
-        / "output_tps_per_gpu-c2"
-    )
-    entries = [
-        entry
-        for entry in measurement_dir.iterdir()
-        if entry.is_dir()
-    ]
+    measurement_dir = root / "experiments" / "artifacts" / "perf-baselines" / "inference" / "output_tps_per_gpu-c2"
+    entries = [entry for entry in measurement_dir.iterdir() if entry.is_dir()]
     assert len(entries) == 1
     baseline = json.loads((entries[0] / "baseline.json").read_text())
     assert baseline["value"] == 100.0
@@ -384,17 +392,8 @@ def test_step_baseline_diff_parses_real_directional_verdict(
     root = _seed_baseline_repo(tmp_path, monkeypatch)
     campaign = _write_headline_campaign(tmp_path, (80.0, 100.0))
     assert step_baseline_record(campaign, "c1") is True
-    measurement_dir = (
-        root
-        / "experiments"
-        / "artifacts"
-        / "perf-baselines"
-        / "inference"
-        / "output_tps_per_gpu-c2"
-    )
-    baseline_dir = next(
-        entry for entry in measurement_dir.iterdir() if entry.is_dir()
-    )
+    measurement_dir = root / "experiments" / "artifacts" / "perf-baselines" / "inference" / "output_tps_per_gpu-c2"
+    baseline_dir = next(entry for entry in measurement_dir.iterdir() if entry.is_dir())
     _write_headline_campaign(tmp_path, candidate)
 
     assert step_baseline_diff(campaign, "c1", str(baseline_dir)) == expected

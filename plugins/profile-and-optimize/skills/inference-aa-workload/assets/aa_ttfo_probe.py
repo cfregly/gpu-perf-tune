@@ -30,6 +30,7 @@ The probe only connects to a loopback HTTP endpoint with the exact
 ``/v1/chat/completions`` path. It requires an explicit unprivileged port and
 does not follow redirects. Run it inside the serving pod as described above.
 """
+
 import argparse
 import http.client
 import json
@@ -100,8 +101,12 @@ def run_one(url, model, prompt, min_tokens, extra_inputs=None):
     body = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0, "top_p": 1, "stream": True,
-        "max_tokens": min_tokens + 64, "min_tokens": min_tokens, "ignore_eos": True,
+        "temperature": 0,
+        "top_p": 1,
+        "stream": True,
+        "max_tokens": min_tokens + 64,
+        "min_tokens": min_tokens,
+        "ignore_eos": True,
         "stream_options": {"include_usage": True},
     }
     if extra_inputs:
@@ -171,10 +176,7 @@ def main():
         "--url",
         type=validated_probe_url,
         default=DEFAULT_URL,
-        help=(
-            "loopback HTTP endpoint with an explicit unprivileged port and the exact "
-            f"{CHAT_COMPLETIONS_PATH} path"
-        ),
+        help=(f"loopback HTTP endpoint with an explicit unprivileged port and the exact {CHAT_COMPLETIONS_PATH} path"),
     )
     ap.add_argument("--model", required=True, help="served-model-name")
     ap.add_argument("--shape", default="aa-1k", choices=list(SHAPES))
@@ -193,17 +195,20 @@ def main():
         vals = [r[key] for r in fin if r.get(key) is not None]
         return round(statistics.median(vals), 1) if vals else None
 
-    decode = [(r["content_tokens"] + r["reasoning_tokens"]) / r["total_s"]
-              for r in fin if r["total_s"] > 0] or [0]
+    decode = [(r["content_tokens"] + r["reasoning_tokens"]) / r["total_s"] for r in fin if r["total_s"] > 0] or [0]
+    ttft_p50 = p50("ttft_ms")
+    ttfo_p50 = p50("ttfo_ms")
     summary = {
-        "shape": a.shape, "n": len(fin),
-        "ttft_p50_ms": p50("ttft_ms"),
-        "ttfo_p50_ms": p50("ttfo_ms"),  # None if the model never emitted an answer token (all-reasoning)
+        "shape": a.shape,
+        "n": len(fin),
+        "ttft_p50_ms": ttft_p50,
+        "ttfo_p50_ms": ttfo_p50,  # None if the model never emitted an answer token (all-reasoning)
         "reasoning_tokens_p50": p50("reasoning_tokens"),
         "content_tokens_p50": p50("content_tokens"),
         "decode_tok_s_per_user_mean": round(statistics.mean(decode), 1),
-        "ttfo_minus_ttft_p50_ms": (round(p50("ttfo_ms") - p50("ttft_ms"), 1)
-                                   if p50("ttfo_ms") and p50("ttft_ms") else None),
+        "ttfo_minus_ttft_p50_ms": (
+            round(ttfo_p50 - ttft_p50, 1) if ttfo_p50 is not None and ttft_p50 is not None else None
+        ),
     }
     print("SUMMARY " + json.dumps(summary), flush=True)
 

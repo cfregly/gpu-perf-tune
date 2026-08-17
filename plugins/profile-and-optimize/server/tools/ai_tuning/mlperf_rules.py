@@ -37,12 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-EXAMPLE_RULES_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "tuning"
-    / "examples"
-    / "mlperf-rules-v6-guardrails.json"
-)
+EXAMPLE_RULES_PATH = Path(__file__).resolve().parents[2] / "tuning" / "examples" / "mlperf-rules-v6-guardrails.json"
 
 
 @dataclass
@@ -166,16 +161,11 @@ def validate_candidate(
         gbs_rules = bench_rules.get("global_batch_size") or {}
         gbs_min = _coerce_int(gbs_rules.get("min"))
         gbs_max = _coerce_int(gbs_rules.get("max"))
-        if (gbs_min is not None and gbs < gbs_min) or (
-            gbs_max is not None and gbs > gbs_max
-        ):
+        if (gbs_min is not None and gbs < gbs_min) or (gbs_max is not None and gbs > gbs_max):
             out.append(
                 RuleViolation(
                     code="global_batch_outside_legal",
-                    message=(
-                        f"global_batch_size {gbs} outside legal range "
-                        f"[{gbs_min},{gbs_max}]"
-                    ),
+                    message=(f"global_batch_size {gbs} outside legal range [{gbs_min},{gbs_max}]"),
                     parameter="global_batch_size",
                     observed=gbs,
                     legal={"min": gbs_min, "max": gbs_max},
@@ -183,16 +173,12 @@ def validate_candidate(
             )
 
     warmup = _coerce_int(parameters.get("warmup_steps"))
-    max_steps = _coerce_int(parameters.get("TRAINER_TRAIN_STEPS")) or _coerce_int(
-        parameters.get("max_steps")
-    )
+    max_steps = _coerce_int(parameters.get("TRAINER_TRAIN_STEPS")) or _coerce_int(parameters.get("max_steps"))
     warmup_rules = bench_rules.get("warmup_steps") or {}
     if warmup is not None:
         wmin = _coerce_int(warmup_rules.get("min"))
         wmax = _coerce_int(warmup_rules.get("max"))
-        if (wmin is not None and warmup < wmin) or (
-            wmax is not None and warmup > wmax
-        ):
+        if (wmin is not None and warmup < wmin) or (wmax is not None and warmup > wmax):
             out.append(
                 RuleViolation(
                     code="warmup_outside_legal",
@@ -209,10 +195,7 @@ def validate_candidate(
             out.append(
                 RuleViolation(
                     code="warmup_above_proportion",
-                    message=(
-                        f"warmup_steps/max_steps={ratio:.4f} > limit "
-                        f"{proportion_max}"
-                    ),
+                    message=(f"warmup_steps/max_steps={ratio:.4f} > limit {proportion_max}"),
                     parameter="warmup_steps",
                     observed=ratio,
                     legal={"max_ratio": proportion_max},
@@ -250,16 +233,11 @@ def validate_candidate(
     if aux_coef is not None and aux_range:
         amin = _coerce_float(aux_range.get("min"))
         amax = _coerce_float(aux_range.get("max"))
-        if (amin is not None and aux_coef < amin) or (
-            amax is not None and aux_coef > amax
-        ):
+        if (amin is not None and aux_coef < amin) or (amax is not None and aux_coef > amax):
             out.append(
                 RuleViolation(
                     code="aux_loss_coef_outside_legal",
-                    message=(
-                        f"AUX_LOSS_BALANCE_COEF={aux_coef} outside legal range "
-                        f"[{amin},{amax}]"
-                    ),
+                    message=(f"AUX_LOSS_BALANCE_COEF={aux_coef} outside legal range [{amin},{amax}]"),
                     parameter="AUX_LOSS_BALANCE_COEF",
                     observed=aux_coef,
                     legal={"min": amin, "max": amax},
@@ -272,10 +250,7 @@ def validate_candidate(
             out.append(
                 RuleViolation(
                     code="non_borrowable_hyperparameter_changed",
-                    message=(
-                        f"hyperparameter {parameter!r} is not borrowable for "
-                        f"benchmark {benchmark!r}"
-                    ),
+                    message=(f"hyperparameter {parameter!r} is not borrowable for benchmark {benchmark!r}"),
                     parameter=parameter,
                     observed=parameters[parameter],
                 )
@@ -284,9 +259,7 @@ def validate_candidate(
     return out
 
 
-def validate_proposal(
-    rules: dict[str, Any], proposal: dict[str, Any], *, benchmark: str
-) -> list[dict[str, Any]]:
+def validate_proposal(rules: dict[str, Any], proposal: dict[str, Any], *, benchmark: str) -> list[dict[str, Any]]:
     candidates = proposal.get("candidates") or []
     results: list[dict[str, Any]] = []
     for index, candidate in enumerate(candidates):
@@ -306,9 +279,7 @@ def validate_proposal(
             )
             continue
         nexp = _coerce_int(params.get("NEXP")) or 1
-        synthetic = (
-            str(params.get("USE_SYNTHETIC_DATA", "0")).lower() in {"1", "true", "yes"}
-        )
+        synthetic = str(params.get("USE_SYNTHETIC_DATA", "0")).lower() in {"1", "true", "yes"}
         violations = validate_candidate(
             rules,
             benchmark=benchmark,
@@ -327,7 +298,8 @@ def validate_proposal(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    description = (__doc__ or "MLPerf rule constraint validator").splitlines()[0]
+    parser = argparse.ArgumentParser(description=description)
     sub = parser.add_subparsers(dest="command", required=True)
 
     validate = sub.add_parser("validate", help="validate a proposal against the rules")

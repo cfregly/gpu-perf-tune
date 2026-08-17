@@ -28,7 +28,7 @@ by the tensor-parallel GPU count so TP2/TP4/TP8 share one set of per-GPU ceiling
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -82,10 +82,10 @@ class ModelShape:
     num_layers: int
     num_attention_heads: int
     vocab_size: int
-    intermediate_size: int          # dense-MLP intermediate (gated SwiGLU: 3 matrices)
-    num_kv_heads: int = 0           # GQA; 0 => MHA (== num_attention_heads)
-    head_dim: int = 0               # 0 => hidden_size / num_attention_heads
-    gated_mlp: bool = True          # SwiGLU (gate+up+down=3) vs (up+down=2)
+    intermediate_size: int  # dense-MLP intermediate (gated SwiGLU: 3 matrices)
+    num_kv_heads: int = 0  # GQA; 0 => MHA (== num_attention_heads)
+    head_dim: int = 0  # 0 => hidden_size / num_attention_heads
+    gated_mlp: bool = True  # SwiGLU (gate+up+down=3) vs (up+down=2)
     # Architecture-specific extra attention params per layer (e.g. the GLM-DSA
     # "lightning indexer" q/k projections). Generic families leave this 0.
     extra_attn_params_per_layer: float = 0.0
@@ -181,16 +181,11 @@ class ModelShape:
         """Cached KV elements per token per layer."""
         if self.is_mla:
             return float(self.kv_lora_rank + self.qk_rope_head_dim)  # latent
-        return float(2 * self._num_kv_heads() * self._head_dim())     # K + V
+        return float(2 * self._num_kv_heads() * self._head_dim())  # K + V
 
     def kv_bytes_per_token(self, ctx_len: int, kv_dtype: str = "fp8") -> float:
         """Bytes of KV read per generated token (full context, all layers)."""
-        return (
-            ctx_len
-            * self.num_layers
-            * self.kv_elems_per_token_per_layer()
-            * kv_bytes_per_elem(kv_dtype)
-        )
+        return ctx_len * self.num_layers * self.kv_elems_per_token_per_layer() * kv_bytes_per_elem(kv_dtype)
 
     @property
     def flop_per_token(self) -> float:
@@ -201,9 +196,7 @@ class ModelShape:
         return 2.0 * self.active_params(experts)
 
     # -- roofline operating-point intensities ----------------------------
-    def decode_arithmetic_intensity(
-        self, concurrency: int, ctx_len: int, quant: str, kv_dtype: str = "fp8"
-    ) -> float:
+    def decode_arithmetic_intensity(self, concurrency: int, ctx_len: int, quant: str, kv_dtype: str = "fp8") -> float:
         """FLOP/byte for a decode step at batch=concurrency, context=ctx_len.
 
         Weight bytes amortize across the batch (the expert union ``min(n_routed,
@@ -247,8 +240,7 @@ class ModelShape:
             "kv_bytes_per_elem": kv_bytes_per_elem(kv_dtype),
             "quant": quant,
             "kv_dtype": kv_dtype,
-            "total_params_b": round(self.active_params(
-                self.n_routed_experts if self.is_moe else 0) / 1e9, 2),
+            "total_params_b": round(self.active_params(self.n_routed_experts if self.is_moe else 0) / 1e9, 2),
         }
 
 
@@ -282,16 +274,13 @@ def from_hf_config(config: dict[str, Any], name: str = "") -> ModelShape:
     inter = int(_first(config, "intermediate_size", "ffn_dim", "n_inner", default=4 * H))
 
     # MoE detection
-    n_routed = int(_first(config, "n_routed_experts", "num_experts",
-                          "num_local_experts", "n_experts", default=0))
-    n_per_tok = int(_first(config, "num_experts_per_tok", "num_experts_per_token",
-                           "moe_topk", "n_experts_per_tok", default=0))
-    moe_inter = int(_first(config, "moe_intermediate_size", "expert_intermediate_size",
-                           default=0))
-    n_shared = int(_first(config, "n_shared_experts", "num_shared_experts",
-                          "moe_num_shared_experts", default=0))
-    first_dense = int(_first(config, "first_k_dense_replace", "moe_layer_start_index",
-                             default=0))
+    n_routed = int(_first(config, "n_routed_experts", "num_experts", "num_local_experts", "n_experts", default=0))
+    n_per_tok = int(
+        _first(config, "num_experts_per_tok", "num_experts_per_token", "moe_topk", "n_experts_per_tok", default=0)
+    )
+    moe_inter = int(_first(config, "moe_intermediate_size", "expert_intermediate_size", default=0))
+    n_shared = int(_first(config, "n_shared_experts", "num_shared_experts", "moe_num_shared_experts", default=0))
+    first_dense = int(_first(config, "first_k_dense_replace", "moe_layer_start_index", default=0))
     is_moe = n_routed > 0 and n_per_tok > 0
     if is_moe and moe_inter == 0:
         moe_inter = inter  # fall back to dense intermediate if expert size absent
@@ -312,13 +301,26 @@ def from_hf_config(config: dict[str, Any], name: str = "") -> ModelShape:
 
     return ModelShape(
         name=name or str(_first(config, "_name_or_path", "model_type", default="model")),
-        hidden_size=H, num_layers=L, num_attention_heads=n_heads, num_kv_heads=n_kv,
-        head_dim=head_dim, vocab_size=vocab, intermediate_size=inter, gated_mlp=gated,
-        is_moe=is_moe, n_routed_experts=n_routed, n_experts_per_tok=n_per_tok,
-        moe_intermediate_size=moe_inter, n_shared_experts=n_shared,
+        hidden_size=H,
+        num_layers=L,
+        num_attention_heads=n_heads,
+        num_kv_heads=n_kv,
+        head_dim=head_dim,
+        vocab_size=vocab,
+        intermediate_size=inter,
+        gated_mlp=gated,
+        is_moe=is_moe,
+        n_routed_experts=n_routed,
+        n_experts_per_tok=n_per_tok,
+        moe_intermediate_size=moe_inter,
+        n_shared_experts=n_shared,
         first_k_dense_replace=first_dense,
-        is_mla=is_mla, kv_lora_rank=kv_lora, q_lora_rank=q_lora,
-        qk_nope_head_dim=qk_nope, qk_rope_head_dim=qk_rope, v_head_dim=v_head,
+        is_mla=is_mla,
+        kv_lora_rank=kv_lora,
+        q_lora_rank=q_lora,
+        qk_nope_head_dim=qk_nope,
+        qk_rope_head_dim=qk_rope,
+        v_head_dim=v_head,
     )
 
 
@@ -332,12 +334,25 @@ def from_hf_config(config: dict[str, Any], name: str = "") -> ModelShape:
 _REGISTRY: dict[str, ModelShape] = {
     # GLM-5.1 (GlmMoeDsaForCausalLM) -- the exemplar, exact from /work/model/config.json
     "glm-5.1": ModelShape(
-        name="zai-org/GLM-5.1", hidden_size=6144, num_layers=78, num_attention_heads=64,
-        vocab_size=154880, intermediate_size=12288, gated_mlp=True,
-        is_moe=True, n_routed_experts=256, n_experts_per_tok=8, moe_intermediate_size=2048,
-        n_shared_experts=1, first_k_dense_replace=3,
-        is_mla=True, kv_lora_rank=512, q_lora_rank=2048,
-        qk_nope_head_dim=192, qk_rope_head_dim=64, v_head_dim=256,
+        name="zai-org/GLM-5.1",
+        hidden_size=6144,
+        num_layers=78,
+        num_attention_heads=64,
+        vocab_size=154880,
+        intermediate_size=12288,
+        gated_mlp=True,
+        is_moe=True,
+        n_routed_experts=256,
+        n_experts_per_tok=8,
+        moe_intermediate_size=2048,
+        n_shared_experts=1,
+        first_k_dense_replace=3,
+        is_mla=True,
+        kv_lora_rank=512,
+        q_lora_rank=2048,
+        qk_nope_head_dim=192,
+        qk_rope_head_dim=64,
+        v_head_dim=256,
         # GLM-DSA lightning indexer: q/k proj over IDX_HEADS=32 x IDX_DIM=128
         extra_attn_params_per_layer=2 * 6144 * (32 * 128),
     ),

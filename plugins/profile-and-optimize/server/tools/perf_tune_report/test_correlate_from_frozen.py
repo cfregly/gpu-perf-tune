@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import sys
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -26,7 +25,6 @@ from tools.perf_tune_report.dcgm_correlate import (
     correlate_from_frozen,
     write_correlation,
 )
-
 
 _MIN_CEILINGS: dict = {
     "b200_sm100": {

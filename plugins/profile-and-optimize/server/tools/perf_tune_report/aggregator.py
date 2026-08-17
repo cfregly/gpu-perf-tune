@@ -21,9 +21,9 @@ The aggregator:
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from tools.perf_tune_report.coverage import CoverageSummary, summarize
 from tools.perf_tune_report.schema import AtlasCell, write_jsonl
@@ -74,9 +74,7 @@ def aggregate(campaign_dir: Path) -> AggregateResult:
             try:
                 rows.append(AtlasCell(**item))
             except (TypeError, ValueError) as exc:
-                raise ValueError(
-                    f"FATAL: row {idx} in {path} fails AtlasCell schema: {exc}"
-                ) from exc
+                raise ValueError(f"FATAL: row {idx} in {path} fails AtlasCell schema: {exc}") from exc
 
     atlas_path = campaign_dir / "atlas.jsonl"
     write_jsonl(rows, atlas_path)

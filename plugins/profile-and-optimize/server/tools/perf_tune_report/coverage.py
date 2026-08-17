@@ -16,8 +16,8 @@ Distinction:
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from tools.perf_tune_report.schema import (
     STATUS_EVICTED,
@@ -83,11 +83,7 @@ def summarize(rows: Iterable[AtlasCell]) -> CoverageSummary:
     partial = sum(1 for s in cell_status.values() if s == STATUS_PARTIAL)
     failed = sum(1 for s in cell_status.values() if s == STATUS_FAILED)
     evicted = sum(1 for s in cell_status.values() if s == STATUS_EVICTED)
-    non_plot_ready_full = sum(
-        1
-        for cid, s in cell_status.items()
-        if s == STATUS_FULL and not cell_has_plottable[cid]
-    )
+    non_plot_ready_full = sum(1 for cid, s in cell_status.items() if s == STATUS_FULL and not cell_has_plottable[cid])
 
     return CoverageSummary(
         atlas_cells=full + partial + failed,

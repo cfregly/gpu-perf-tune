@@ -9,15 +9,16 @@ import pytest
 
 from tools.perf_tune_report.capture_signature import variant_key_for
 from tools.perf_tune_report.importers.inference_perf_bench import (
-    ImportResult,
-    _enumerate_sweep_files,
-    _parse_metrics,
     _SWEEP_K,
     _SWEEP_SIMPLE,
+    ImportResult,
+    _CellIdentity,
+    _enumerate_sweep_files,
+    _parse_metrics,
+    _row_from_metrics,
     import_perf_bench_bundle,
 )
 from tools.perf_tune_report.schema import AtlasCell
-
 
 # --- sample bench-serve output blocks (anonymized; matches V1 sweep format) -
 
@@ -123,9 +124,15 @@ def test_enumerate_sweep_files_sorted_by_k_then_c(tmp_path):
             (raw / f"sweep-K{k}-c{c}.txt").write_text(_SWEEP_C8)
     files = _enumerate_sweep_files(bundle)
     assert [(f.k, f.concurrency) for f in files] == [
-        (1, 1), (1, 4), (1, 16),
-        (2, 1), (2, 4), (2, 16),
-        (3, 1), (3, 4), (3, 16),
+        (1, 1),
+        (1, 4),
+        (1, 16),
+        (2, 1),
+        (2, 4),
+        (2, 16),
+        (3, 1),
+        (3, 4),
+        (3, 16),
     ]
 
 
@@ -195,9 +202,7 @@ def test_import_derives_mean_isl_osl(tmp_path):
 def test_import_cache_mode_override(tmp_path):
     bundle = _make_bundle(tmp_path)
     campaign = _make_campaign(tmp_path)
-    import_perf_bench_bundle(
-        bundle, campaign, overrides={"cell_id": "c", "cache_mode": "warm"}
-    )
+    import_perf_bench_bundle(bundle, campaign, overrides={"cell_id": "c", "cache_mode": "warm"})
     rows = json.loads((campaign / "cells" / "c" / "normalized.json").read_text())
     assert all(r["cache_mode"] == "warm" for r in rows)
 
@@ -215,9 +220,7 @@ def test_import_prefix_cache_hit_rate_from_bundle_meta(tmp_path):
     raw = bundle / "raw"
     raw.mkdir(parents=True)
     (raw / "sweep-c8.txt").write_text(_SWEEP_C8)
-    (bundle / "inference_perfbench_v1.json").write_text(
-        json.dumps({"model": "m", "prefix_cache_hit_rate": 0.83})
-    )
+    (bundle / "inference_perfbench_v1.json").write_text(json.dumps({"model": "m", "prefix_cache_hit_rate": 0.83}))
     campaign = _make_campaign(tmp_path)
     import_perf_bench_bundle(bundle, campaign, overrides={"cell_id": "c"})
     rows = json.loads((campaign / "cells" / "c" / "normalized.json").read_text())
@@ -350,17 +353,24 @@ def test_import_k_sweep_emits_k_suffixed_cell_ids(tmp_path):
         for c in (1, 4):
             (raw / f"sweep-K{k}-c{c}.txt").write_text(_SWEEP_C8)
     (bundle / "inference_perfbench_v1.json").write_text(
-        json.dumps({"model": "deepseek-ai/DeepSeek-V4-Flash", "hardware": "B200",
-                    "quant": "NVFP4", "tensor_parallel_size": 8,
-                    "parallel_strategy": "TP", "mtp": True,
-                    "max_num_batched_tokens": 12288})
+        json.dumps(
+            {
+                "model": "deepseek-ai/DeepSeek-V4-Flash",
+                "hardware": "B200",
+                "quant": "NVFP4",
+                "tensor_parallel_size": 8,
+                "parallel_strategy": "TP",
+                "mtp": True,
+                "max_num_batched_tokens": 12288,
+            }
+        )
     )
     campaign = _make_campaign(tmp_path)
 
     result = import_perf_bench_bundle(bundle, campaign)
     data = json.loads(result.normalized_path.read_text())
 
-    # 3 K values × 2 concurrencies = 6 rows
+    # 3 K values x 2 concurrencies = 6 rows
     assert len(data) == 6
     assert result.k_values == [1, 2, 3]
     # K=1 keeps the base cell_id; K>1 gets a -K<n> suffix
@@ -374,12 +384,46 @@ def test_import_k_sweep_emits_k_suffixed_cell_ids(tmp_path):
     assert k3_row["extra"]["spec_decode_k"] == 3
 
 
+def test_variant_extra_does_not_overwrite_k_suffix(tmp_path):
+    identity = _CellIdentity(
+        cell_id="cell",
+        model="model",
+        hardware="B200",
+        quant="FP8",
+        tensor_parallel=8,
+        parallel_strategy="TP",
+        mtp=True,
+        max_num_batched_tokens=4096,
+        variant_extra={"custom_knob": "enabled"},
+    )
+
+    row = _row_from_metrics(
+        identity,
+        concurrency=4,
+        metrics={
+            "req_per_s": 1.0,
+            "output_tps": 100.0,
+            "total_tps": 200.0,
+            "ttft_med_ms": 50.0,
+            "tpot_med_ms": 10.0,
+        },
+        sweep_path=tmp_path / "raw" / "sweep-K3-c4.txt",
+        k=3,
+        captured_at="2026-08-16T00:00:00Z",
+    )
+
+    assert row.cell_id == "cell-K3"
+    assert row.extra["spec_decode_k"] == 3
+    assert row.extra["custom_knob"] == "enabled"
+
+
 def test_import_overrides_take_precedence_over_bundle_meta(tmp_path):
     bundle = _make_bundle(tmp_path)
     campaign = _make_campaign(tmp_path)
 
     result = import_perf_bench_bundle(
-        bundle, campaign,
+        bundle,
+        campaign,
         overrides={
             "cell_id": "operator-named-cell",
             "model": "operator/override-model",
@@ -410,7 +454,8 @@ def test_import_no_metadata_with_overrides_works(tmp_path):
     bundle = _make_bundle(tmp_path, with_meta=False)
     campaign = _make_campaign(tmp_path)
     result = import_perf_bench_bundle(
-        bundle, campaign,
+        bundle,
+        campaign,
         overrides={
             "model": "moonshotai/Kimi-K2.6",
             "quant": "NVFP4",

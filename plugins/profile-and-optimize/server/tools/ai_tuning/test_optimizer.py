@@ -25,13 +25,14 @@ ai_tuning = importlib.util.module_from_spec(SPEC)
 
 SPEC.loader.exec_module(ai_tuning)
 
-from optimizer import gp, hyp_format, hyp_session, hyperband, space, tpe  # noqa: E402
+from optimizer import gp, hyp_format, hyp_session, hyperband, space, tpe
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 FIXTURES = Path(__file__).resolve().parent / "testdata"
 B200_SPACE = REPO_ROOT / "tuning" / "examples" / "b200-offline.json"
 GB300_SPACE = REPO_ROOT / "tuning" / "examples" / "gb300-offline.json"
+
 
 def _make_space(values_per_dim: int = 5) -> space.Space:
     dims = [
@@ -50,11 +51,13 @@ def _make_space(values_per_dim: int = 5) -> space.Space:
     ]
     return space.Space(dimensions=dims)
 
+
 def _quadratic(point: dict[str, str]) -> float:
     """Maximized at (0.7, 0.3)."""
     x = float(point["x"])
     y = float(point["y"])
     return -((x - 0.7) ** 2 + (y - 0.3) ** 2)
+
 
 class SpaceTest(unittest.TestCase):
     def test_categorical_round_trip(self) -> None:
@@ -81,8 +84,10 @@ class SpaceTest(unittest.TestCase):
         )
         self.assertEqual(finite_space.total_finite(), 2 * 3)
 
+
 if __name__ == "__main__":
     unittest.main()
+
 
 class TpeTest(unittest.TestCase):
     def test_cold_start_returns_random_until_min_observations(self) -> None:
@@ -110,9 +115,7 @@ class TpeTest(unittest.TestCase):
                 tpe.Observation(vector=opt_space.encode(rand_params), value=_quadratic(rand_params))
             )
             tpe_params = opt_space.random(rng_tpe)
-            tpe_observations.append(
-                tpe.Observation(vector=opt_space.encode(tpe_params), value=_quadratic(tpe_params))
-            )
+            tpe_observations.append(tpe.Observation(vector=opt_space.encode(tpe_params), value=_quadratic(tpe_params)))
 
         for _ in range(20):
             tpe_candidates, _ = tpe.propose(
@@ -124,9 +127,7 @@ class TpeTest(unittest.TestCase):
                 limit=1,
             )
             params = tpe_candidates[0]
-            tpe_observations.append(
-                tpe.Observation(vector=opt_space.encode(params), value=_quadratic(params))
-            )
+            tpe_observations.append(tpe.Observation(vector=opt_space.encode(params), value=_quadratic(params)))
             rand_params = opt_space.random(rng_random)
             random_observations.append(
                 tpe.Observation(vector=opt_space.encode(rand_params), value=_quadratic(rand_params))
@@ -136,15 +137,17 @@ class TpeTest(unittest.TestCase):
         best_tpe = max(o.value for o in tpe_observations)
         self.assertGreaterEqual(best_tpe, best_random)
 
+
 if __name__ == "__main__":
     unittest.main()
+
 
 class GpTest(unittest.TestCase):
     def test_predict_recovers_observed_values(self) -> None:
         vectors = [[0.1, 0.2], [0.5, 0.4], [0.9, 0.8]]
         targets = [0.5, 1.5, -0.5]
         model = gp.fit(vectors, targets, length_scale_candidates=(0.3,), noise_variance=1e-6)
-        for vector, target in zip(vectors, targets):
+        for vector, target in zip(vectors, targets, strict=True):
             mean, _variance = gp.predict(model, vector)
             self.assertAlmostEqual(mean, target, places=2)
 
@@ -165,9 +168,7 @@ class GpTest(unittest.TestCase):
                 tpe.Observation(vector=opt_space.encode(rand_params), value=_quadratic(rand_params))
             )
             gp_params = opt_space.random(rng_gp)
-            gp_observations.append(
-                tpe.Observation(vector=opt_space.encode(gp_params), value=_quadratic(gp_params))
-            )
+            gp_observations.append(tpe.Observation(vector=opt_space.encode(gp_params), value=_quadratic(gp_params)))
 
         for _ in range(15):
             gp_candidates, _ = gp.propose(
@@ -179,9 +180,7 @@ class GpTest(unittest.TestCase):
                 limit=1,
             )
             params = gp_candidates[0]
-            gp_observations.append(
-                tpe.Observation(vector=opt_space.encode(params), value=_quadratic(params))
-            )
+            gp_observations.append(tpe.Observation(vector=opt_space.encode(params), value=_quadratic(params)))
             rand_params = opt_space.random(rng_random)
             random_observations.append(
                 tpe.Observation(vector=opt_space.encode(rand_params), value=_quadratic(rand_params))
@@ -191,8 +190,10 @@ class GpTest(unittest.TestCase):
         best_gp = max(o.value for o in gp_observations)
         self.assertGreater(best_gp, best_random - 0.05)
 
+
 if __name__ == "__main__":
     unittest.main()
+
 
 class HyperbandTest(unittest.TestCase):
     def test_plan_produces_brackets(self) -> None:
@@ -253,8 +254,10 @@ class HyperbandTest(unittest.TestCase):
         self.assertEqual(next_state["current_rung"], 1)
         self.assertGreater(next_state["current_budget"], 1.0)
 
+
 if __name__ == "__main__":
     unittest.main()
+
 
 class HypFormatTest(unittest.TestCase):
     def test_parses_real_hyp_fixture(self) -> None:
@@ -268,8 +271,10 @@ class HypFormatTest(unittest.TestCase):
         kinds = {entry["name"]: entry["kind"] for entry in manifest}
         self.assertEqual(kinds["TENSOR_MODEL_PARALLEL"], "integer")
 
+
 if __name__ == "__main__":
     unittest.main()
+
 
 class HypSessionTest(unittest.TestCase):
     def test_imports_synthetic_session(self) -> None:
@@ -290,8 +295,10 @@ class HypSessionTest(unittest.TestCase):
         self.assertAlmostEqual(scores[0], 10.875, places=3)
         self.assertAlmostEqual(scores[-1], 12.100, places=3)
 
+
 if __name__ == "__main__":
     unittest.main()
+
 
 class CliTest(unittest.TestCase):
     def test_optimizer_status_smoke(self) -> None:
@@ -484,14 +491,14 @@ class CliTest(unittest.TestCase):
                 "--seed",
                 "3",
             ]
-            rc = ai_tuning.main(base_args + ["--state-out", str(state_file), "--output", str(first_output)])
+            rc = ai_tuning.main([*base_args, "--state-out", str(state_file), "--output", str(first_output)])
             self.assertEqual(rc, 0)
             self.assertTrue(state_file.is_file())
             first = json.loads(first_output.read_text(encoding="utf-8"))
             self.assertEqual(first["optimizer_state"]["current_rung"], 0)
             self.assertTrue(first["optimizer_state"]["bracket_keys"])
 
-            rc = ai_tuning.main(base_args + ["--state-file", str(state_file), "--output", str(second_output)])
+            rc = ai_tuning.main([*base_args, "--state-file", str(state_file), "--output", str(second_output)])
             self.assertEqual(rc, 0)
             second = json.loads(second_output.read_text(encoding="utf-8"))
             self.assertEqual(second["optimizer_state"]["current_rung"], 1)
@@ -862,6 +869,7 @@ class CliTest(unittest.TestCase):
             compared = json.loads(compare_output.read_text(encoding="utf-8"))
             self.assertEqual(compared["direction"], "maximize")
             self.assertEqual(compared["winner"], "compare-b")
+
 
 if __name__ == "__main__":
     unittest.main()

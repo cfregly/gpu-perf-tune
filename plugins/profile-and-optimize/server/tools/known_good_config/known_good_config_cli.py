@@ -41,9 +41,19 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "safety": "writes_artifacts",
         "required": ("--model",),
         "optional": (
-            "--registry", "--slug", "--arch", "--hardware", "--engine",
-            "--required-flag", "--champion-config-ref", "--champion-verdict",
-            "--champion-campaign", "--fallback", "--grind-frontier", "--notes", "--json",
+            "--registry",
+            "--slug",
+            "--arch",
+            "--hardware",
+            "--engine",
+            "--required-flag",
+            "--champion-config-ref",
+            "--champion-verdict",
+            "--champion-campaign",
+            "--fallback",
+            "--grind-frontier",
+            "--notes",
+            "--json",
         ),
         "json": True,
         "ack": None,
@@ -53,7 +63,10 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "safety": "read_only",
         "required": ("--model",),
         "optional": (
-            "--registry", "--serve-args", "--deploy-file", "--json",
+            "--registry",
+            "--serve-args",
+            "--deploy-file",
+            "--json",
         ),
         "json": True,
         "ack": None,
@@ -129,7 +142,7 @@ def _parse_required_flag(raw: str) -> dict[str, str]:
     parts = [p.strip() for p in raw.split("|")]
     keys = ("flag", "match", "severity", "why", "affected", "evidence")
     out: dict[str, str] = {}
-    for key, val in zip(keys, parts):
+    for key, val in zip(keys, parts, strict=False):
         if val:
             out[key] = val
     if "flag" not in out:
@@ -144,9 +157,7 @@ def _validate_severity(severity: object, *, source: str) -> str:
     """Return a documented severity or stop before unsafe warn-only behavior."""
     if not isinstance(severity, str) or severity not in ALLOWED_SEVERITIES:
         allowed = ", ".join(sorted(ALLOWED_SEVERITIES))
-        raise SystemExit(
-            f"FATAL: {source} severity must be one of {allowed}; got {severity!r}"
-        )
+        raise SystemExit(f"FATAL: {source} severity must be one of {allowed}; got {severity!r}")
     return severity
 
 
@@ -257,13 +268,15 @@ def cmd_check(args: argparse.Namespace) -> int:
         try:
             found = re.search(match, text) is not None
         except re.error as exc:
-            raise SystemExit(f"FATAL: bad `match` regex {match!r} for model {args.model}: {exc}")
+            raise SystemExit(f"FATAL: bad `match` regex {match!r} for model {args.model}: {exc}") from exc
         if not found:
-            missing.append({
-                "flag": rf.get("flag", match),
-                "severity": severity,
-                "why": rf.get("why", ""),
-            })
+            missing.append(
+                {
+                    "flag": rf.get("flag", match),
+                    "severity": severity,
+                    "why": rf.get("why", ""),
+                }
+            )
 
     hard = [m for m in missing if m["severity"] in FAIL_SEVERITIES]
     verdict = "fail" if hard else "pass"
@@ -291,16 +304,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     record = sub.add_parser("record", description=CONTRACT["record"]["description"])
     record.add_argument("--model", required=True, help="HF id / served-model-name (the registry key)")
-    record.add_argument("--registry", default=None, help="Path to known-good-configs.yaml (else $KNOWN_GOOD_CONFIG_REGISTRY / walk-up)")
+    record.add_argument(
+        "--registry", default=None, help="Path to known-good-configs.yaml (else $KNOWN_GOOD_CONFIG_REGISTRY / walk-up)"
+    )
     record.add_argument("--slug", default=None, help="Deploy-bundle slug (<slug>-deploy)")
     record.add_argument("--arch", default=None, help="Short arch note (why the quirk exists)")
     record.add_argument("--hardware", default=None, help="Validated hardware (e.g. GB300 TP=4 NVFP4)")
     record.add_argument("--engine", default=None, help="vllm | sglang")
     record.add_argument(
-        "--required-flag", action="append", default=None,
+        "--required-flag",
+        action="append",
+        default=None,
         help="Pipe-delimited flag|match|severity|why|affected|evidence (repeatable)",
     )
-    record.add_argument("--champion-config-ref", default=None, help="Path to the full champion config (my-values / deploy yaml)")
+    record.add_argument(
+        "--champion-config-ref", default=None, help="Path to the full champion config (my-values / deploy yaml)"
+    )
     record.add_argument("--champion-verdict", default=None, help="DRAFT <n> | VERDICT <n>")
     record.add_argument("--champion-campaign", default=None, help="perf-lake campaign id (evidence)")
     record.add_argument("--fallback", default=None, help="A known-working alternative")
@@ -311,9 +330,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     check = sub.add_parser("check", description=CONTRACT["check"]["description"])
     check.add_argument("--model", required=True, help="HF id / served-model-name to check")
-    check.add_argument("--registry", default=None, help="Path to known-good-configs.yaml (else $KNOWN_GOOD_CONFIG_REGISTRY / walk-up)")
+    check.add_argument(
+        "--registry", default=None, help="Path to known-good-configs.yaml (else $KNOWN_GOOD_CONFIG_REGISTRY / walk-up)"
+    )
     check_input = check.add_mutually_exclusive_group(required=True)
-    check_input.add_argument("--serve-args", default=None, help="The joined serve-args string to scan for required flags")
+    check_input.add_argument(
+        "--serve-args", default=None, help="The joined serve-args string to scan for required flags"
+    )
     check_input.add_argument("--deploy-file", default=None, help="A deploy/values file to scan for required flags")
     check.add_argument(
         "--require-registered",

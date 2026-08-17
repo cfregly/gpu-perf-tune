@@ -7,11 +7,8 @@ import argparse
 import re
 import sys
 
-
 VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
-HEADING = re.compile(
-    rf"^## \[({VERSION.pattern})\] - ([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})$"
-)
+HEADING = re.compile(rf"^## \[({VERSION.pattern})\] - ([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})$")
 
 
 def main() -> int:

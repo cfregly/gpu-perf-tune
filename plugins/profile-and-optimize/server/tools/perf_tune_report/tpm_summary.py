@@ -42,10 +42,14 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import sys
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+
+import yaml
 
 from tools.perf_tune_report.schema import AtlasCell
 
@@ -69,7 +73,10 @@ DEFAULT_TPOT_SLA_MS = 50.0
 # (~1.4x B200), a placeholder to replace when a real rate exists. All are LIST/
 # ESTIMATE prices, not contract cost; override per-campaign.
 DEFAULT_USD_PER_GPU_HOUR: dict[str, float] = {
-    "H100": 6.16, "H200": 6.31, "B200": 8.60, "GB300": 12.00,
+    "H100": 6.16,
+    "H200": 6.31,
+    "B200": 8.60,
+    "GB300": 12.00,
 }
 DEFAULT_COST_RATE_SOURCE = (
     "assumed: H100/H200/B200 = representative public on-demand list rate per-GPU "
@@ -83,6 +90,7 @@ OPERATING_POINT_PEAK = "peak"
 OPERATING_POINT_SLA = "sla"
 
 BASES = ("per_gpu", "per_replica", "per_node")
+logger = logging.getLogger(__name__)
 
 _METHODOLOGY_CAVEAT = (
     "TPM = tokens/minute (tok/s * 60). 'peak' is the warm sweep best-case "
@@ -109,9 +117,7 @@ class TpmConfig:
     # {hardware: $/GPU-hour}. Defaults to the assumed public-list table
     # (DEFAULT_USD_PER_GPU_HOUR); a campaign ``cost:`` block is overlaid on top
     # (so a campaign can override a rate or add a hardware key like GB300).
-    usd_per_gpu_hour: dict[str, float] = field(
-        default_factory=lambda: dict(DEFAULT_USD_PER_GPU_HOUR)
-    )
+    usd_per_gpu_hour: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_USD_PER_GPU_HOUR))
     # Provenance for the cost rates in use (informational; surfaced in the
     # summary, NOT a lake column). Set to the campaign config when a cost: block
     # overrides the defaults.
@@ -148,10 +154,9 @@ def discover_tpm_config(campaign_dir: Path) -> TpmConfig:
     if not cfg_path.is_file():
         return TpmConfig()
     try:
-        import yaml  # lazy: keep the module import light for the publish path
-
         data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    except Exception:  # noqa: BLE001 - config is best-effort; degrade to defaults
+    except (OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+        logger.debug("Ignoring malformed TPM config %s: %s", cfg_path, exc)
         return TpmConfig()
     if not isinstance(data, dict):
         return TpmConfig()
@@ -186,22 +191,15 @@ def discover_tpm_config(campaign_dir: Path) -> TpmConfig:
                 if fleet:
                     usd_map.update(fleet)
                     source = f"perf-tune-report/configs/cost.yaml (rates {sorted(fleet)})"
-        except Exception:  # noqa: BLE001 - cost.yaml is best-effort; degrade to defaults
-            pass
+        except (OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+            logger.debug("Ignoring malformed cost config %s: %s", cost_yaml, exc)
     if isinstance(cost_block, dict):
         raw_map = cost_block.get("usd_per_gpu_hour")
         if isinstance(raw_map, dict):
-            overrides = {
-                str(hw): float(v)
-                for hw, v in raw_map.items()
-                if isinstance(v, (int, float)) and v > 0
-            }
+            overrides = {str(hw): float(v) for hw, v in raw_map.items() if isinstance(v, (int, float)) and v > 0}
             if overrides:
                 usd_map.update(overrides)
-                source = (
-                    f"campaign config cost: block (overrides {sorted(overrides)}) "
-                    f"on top of {source}"
-                )
+                source = f"campaign config cost: block (overrides {sorted(overrides)}) on top of {source}"
 
     return TpmConfig(
         ttft_sla_ms=_num("ttft_sla_ms", DEFAULT_TTFT_SLA_MS),
@@ -266,10 +264,7 @@ class TpmGroup:
     @property
     def legend_label(self) -> str:
         mtp_suffix = " MTP" if self.mtp else ""
-        return (
-            f"{self.hardware} {self.quant}{mtp_suffix} "
-            f"TP={self.tensor_parallel} {self.parallel_strategy}"
-        )
+        return f"{self.hardware} {self.quant}{mtp_suffix} TP={self.tensor_parallel} {self.parallel_strategy}"
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -320,12 +315,25 @@ class TpmSummary:
         writer = csv.writer(buf)
         writer.writerow(
             [
-                "model", "hardware", "quant", "tensor_parallel",
-                "parallel_strategy", "mtp", "operating_point", "basis",
-                "concurrency", "output_tpm", "total_tpm",
-                "ttft_avg_ms", "tpot_median_ms", "itl_avg_ms",
-                "mean_isl", "mean_osl", "cache_mode",
-                "usd_per_1m_output_tokens", "usd_per_1m_total_tokens",
+                "model",
+                "hardware",
+                "quant",
+                "tensor_parallel",
+                "parallel_strategy",
+                "mtp",
+                "operating_point",
+                "basis",
+                "concurrency",
+                "output_tpm",
+                "total_tpm",
+                "ttft_avg_ms",
+                "tpot_median_ms",
+                "itl_avg_ms",
+                "mean_isl",
+                "mean_osl",
+                "cache_mode",
+                "usd_per_1m_output_tokens",
+                "usd_per_1m_total_tokens",
             ]
         )
         for g in self.groups:
@@ -335,15 +343,23 @@ class TpmSummary:
                 for basis in BASES:
                     writer.writerow(
                         [
-                            g.model, g.hardware, g.quant, g.tensor_parallel,
-                            g.parallel_strategy, g.mtp, point.operating_point,
-                            basis, point.concurrency,
+                            g.model,
+                            g.hardware,
+                            g.quant,
+                            g.tensor_parallel,
+                            g.parallel_strategy,
+                            g.mtp,
+                            point.operating_point,
+                            basis,
+                            point.concurrency,
                             _fmt_num(getattr(point, f"output_tpm_{basis}")),
                             _fmt_num(getattr(point, f"total_tpm_{basis}")),
                             _fmt_num(point.ttft_avg_ms),
                             _fmt_num(point.tpot_median_ms),
                             _fmt_num(point.itl_avg_ms),
-                            _fmt_num(g.mean_isl), _fmt_num(g.mean_osl), g.cache_mode,
+                            _fmt_num(g.mean_isl),
+                            _fmt_num(g.mean_osl),
+                            g.cache_mode,
                             _fmt_num(point.usd_per_1m_output_tokens),
                             _fmt_num(point.usd_per_1m_total_tokens),
                         ]
@@ -360,10 +376,7 @@ class TpmSummary:
             lines.append(f"- Data source / shape: {self.context_line}")
         lines.append(f"- gpus_per_node basis: {self.gpus_per_node}")
         if self.sla_computed:
-            lines.append(
-                f"- SLA thresholds: TTFT <= {self.ttft_sla_ms} ms, "
-                f"TPOT/ITL <= {self.tpot_sla_ms} ms"
-            )
+            lines.append(f"- SLA thresholds: TTFT <= {self.ttft_sla_ms} ms, TPOT/ITL <= {self.tpot_sla_ms} ms")
         else:
             lines.append(
                 "- SLA thresholds: not set -> SLA columns not computed "
@@ -411,10 +424,7 @@ class TpmSummary:
                 elif self.sla_computed:
                     # SLA thresholds were set but no sweep point met them:
                     # show an explicit row so the gap is never silently absent.
-                    lines.append(
-                        f"| {g.legend_label} | sla | - | no point met SLA "
-                        "| - | - | - | - | - | - | - |"
-                    )
+                    lines.append(f"| {g.legend_label} | sla | - | no point met SLA | - | - | - | - | - | - | - |")
             lines.append("")
         return "\n".join(lines)
 
@@ -452,9 +462,7 @@ def _ordered_unique(items: Sequence[str]) -> list[str]:
     return list(seen.keys())
 
 
-def _meets_sla(
-    row: AtlasCell, ttft_sla_ms: float | None, tpot_sla_ms: float | None
-) -> bool:
+def _meets_sla(row: AtlasCell, ttft_sla_ms: float | None, tpot_sla_ms: float | None) -> bool:
     """True iff the row satisfies every supplied latency threshold.
 
     A threshold of ``None`` is not applied. When a threshold is applied the
@@ -477,23 +485,20 @@ def _point_from_row(
     gpus_per_node: int,
     usd_per_gpu_hour: float | None = None,
 ) -> TpmPoint:
-    o_gpu = row.output_tps_per_gpu * SECONDS_PER_MINUTE
-    t_gpu = (
-        row.total_tps_per_gpu * SECONDS_PER_MINUTE
-        if row.total_tps_per_gpu is not None
-        else None
-    )
+    output_tps_per_gpu = _required_output_tps(row)
+    o_gpu = output_tps_per_gpu * SECONDS_PER_MINUTE
+    t_gpu = row.total_tps_per_gpu * SECONDS_PER_MINUTE if row.total_tps_per_gpu is not None else None
     # $/1M tokens (basis-independent: cost and tokens both scale with GPU count,
     # so the per-GPU ratio is the $/token for any basis).
     usd_out = usd_tot = None
-    if usd_per_gpu_hour is not None and row.output_tps_per_gpu > 0:
-        usd_out = usd_per_gpu_hour * 1e6 / (row.output_tps_per_gpu * 3600.0)
+    if usd_per_gpu_hour is not None and output_tps_per_gpu > 0:
+        usd_out = usd_per_gpu_hour * 1e6 / (output_tps_per_gpu * 3600.0)
         if row.total_tps_per_gpu and row.total_tps_per_gpu > 0:
             usd_tot = usd_per_gpu_hour * 1e6 / (row.total_tps_per_gpu * 3600.0)
     return TpmPoint(
         operating_point=operating_point,
         concurrency=row.concurrency,
-        output_tps_per_gpu=row.output_tps_per_gpu,
+        output_tps_per_gpu=output_tps_per_gpu,
         total_tps_per_gpu=row.total_tps_per_gpu,
         output_tpm_per_gpu=o_gpu,
         output_tpm_per_replica=o_gpu * tensor_parallel,
@@ -509,6 +514,14 @@ def _point_from_row(
         usd_per_1m_total_tokens=usd_tot,
         usd_per_gpu_hour=usd_per_gpu_hour,
     )
+
+
+def _required_output_tps(row: AtlasCell) -> float:
+    """Return throughput after the summary's row filter has validated it."""
+    output_tps_per_gpu = row.output_tps_per_gpu
+    if output_tps_per_gpu is None:
+        raise ValueError("TPM operating points require output_tps_per_gpu")
+    return output_tps_per_gpu
 
 
 def _group_attr(group_rows: Sequence[AtlasCell], attr: str) -> float | None:
@@ -546,7 +559,7 @@ def compute_tpm_summary(
     for row in rows:
         if row.output_tps_per_gpu is None:
             continue
-        key = (row.model,) + row.legend_key
+        key = (row.model, *row.legend_key)
         groups.setdefault(key, []).append(row)
 
     out_groups: list[TpmGroup] = []
@@ -562,11 +575,7 @@ def compute_tpm_summary(
     # publish. Only a NON-default (operator-supplied) unmatched key is a typo.
     if cost_map:
         present_hw = {key[1] for key in groups}
-        unmatched = [
-            hw
-            for hw in cost_map
-            if hw not in present_hw and hw not in DEFAULT_USD_PER_GPU_HOUR
-        ]
+        unmatched = [hw for hw in cost_map if hw not in present_hw and hw not in DEFAULT_USD_PER_GPU_HOUR]
         if unmatched:
             print(
                 f"WARNING: cost: usd_per_gpu_hour has hardware key(s) {unmatched} "
@@ -575,24 +584,18 @@ def compute_tpm_summary(
                 "'b200' vs 'B200').",
                 file=sys.stderr,
             )
-    for key, group_rows in groups.items():
-        peak_row = max(group_rows, key=lambda r: r.output_tps_per_gpu)
+    for _key, group_rows in groups.items():
+        peak_row = max(group_rows, key=_required_output_tps)
         tp = peak_row.tensor_parallel
         usd_gpu_hr = cost_map.get(peak_row.hardware)
-        peak = _point_from_row(
-            peak_row, OPERATING_POINT_PEAK, tp, gpus_per_node, usd_gpu_hr
-        )
+        peak = _point_from_row(peak_row, OPERATING_POINT_PEAK, tp, gpus_per_node, usd_gpu_hr)
 
         sla_point: TpmPoint | None = None
         if sla_active:
-            sla_candidates = [
-                r for r in group_rows if _meets_sla(r, ttft_sla_ms, tpot_sla_ms)
-            ]
+            sla_candidates = [r for r in group_rows if _meets_sla(r, ttft_sla_ms, tpot_sla_ms)]
             if sla_candidates:
-                sla_row = max(sla_candidates, key=lambda r: r.output_tps_per_gpu)
-                sla_point = _point_from_row(
-                    sla_row, OPERATING_POINT_SLA, tp, gpus_per_node, usd_gpu_hr
-                )
+                sla_row = max(sla_candidates, key=_required_output_tps)
+                sla_point = _point_from_row(sla_row, OPERATING_POINT_SLA, tp, gpus_per_node, usd_gpu_hr)
 
         out_groups.append(
             TpmGroup(

@@ -87,9 +87,7 @@ def test_next_lever_problems_present_is_empty(tmp_path: Path):
 
 def test_next_lever_problems_frontier_exhausted_is_allowed(tmp_path: Path):
     """A genuinely-maxed dimension opts out via the non-empty escape value."""
-    (tmp_path / "config.yaml").write_text(
-        "name: t\nnext_lever: 'frontier-exhausted: HBM SoL 94% at c=256'\n"
-    )
+    (tmp_path / "config.yaml").write_text("name: t\nnext_lever: 'frontier-exhausted: HBM SoL 94% at c=256'\n")
     assert next_lever_problems(tmp_path) == []
 
 
@@ -116,7 +114,10 @@ def test_publish_strict_refuses_without_next_lever(tmp_path: Path):
     _strip_next_lever(cd)
     with pytest.raises(CampaignIncompleteError, match="next_lever"):
         publish(
-            cd, cfg=_stub_cfg(), dry_run=True, strict=True,
+            cd,
+            cfg=_stub_cfg(),
+            dry_run=True,
+            strict=True,
             s3_client_factory=lambda _cfg: _FakeS3Client(),
         )
 
@@ -127,7 +128,9 @@ def test_publish_no_strict_records_missing_next_lever_and_lands(tmp_path: Path):
     cd = _stage_campaign(tmp_path)
     _strip_next_lever(cd)
     result = publish(
-        cd, cfg=_stub_cfg(), dry_run=True,
+        cd,
+        cfg=_stub_cfg(),
+        dry_run=True,
         s3_client_factory=lambda _cfg: _FakeS3Client(),
     )
     assert result.campaign.row_count == 1

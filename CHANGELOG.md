@@ -3,6 +3,34 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-16
+
+### Added
+- Added repository-wide Ruff, Pyright, and ShellCheck gates to `make all`,
+  pre-commit, and CI.
+- Added an upgrade guide, a Claude Code MCP health check, and a Codex MCP
+  registration check.
+
+### Security
+- Kept Artificial Analysis API keys out of subprocess arguments, command
+  receipts, standard output, standard error, CLI JSON, and MCP responses.
+- Rejected custom AIPerf commands that embed `--api-key` before they can run or
+  create evidence artifacts.
+
+### Changed
+- Required an explicit `--client` in the direct MCP installer and client
+  configuration helper. The installer no longer writes Cursor configuration
+  when the caller omits a client.
+- Updated the pinned Artificial Analysis dependency closure and held the MCP
+  runtime below version 2 pending a deliberate compatibility migration.
+
+### Fixed
+- Corrected production type contracts across the server, hooks, skills, and
+  repository scripts.
+- Fixed a variable-shadowing bug that could corrupt K-suffixed benchmark cell
+  identifiers when variant metadata was present.
+- Documented the search-tool fallback when `rg` is not installed.
+
 ## [0.3.1] - 2026-08-16
 
 ### Security

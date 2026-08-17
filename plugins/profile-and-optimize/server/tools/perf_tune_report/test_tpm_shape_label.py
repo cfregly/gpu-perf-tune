@@ -5,6 +5,7 @@ a per-hardware shape caption must NOT collapse heterogeneous-shape variant group
 ISL/OSL label (which would hide per-point variation). _shape_caption emits a single
 ISL/OSL only when the groups share it; otherwise "ISL/OSL: per-row (varies)".
 """
+
 from __future__ import annotations
 
 import sys

@@ -16,8 +16,8 @@ Legend semantics (mirrors the source GLM-5.1 PDF):
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from tools.perf_tune_report.schema import AtlasCell
 
@@ -29,12 +29,12 @@ LABEL_CONCURRENCIES: tuple[int, ...] = (1, 8, 32)
 # the four hw/TP combos the GLM-5.1 PDF uses; unknown combos fall back to a
 # deterministic gray so the figure still renders without crashing.
 DEFAULT_PALETTE: dict[tuple[str, int], str] = {
-    ("H100", 16): "#1f77b4",   # blue
-    ("B200", 8): "#2ca02c",    # green
-    ("GB300", 4): "#d62728",   # red
-    ("GB300", 8): "#9467bd",   # purple (NVL72 8-GPU variants)
-    ("B200", 4): "#ff7f0e",    # orange
-    ("H100", 8): "#8c564b",    # brown
+    ("H100", 16): "#1f77b4",  # blue
+    ("B200", 8): "#2ca02c",  # green
+    ("GB300", 4): "#d62728",  # red
+    ("GB300", 8): "#9467bd",  # purple (NVL72 8-GPU variants)
+    ("B200", 4): "#ff7f0e",  # orange
+    ("H100", 8): "#8c564b",  # brown
 }
 _FALLBACK_COLOR = "#7f7f7f"  # neutral gray
 

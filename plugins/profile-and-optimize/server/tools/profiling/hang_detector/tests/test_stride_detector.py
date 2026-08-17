@@ -21,10 +21,7 @@ from tools.profiling.hang_detector.stride_detector import (
 class StrideDetectorTest(unittest.TestCase):
     def test_healthy_cohort_emits_zero_alerts(self) -> None:
         """All ranks advance synchronously; no bucket lags."""
-        snaps = [
-            RankSnapshot(rank=r, seq_num=150, timestamp=1.0)
-            for r in (0, 1, 16, 31, 32, 33, 48, 63, 64, 95, 127)
-        ]
+        snaps = [RankSnapshot(rank=r, seq_num=150, timestamp=1.0) for r in (0, 1, 16, 31, 32, 33, 48, 63, 64, 95, 127)]
         alerts = detect_stride_lag(snaps, stride=32)
         self.assertEqual(alerts, [])
 
@@ -101,9 +98,7 @@ class StrideDetectorTest(unittest.TestCase):
 
     def test_invalid_stride_raises(self) -> None:
         with self.assertRaises(ValueError):
-            detect_stride_lag(
-                [RankSnapshot(rank=0, seq_num=1, timestamp=1.0)], stride=0
-            )
+            detect_stride_lag([RankSnapshot(rank=0, seq_num=1, timestamp=1.0)], stride=0)
 
     def test_invalid_lag_threshold_raises(self) -> None:
         with self.assertRaises(ValueError):

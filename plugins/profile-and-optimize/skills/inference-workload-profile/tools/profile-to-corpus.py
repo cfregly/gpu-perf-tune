@@ -25,6 +25,7 @@ Usage:
   ./profile-to-corpus.py --profile workload-profile.json --out-plan corpus-plan.sh [--total 54000]
   ./profile-to-corpus.py --profile workload-profile.json --traffic redacted.jsonl --out corpus.jsonl
 """
+
 import argparse
 import json
 import shlex
@@ -35,7 +36,7 @@ import sys
 CLASS_TO_DATASETS = {
     "chat": ["ultrachat", "sharegpt"],
     "code": ["opencodeinstruct", "codealpaca-20k"],
-    "structured-rewrite": ["opc"],          # opc = code-edit/diff-flavored
+    "structured-rewrite": ["opc"],  # opc = code-edit/diff-flavored
 }
 
 
@@ -49,16 +50,14 @@ def close_cli_text(stream) -> None:
         stream.close()
 
 
-def emit_weighted_plan(profile: dict, total: int, out_plan: str, specforge_dir: str,
-                       out_data: str):
+def emit_weighted_plan(profile: dict, total: int, out_plan: str, specforge_dir: str, out_data: str):
     mix = profile.get("content_class_mix", {})
     grand = sum(mix.values()) or 1
     quoted_specforge_dir = shlex.quote(specforge_dir)
     quoted_out_data = shlex.quote(out_data)
     lines = [
         "#!/usr/bin/env bash",
-        "# corpus-plan.sh -- WS-C2 weighted-dataset plan (auto-generated from a "
-        "workload profile).",
+        "# corpus-plan.sh -- WS-C2 weighted-dataset plan (auto-generated from a workload profile).",
         "# Run inside the SpecForge env (e.g. via b1-prepare-data.sbatch's container).",
         "# Produces a profile-matched conversations.jsonl to use as run-offline.sh DATA_PATH.",
         "set -euo pipefail",
@@ -72,23 +71,21 @@ def emit_weighted_plan(profile: dict, total: int, out_plan: str, specforge_dir: 
     ]
     for cls, count in sorted(mix.items()):
         frac = count / grand
-        cls_total = int(round(frac * total))
+        cls_total = round(frac * total)
         datasets = CLASS_TO_DATASETS.get(cls, ["ultrachat"])
         per = max(1, cls_total // len(datasets))
-        status = (f"[corpus] class={cls} frac={frac:.2f} n~={cls_total} "
-                  f"via {','.join(datasets)}")
+        status = f"[corpus] class={cls} frac={frac:.2f} n~={cls_total} via {','.join(datasets)}"
         lines.append(f"printf '%s\\n' {shlex.quote(status)}")
         for ds in datasets:
             lines.append(
-                f'python scripts/prepare_data.py --dataset {shlex.quote(ds)} '
+                f"python scripts/prepare_data.py --dataset {shlex.quote(ds)} "
                 f'--sample-size {per} --output-path "$OUT" || true'
             )
             # prepare_data.py writes <dataset>_train.jsonl; collect them
             lines.append(f'PARTS+=("$OUT/{ds}_train.jsonl")')
     lines += [
         f'cat "${{PARTS[@]}}" > {quoted_out_data}',
-        f"printf '%s lines=%s\\n' {shlex.quote(f'[corpus] wrote {out_data}')} "
-        f'"$(wc -l < {quoted_out_data})"',
+        f"printf '%s lines=%s\\n' {shlex.quote(f'[corpus] wrote {out_data}')} \"$(wc -l < {quoted_out_data})\"",
     ]
     output = open_cli_text(out_plan, "w")
     try:
@@ -98,7 +95,7 @@ def emit_weighted_plan(profile: dict, total: int, out_plan: str, specforge_dir: 
     print(f"== wrote weighted-dataset plan {out_plan} ==")
     print("Profile-matched mix:")
     for cls, count in sorted(mix.items()):
-        print(f"  {cls:<20} {count/grand:6.1%}  -> {CLASS_TO_DATASETS.get(cls,['ultrachat'])}")
+        print(f"  {cls:<20} {count / grand:6.1%}  -> {CLASS_TO_DATASETS.get(cls, ['ultrachat'])}")
     print(f"\nRun it in the SpecForge container (cluster). DATA_PATH = {out_data}")
 
 
@@ -118,7 +115,7 @@ def convert_traffic(profile: dict, traffic: str, out_data: str):
                 continue
             try:
                 rec = json.loads(line)
-            except Exception:
+            except json.JSONDecodeError:
                 skipped += 1
                 continue
             convs = []
@@ -130,13 +127,12 @@ def convert_traffic(profile: dict, traffic: str, out_data: str):
                 comp = rec.get("completion") or rec.get("response")
                 if isinstance(comp, str) and comp:
                     convs.append({"role": "assistant", "content": comp})
-            elif "conversations" in rec:   # already in schema
+            elif "conversations" in rec:  # already in schema
                 convs = rec["conversations"]
-            if len(convs) < 2:             # need at least user+assistant to supervise
+            if len(convs) < 2:  # need at least user+assistant to supervise
                 skipped += 1
                 continue
-            fout.write(json.dumps({"id": rec.get("id", f"traffic-{i}"),
-                                   "conversations": convs}) + "\n")
+            fout.write(json.dumps({"id": rec.get("id", f"traffic-{i}"), "conversations": convs}) + "\n")
             n += 1
     finally:
         close_cli_text(fin)
@@ -144,18 +140,23 @@ def convert_traffic(profile: dict, traffic: str, out_data: str):
     print(f"== wrote {out_data}: {n} conversations ({skipped} skipped) ==")
     if n == 0:
         sys.exit(2)
-    print("This is a true profile-matched corpus (real traffic). Use as run-offline.sh "
-          "DATA_PATH. NOTE: ensure the traffic was redacted upstream (PII / secrets).")
+    print(
+        "This is a true profile-matched corpus (real traffic). Use as run-offline.sh "
+        "DATA_PATH. NOTE: ensure the traffic was redacted upstream (PII / secrets)."
+    )
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", required=True)
     ap.add_argument("--traffic", default=None, help="redacted traffic jsonl (mode b)")
-    ap.add_argument("--out", dest="out_data", default="corpus.jsonl",
-                    help="output conversations jsonl (mode b) or final concat path (mode a)")
-    ap.add_argument("--out-plan", default="corpus-plan.sh",
-                    help="weighted-dataset plan script (mode a)")
+    ap.add_argument(
+        "--out",
+        dest="out_data",
+        default="corpus.jsonl",
+        help="output conversations jsonl (mode b) or final concat path (mode a)",
+    )
+    ap.add_argument("--out-plan", default="corpus-plan.sh", help="weighted-dataset plan script (mode a)")
     ap.add_argument("--total", type=int, default=54000, help="target corpus size (mode a)")
     ap.add_argument("--specforge-dir", default="/mnt/data/eagle3-train/SpecForge")
     args = ap.parse_args()
@@ -169,8 +170,7 @@ def main():
     if args.traffic:
         convert_traffic(profile, args.traffic, args.out_data)
     else:
-        emit_weighted_plan(profile, args.total, args.out_plan, args.specforge_dir,
-                           args.out_data)
+        emit_weighted_plan(profile, args.total, args.out_plan, args.specforge_dir, args.out_data)
 
 
 if __name__ == "__main__":

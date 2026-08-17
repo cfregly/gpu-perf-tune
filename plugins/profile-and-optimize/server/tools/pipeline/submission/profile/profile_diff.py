@@ -111,16 +111,13 @@ def run_nsys_stats(report_path: Path, out_dir: Path) -> dict[str, Path]:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
-            f"nsys stats failed for {report_path}:\n"
-            f"  stdout:\n{exc.stdout}\n  stderr:\n{exc.stderr}"
+            f"nsys stats failed for {report_path}:\n  stdout:\n{exc.stdout}\n  stderr:\n{exc.stderr}"
         ) from exc
     paths = {}
     for report in NSYS_REPORTS:
         candidate = out_dir / f"{report_path.stem}_{report}.csv"
         if not candidate.is_file():
-            raise RuntimeError(
-                f"nsys stats did not produce expected CSV: {candidate}"
-            )
+            raise RuntimeError(f"nsys stats did not produce expected CSV: {candidate}")
         paths[report] = candidate
     return paths
 
@@ -133,13 +130,9 @@ def collect_csv_dir(csv_dir: Path) -> dict[str, Path]:
     for report in NSYS_REPORTS:
         matches = sorted(csv_dir.glob(f"*_{report}.csv"))
         if not matches:
-            raise FileNotFoundError(
-                f"no CSV matching *_{report}.csv in {csv_dir}"
-            )
+            raise FileNotFoundError(f"no CSV matching *_{report}.csv in {csv_dir}")
         if len(matches) > 1:
-            raise RuntimeError(
-                f"ambiguous CSV match for {report} in {csv_dir}: {matches}"
-            )
+            raise RuntimeError(f"ambiguous CSV match for {report} in {csv_dir}: {matches}")
         paths[report] = matches[0]
     return paths
 
@@ -193,10 +186,7 @@ def parse_stat_csv(
         total_idx = _resolve(total_col_candidates)
         count_idx = _resolve(count_col_candidates) if count_col_candidates else None
         if name_idx is None or total_idx is None:
-            raise RuntimeError(
-                f"could not locate name/total columns in {csv_path}; "
-                f"header was {header_norm}"
-            )
+            raise RuntimeError(f"could not locate name/total columns in {csv_path}; header was {header_norm}")
         for raw in reader:
             if not raw or len(raw) <= max(name_idx, total_idx):
                 continue
@@ -273,10 +263,7 @@ def parse_nccl(csv_path: Path) -> list[StatRow]:
                 continue
             totals[name] += _to_int(raw[dur_idx])
             counts[name] += 1
-    return [
-        StatRow(name=name, total_ns=totals[name], count=counts[name])
-        for name in totals
-    ]
+    return [StatRow(name=name, total_ns=totals[name], count=counts[name]) for name in totals]
 
 
 def keep_interesting_nvtx(rows: list[StatRow]) -> list[StatRow]:
@@ -401,8 +388,7 @@ def render_report(
         f"Baseline: `{baseline_label}`  ",
         f"Candidate: `{candidate_label}`",
         "",
-        "Sorted by absolute delta-of-totals; top "
-        f"`{limit}` rows per table.",
+        f"Sorted by absolute delta-of-totals; top `{limit}` rows per table.",
         "",
         "Each row's `Delta` column is `candidate - baseline`. Positive numbers "
         "indicate the candidate spent MORE device time in that range / kernel "
@@ -427,34 +413,36 @@ def populate_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     `profile_diff --json-out file.json`.
     """
     src = parser.add_argument_group("inputs (mutually exclusive per side)")
-    src.add_argument("--baseline", type=Path, default=None,
-                     help="Path to the baseline .nsys-rep.")
-    src.add_argument("--baseline-csv-dir", type=Path, default=None,
-                     help="Pre-extracted nsys-stats directory for the baseline.")
-    src.add_argument("--candidate", type=Path, default=None,
-                     help="Path to the candidate .nsys-rep.")
-    src.add_argument("--candidate-csv-dir", type=Path, default=None,
-                     help="Pre-extracted nsys-stats directory for the candidate.")
-    parser.add_argument("--baseline-label", default=None,
-                        help="Override the baseline label printed in the report.")
-    parser.add_argument("--candidate-label", default=None,
-                        help="Override the candidate label printed in the report.")
-    parser.add_argument("--out", type=Path, default=None,
-                        help="Write the report to this path. Default: stdout.")
-    parser.add_argument("--json-out", dest="json_out", type=Path, default=None,
-                        help="Optional JSON sidecar with the full delta tables.")
-    parser.add_argument("--json", action="store_true",
-                        help="No-op; --json-out PATH is the real JSON sidecar flag.")
-    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
-                        help=f"Top-N rows per table. Default {DEFAULT_LIMIT}.")
-    parser.add_argument("--scratch", type=Path, default=None,
-                        help="Scratch directory for nsys-stats CSV extraction. "
-                             "Default: <out parent>/nsys-stats or a tempdir.")
+    src.add_argument("--baseline", type=Path, default=None, help="Path to the baseline .nsys-rep.")
+    src.add_argument(
+        "--baseline-csv-dir", type=Path, default=None, help="Pre-extracted nsys-stats directory for the baseline."
+    )
+    src.add_argument("--candidate", type=Path, default=None, help="Path to the candidate .nsys-rep.")
+    src.add_argument(
+        "--candidate-csv-dir", type=Path, default=None, help="Pre-extracted nsys-stats directory for the candidate."
+    )
+    parser.add_argument("--baseline-label", default=None, help="Override the baseline label printed in the report.")
+    parser.add_argument("--candidate-label", default=None, help="Override the candidate label printed in the report.")
+    parser.add_argument("--out", type=Path, default=None, help="Write the report to this path. Default: stdout.")
+    parser.add_argument(
+        "--json-out", dest="json_out", type=Path, default=None, help="Optional JSON sidecar with the full delta tables."
+    )
+    parser.add_argument("--json", action="store_true", help="No-op; --json-out PATH is the real JSON sidecar flag.")
+    parser.add_argument(
+        "--limit", type=int, default=DEFAULT_LIMIT, help=f"Top-N rows per table. Default {DEFAULT_LIMIT}."
+    )
+    parser.add_argument(
+        "--scratch",
+        type=Path,
+        default=None,
+        help="Scratch directory for nsys-stats CSV extraction. Default: <out parent>/nsys-stats or a tempdir.",
+    )
     return parser
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    description = (__doc__ or "Diff two Nsight Systems profiles").splitlines()[0]
+    parser = argparse.ArgumentParser(description=description)
     populate_parser(parser)
     return parser.parse_args(argv)
 

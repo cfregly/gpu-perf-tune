@@ -148,9 +148,7 @@ def _extract_metrics(report: dict) -> dict | None:
     for source in candidates:
         if not isinstance(source, dict):
             continue
-        ttft = _metric_value(
-            source, "time_to_first_token", "median_ttft_ms", "mean_ttft_ms", "ttft_avg_ms"
-        )
+        ttft = _metric_value(source, "time_to_first_token", "median_ttft_ms", "mean_ttft_ms", "ttft_avg_ms")
         rt = _metric_value(source, "request_throughput", "request_throughput_avg")
         ot = _metric_value(
             source,
@@ -165,9 +163,7 @@ def _extract_metrics(report: dict) -> dict | None:
             # TTFO = first non-reasoning/answer token. Capturing both stops the
             # under-reporting that hid MiniMax-M2.7's ~4s think phase behind a
             # 0.10s "TTFT" (minimax-aabench). reasoning_token_count quantifies the think.
-            ttfo = _metric_value(
-                source, "time_to_first_output_token", "median_ttfo_ms", "mean_ttfo_ms"
-            )
+            ttfo = _metric_value(source, "time_to_first_output_token", "median_ttfo_ms", "mean_ttfo_ms")
             reasoning_tokens = _metric_value(
                 source, "reasoning_token_count", "reasoning_tokens", "output_reasoning_token_count"
             )
@@ -286,9 +282,7 @@ def run_cell(
         commands.append(cmd)
 
     (cell_dir / "commands").mkdir(exist_ok=True)
-    (cell_dir / "commands" / "aiperf-sweep.cmd").write_text(
-        "\n".join(shlex.join(c) for c in commands) + "\n"
-    )
+    (cell_dir / "commands" / "aiperf-sweep.cmd").write_text("\n".join(shlex.join(c) for c in commands) + "\n")
 
     if dry_run:
         write_status_file(cell_dir, STATUS_FAILED)
@@ -305,7 +299,7 @@ def run_cell(
     stdout_chunks: list[str] = []
     stderr_chunks: list[str] = []
     exits: list[int] = []
-    for cmd, c in zip(commands, cell.concurrencies):
+    for cmd, c in zip(commands, cell.concurrencies, strict=True):
         proc = subprocess_runner(cmd, capture_output=True, text=True, check=False)
         exits.append(proc.returncode)
         stdout_chunks.append(f"# concurrency={c} exit={proc.returncode}\n{proc.stdout or ''}")
@@ -323,9 +317,7 @@ def run_cell(
 
     (cell_dir / "commands" / "aiperf-sweep.stdout").write_text("\n".join(stdout_chunks))
     (cell_dir / "commands" / "aiperf-sweep.stderr").write_text("\n".join(stderr_chunks))
-    (cell_dir / "commands" / "aiperf-sweep.exit").write_text(
-        "\n".join(str(e) for e in exits) + "\n"
-    )
+    (cell_dir / "commands" / "aiperf-sweep.exit").write_text("\n".join(str(e) for e in exits) + "\n")
 
     rows, status = normalize_outputs(cell, raw_dir, cell_dir)
     write_normalized_json(cell_dir, rows)

@@ -25,7 +25,6 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -160,10 +159,10 @@ def _scale_anchor(tps_anchor: float, ttft_anchor: float, c_anchor: int, c_target
     ratio = c_target / c_anchor
     # tps/GPU rises with concurrency up to saturation. Below C=8 use ratio**0.85
     # to approximate the diminishing-returns shape vLLM produces.
-    tps = tps_anchor * (ratio ** 0.85)
+    tps = tps_anchor * (ratio**0.85)
     # TTFT below C=8: divide by ratio**0.6 so going from C=8 to C=1 cuts
     # TTFT by ~3.8x. Realistic for prefill-dominated workloads.
-    ttft = ttft_anchor * (ratio ** 0.6) if ratio < 1.0 else ttft_anchor
+    ttft = ttft_anchor * (ratio**0.6) if ratio < 1.0 else ttft_anchor
     return tps, ttft
 
 
@@ -244,13 +243,9 @@ def build_rows() -> list[AtlasCell]:
                     tps_per_gpu = float(raw_tps)
                     ttft_ms = float(raw_ttft)
                 else:
-                    tps_per_gpu, ttft_ms = _scale_anchor(
-                        float(c8_tps), float(C8_TTFT_MS[v_idx][m_idx]), 8, c
-                    )
+                    tps_per_gpu, ttft_ms = _scale_anchor(float(c8_tps), float(C8_TTFT_MS[v_idx][m_idx]), 8, c)
 
-                req_throughput, tps_per_user = _derived_metrics(
-                    tps_per_gpu, c, variant.tp
-                )
+                req_throughput, tps_per_user = _derived_metrics(tps_per_gpu, c, variant.tp)
 
                 rows.append(
                     AtlasCell(
@@ -278,9 +273,7 @@ def build_rows() -> list[AtlasCell]:
     for hw, tp in (("B200", 8), ("GB300", 4)):
         for strategy in ("EP", "TP"):
             for mbt in MBT_VALUES:
-                cell_id = (
-                    f"{hw.lower()}-nvfp4-tp{tp}-{strategy.lower()}-mtp-mbt{mbt}"
-                )
+                cell_id = f"{hw.lower()}-nvfp4-tp{tp}-{strategy.lower()}-mtp-mbt{mbt}"
                 rows.append(
                     AtlasCell(
                         cell_id=cell_id,

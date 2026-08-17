@@ -23,11 +23,24 @@ from tools.perf_tune_report.schema import AtlasCell, write_jsonl
 
 
 def _row(**kw) -> AtlasCell:
-    base = dict(cell_id="c1", model="GLM-5.1-NVFP4", hardware="GB300", quant="NVFP4",
-                tensor_parallel=4, parallel_strategy="TP", mtp=False,
-                max_num_batched_tokens=8192, concurrency=1, status="full",
-                ttft_avg_ms=120.0, request_throughput_avg=0.2, output_tps_per_user=70.0,
-                output_tps_per_gpu=400.0, tpot_median_ms=13.0, backend="vllm-sweep")
+    base = dict(
+        cell_id="c1",
+        model="GLM-5.1-NVFP4",
+        hardware="GB300",
+        quant="NVFP4",
+        tensor_parallel=4,
+        parallel_strategy="TP",
+        mtp=False,
+        max_num_batched_tokens=8192,
+        concurrency=1,
+        status="full",
+        ttft_avg_ms=120.0,
+        request_throughput_avg=0.2,
+        output_tps_per_user=70.0,
+        output_tps_per_gpu=400.0,
+        tpot_median_ms=13.0,
+        backend="vllm-sweep",
+    )
     base.update(kw)
     return AtlasCell(**base)
 
@@ -68,25 +81,43 @@ def test_build_throughput_skips_failed_status():
 
 
 def test_resolve_gpu_hr_override_and_config(tmp_path: Path):
-    from tools.perf_tune_report.fleet_leaderboard import resolve_gpu_hr, GPU_HR_DEFAULT
+    from tools.perf_tune_report.fleet_leaderboard import GPU_HR_DEFAULT, resolve_gpu_hr
+
     cfg = tmp_path / "configs"
     cfg.mkdir()
     (cfg / "cost.yaml").write_text("usd_per_gpu_hour:\n  GB300: 9.99\n  default: 4.00\n")
-    assert resolve_gpu_hr("GB300", cfg, 12.0) == 12.0   # --gpu-hr override wins
-    assert resolve_gpu_hr("GB300", cfg) == 9.99          # per-hardware rate
-    assert resolve_gpu_hr("UNKNOWN-HW", cfg) == 4.00     # falls back to default
+    assert resolve_gpu_hr("GB300", cfg, 12.0) == 12.0  # --gpu-hr override wins
+    assert resolve_gpu_hr("GB300", cfg) == 9.99  # per-hardware rate
+    assert resolve_gpu_hr("UNKNOWN-HW", cfg) == 4.00  # falls back to default
     assert resolve_gpu_hr("GB300", tmp_path / "nope") == GPU_HR_DEFAULT  # no config -> built-in default
 
 
+def test_resolve_gpu_hr_ignores_non_mapping_yaml(tmp_path: Path):
+    from tools.perf_tune_report.fleet_leaderboard import GPU_HR_DEFAULT, resolve_gpu_hr
+
+    cfg = tmp_path / "configs"
+    cfg.mkdir()
+    (cfg / "cost.yaml").write_text("- not\n- a mapping\n")
+
+    assert resolve_gpu_hr("GB300", cfg) == GPU_HR_DEFAULT
+
+
 def test_build_quality_extracts_eval_acc_and_renders():
-    from tools.perf_tune_report.fleet_leaderboard import build_quality, build_pareto, render_pareto_md
+    from tools.perf_tune_report.fleet_leaderboard import build_pareto, build_quality, render_pareto_md
+
     eval_row = _row(
-        model="zai-org/GLM-5.1", cell_id="model-eval", concurrency=1,
-        ttft_avg_ms=None, request_throughput_avg=None, output_tps_per_user=None,
-        output_tps_per_gpu=None, tpot_median_ms=None, max_num_batched_tokens=0,
-        backend="aiperf", captured_at="2026-06-07T00:00:00Z",
-        extra={"metric_kind": "eval_acc",
-               "quality_metrics": {"gpqa_acc": 0.52, "mmlu_pro_acc": 0.903}},
+        model="zai-org/GLM-5.1",
+        cell_id="model-eval",
+        concurrency=1,
+        ttft_avg_ms=None,
+        request_throughput_avg=None,
+        output_tps_per_user=None,
+        output_tps_per_gpu=None,
+        tpot_median_ms=None,
+        max_num_batched_tokens=0,
+        backend="aiperf",
+        captured_at="2026-06-07T00:00:00Z",
+        extra={"metric_kind": "eval_acc", "quality_metrics": {"gpqa_acc": 0.52, "mmlu_pro_acc": 0.903}},
     )
     q = build_quality([eval_row])
     assert q["GLM-5.1"]["gpqa_acc"] == 0.52
@@ -101,10 +132,10 @@ def test_build_quality_extracts_eval_acc_and_renders():
 
 def test_build_aa_latest_captured_wins():
     rows = [
-        _row(model="A", cell_id="aa-1k", concurrency=1, output_tps_per_user=100.0,
-             captured_at="2026-06-01T00:00:00Z"),
-        _row(model="A", cell_id="aa-1k", concurrency=1, output_tps_per_user=222.0,
-             captured_at="2026-06-05T00:00:00Z"),  # newer wins
+        _row(model="A", cell_id="aa-1k", concurrency=1, output_tps_per_user=100.0, captured_at="2026-06-01T00:00:00Z"),
+        _row(
+            model="A", cell_id="aa-1k", concurrency=1, output_tps_per_user=222.0, captured_at="2026-06-05T00:00:00Z"
+        ),  # newer wins
     ]
     aa = build_aa(rows)
     assert aa["A"][("aa-1k", 1)]["opu"] == 222.0
@@ -117,6 +148,7 @@ def test_build_pareto_frontier_and_dominance():
             _row(model=name, cell_id="aa-1k", concurrency=1, output_tps_per_user=opu, ttft_avg_ms=ttft),
             _row(model=name, cell_id="sweep", concurrency=256, tensor_parallel=4, output_tps_per_gpu=tps),
         ]
+
     rows = model("AAA", 200, 100, 2000) + model("BBB", 100, 300, 1000) + model("CCC", 250, 50, 500)
     M = build_pareto(rows)
     assert set(M) == {"AAA", "BBB", "CCC"}
@@ -142,10 +174,10 @@ def test_read_all_rows_filters_hardware(tmp_path: Path):
 
 
 def test_write_leaderboards_emits_three_files(tmp_path: Path):
-    rows = (
-        [_row(model="Fast", cell_id="aa-1k", concurrency=1, output_tps_per_user=220.0, ttft_avg_ms=100.0),
-         _row(model="Fast", cell_id="sweep", concurrency=256, output_tps_per_gpu=2900.0)]
-    )
+    rows = [
+        _row(model="Fast", cell_id="aa-1k", concurrency=1, output_tps_per_user=220.0, ttft_avg_ms=100.0),
+        _row(model="Fast", cell_id="sweep", concurrency=256, output_tps_per_gpu=2900.0),
+    ]
     out = tmp_path / "out"
     res = write_leaderboards(rows, out, hw="GB300", gpu_hr=8.60)
     for key in ("aa", "throughput", "pareto"):
@@ -156,12 +188,15 @@ def test_write_leaderboards_emits_three_files(tmp_path: Path):
 
 def test_cli_fleet_leaderboard_smoke(tmp_path: Path, capsys):
     campaigns = tmp_path / "campaigns"
-    _stage(campaigns, "camp-20260607T000000Z", [
-        _row(model="Champ", cell_id="aa-1k", concurrency=1, output_tps_per_user=221.0, ttft_avg_ms=170.0),
-        _row(model="Champ", cell_id="sweep", concurrency=160, output_tps_per_gpu=2916.0),
-    ])
-    rc = main(["fleet_leaderboard", "--campaigns-dir", str(campaigns),
-               "--out", str(tmp_path / "out"), "--json"])
+    _stage(
+        campaigns,
+        "camp-20260607T000000Z",
+        [
+            _row(model="Champ", cell_id="aa-1k", concurrency=1, output_tps_per_user=221.0, ttft_avg_ms=170.0),
+            _row(model="Champ", cell_id="sweep", concurrency=160, output_tps_per_gpu=2916.0),
+        ],
+    )
+    rc = main(["fleet_leaderboard", "--campaigns-dir", str(campaigns), "--out", str(tmp_path / "out"), "--json"])
     assert rc == 0
     assert (tmp_path / "out" / "FLEET-MODEL-SELECTION-GB300.md").is_file()
     assert "Champ" in (tmp_path / "out" / "THROUGHPUT-FLEET-LEADERBOARD-GB300.md").read_text()

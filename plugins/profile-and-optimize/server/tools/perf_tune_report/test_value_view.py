@@ -23,19 +23,37 @@ from tools.perf_tune_report.value_view import (
 )
 
 
-def _mk_campaign(campaigns: Path, cid: str, *, sol_rigor: str = "L3",
-                 dcgm: bool = True, tier: str = "verdict",
-                 baseline_named: bool = True) -> Path:
+def _mk_campaign(
+    campaigns: Path,
+    cid: str,
+    *,
+    sol_rigor: str = "L3",
+    dcgm: bool = True,
+    tier: str = "verdict",
+    baseline_named: bool = True,
+) -> Path:
     d = campaigns / cid
     d.mkdir(parents=True)
-    (d / "report_status.json").write_text(json.dumps({
-        "sol_rigor": sol_rigor, "sol_complete": True,
-        "dcgm_grounded": dcgm, "focus": "mixed",
-    }))
-    (d / "verdict.json").write_text(json.dumps({
-        "tier": tier, "trials": 3, "same_node": True,
-        "baseline_named": baseline_named,
-    }))
+    (d / "report_status.json").write_text(
+        json.dumps(
+            {
+                "sol_rigor": sol_rigor,
+                "sol_complete": True,
+                "dcgm_grounded": dcgm,
+                "focus": "mixed",
+            }
+        )
+    )
+    (d / "verdict.json").write_text(
+        json.dumps(
+            {
+                "tier": tier,
+                "trials": 3,
+                "same_node": True,
+                "baseline_named": baseline_named,
+            }
+        )
+    )
     return d
 
 
@@ -43,19 +61,46 @@ def _registry() -> dict:
     return {
         "baseline_context": "vLLM + FlashInfer-TRTLLM",
         "findings": [
-            {"id": "win1", "title": "Win One", "lifecycle": "done", "baseline": "fp8",
-             "win": "1.3x", "hardware": "GB300", "deploy_readiness": "deployed",
-             "campaign_ids": ["camp-good"], "next_lever": "extend to fleet", "next_value": "high",
-             "source_refs": [{"repo": "example/vllm", "branch": "feature/x",
-                              "commit": "abc1234", "delivery": "overlay"}]},
-            {"id": "wip1", "title": "WIP One", "lifecycle": "in_progress", "baseline": "ctrl",
-             "win": "tbd", "hardware": "GB300", "deploy_readiness": "fork-local",
-             "campaign_ids": ["camp-missing"], "next_lever": "finish revalidation", "next_value": "med",
-             "source_refs": [{"repo": "vllm-project/vllm", "delivery": "image",
-                              "image": "infr/vllm:v2.12.3"}]},
-            {"id": "neg1", "title": "Neg One", "lifecycle": "closed_negative", "baseline": "FI",
-             "win": "slower", "hardware": "GB300", "deploy_readiness": "n/a",
-             "campaign_ids": [], "next_lever": "frontier-exhausted: H1 cannot beat H4", "next_value": "low"},
+            {
+                "id": "win1",
+                "title": "Win One",
+                "lifecycle": "done",
+                "baseline": "fp8",
+                "win": "1.3x",
+                "hardware": "GB300",
+                "deploy_readiness": "deployed",
+                "campaign_ids": ["camp-good"],
+                "next_lever": "extend to fleet",
+                "next_value": "high",
+                "source_refs": [
+                    {"repo": "example/vllm", "branch": "feature/x", "commit": "abc1234", "delivery": "overlay"}
+                ],
+            },
+            {
+                "id": "wip1",
+                "title": "WIP One",
+                "lifecycle": "in_progress",
+                "baseline": "ctrl",
+                "win": "tbd",
+                "hardware": "GB300",
+                "deploy_readiness": "fork-local",
+                "campaign_ids": ["camp-missing"],
+                "next_lever": "finish revalidation",
+                "next_value": "med",
+                "source_refs": [{"repo": "vllm-project/vllm", "delivery": "image", "image": "infr/vllm:v2.12.3"}],
+            },
+            {
+                "id": "neg1",
+                "title": "Neg One",
+                "lifecycle": "closed_negative",
+                "baseline": "FI",
+                "win": "slower",
+                "hardware": "GB300",
+                "deploy_readiness": "n/a",
+                "campaign_ids": [],
+                "next_lever": "frontier-exhausted: H1 cannot beat H4",
+                "next_value": "low",
+            },
         ],
     }
 
@@ -80,11 +125,24 @@ def test_ungrounded_and_unnamed_flags(tmp_path):
     campaigns = tmp_path / "campaigns"
     campaigns.mkdir()
     _mk_campaign(campaigns, "camp-weak", sol_rigor="none", dcgm=False, baseline_named=False)
-    reg = {"baseline_context": "x", "findings": [
-        {"id": "w", "title": "W", "lifecycle": "done", "baseline": "b", "win": "1x",
-         "hardware": "GB300", "deploy_readiness": "deployed", "campaign_ids": ["camp-weak"],
-         "next_lever": "next", "next_value": "med", "source_refs": [{"repo": "x/vllm", "delivery": "overlay"}]},
-    ]}
+    reg = {
+        "baseline_context": "x",
+        "findings": [
+            {
+                "id": "w",
+                "title": "W",
+                "lifecycle": "done",
+                "baseline": "b",
+                "win": "1x",
+                "hardware": "GB300",
+                "deploy_readiness": "deployed",
+                "campaign_ids": ["camp-weak"],
+                "next_lever": "next",
+                "next_value": "med",
+                "source_refs": [{"repo": "x/vllm", "delivery": "overlay"}],
+            },
+        ],
+    }
     view = build_value_view(reg, campaigns)
     flags = view["findings"][0]["live"]["flags"]
     assert any("ungrounded" in f for f in flags)
@@ -110,10 +168,21 @@ def test_missing_source_refs_flagged(tmp_path):
     campaigns = tmp_path / "campaigns"
     campaigns.mkdir()
     _mk_campaign(campaigns, "camp-good")
-    reg = {"baseline_context": "x", "findings": [
-        {"id": "w", "title": "W", "lifecycle": "done", "baseline": "b", "win": "1x",
-         "hardware": "GB300", "deploy_readiness": "deployed", "campaign_ids": ["camp-good"]},
-    ]}
+    reg = {
+        "baseline_context": "x",
+        "findings": [
+            {
+                "id": "w",
+                "title": "W",
+                "lifecycle": "done",
+                "baseline": "b",
+                "win": "1x",
+                "hardware": "GB300",
+                "deploy_readiness": "deployed",
+                "campaign_ids": ["camp-good"],
+            },
+        ],
+    }
     view = build_value_view(reg, campaigns)
     assert any("no source_refs" in f for f in view["findings"][0]["live"]["flags"])
 
@@ -131,10 +200,21 @@ def test_missing_next_lever_flagged(tmp_path):
     campaigns = tmp_path / "campaigns"
     campaigns.mkdir()
     _mk_campaign(campaigns, "camp-good")
-    reg = {"baseline_context": "x", "findings": [
-        {"id": "w", "title": "W", "lifecycle": "closed_negative", "baseline": "b", "win": "1x",
-         "hardware": "GB300", "deploy_readiness": "n/a", "campaign_ids": []},
-    ]}
+    reg = {
+        "baseline_context": "x",
+        "findings": [
+            {
+                "id": "w",
+                "title": "W",
+                "lifecycle": "closed_negative",
+                "baseline": "b",
+                "win": "1x",
+                "hardware": "GB300",
+                "deploy_readiness": "n/a",
+                "campaign_ids": [],
+            },
+        ],
+    }
     view = build_value_view(reg, campaigns)
     assert any("no next_lever" in f for f in view["findings"][0]["live"]["flags"])
 
@@ -164,8 +244,7 @@ def test_cli_value_view_report(tmp_path, capsys):
     _mk_campaign(campaigns, "camp-good")
     reg = tmp_path / "value-findings.yaml"
     reg.write_text(yaml.safe_dump(_registry()))
-    rc = main(["value_view", "--registry", str(reg),
-               "--campaigns-dir", str(campaigns), "--format", "report"])
+    rc = main(["value_view", "--registry", str(reg), "--campaigns-dir", str(campaigns), "--format", "report"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "value prop" in out and "**Win One**" in out
@@ -178,13 +257,10 @@ def test_cli_value_view_resolves_gpu_hr_from_cost_yaml(tmp_path, capsys):
     campaigns.mkdir()
     _mk_campaign(campaigns, "camp-good")
     (tmp_path / "configs").mkdir()
-    (tmp_path / "configs" / "cost.yaml").write_text(
-        "usd_per_gpu_hour:\n  GB300: 7.77\n  default: 7.77\n"
-    )
+    (tmp_path / "configs" / "cost.yaml").write_text("usd_per_gpu_hour:\n  GB300: 7.77\n  default: 7.77\n")
     reg = tmp_path / "value-findings.yaml"
     reg.write_text(yaml.safe_dump(_registry()))
-    rc = main(["value_view", "--registry", str(reg),
-               "--campaigns-dir", str(campaigns), "--json"])
+    rc = main(["value_view", "--registry", str(reg), "--campaigns-dir", str(campaigns), "--json"])
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["gpu_hr"] == 7.77  # from cost.yaml, not the 8.60 GB300 default
@@ -198,8 +274,7 @@ def test_cli_value_view_gpu_hr_override_wins_over_cost_yaml(tmp_path, capsys):
     (tmp_path / "configs" / "cost.yaml").write_text("usd_per_gpu_hour:\n  GB300: 7.77\n")
     reg = tmp_path / "value-findings.yaml"
     reg.write_text(yaml.safe_dump(_registry()))
-    rc = main(["value_view", "--registry", str(reg), "--campaigns-dir", str(campaigns),
-               "--gpu-hr", "12.34", "--json"])
+    rc = main(["value_view", "--registry", str(reg), "--campaigns-dir", str(campaigns), "--gpu-hr", "12.34", "--json"])
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["gpu_hr"] == 12.34  # explicit override wins
@@ -209,19 +284,52 @@ def _gain_registry() -> dict:
     """Registry exercising the blended gain ranking: a throughput speedup with tok/s/GPU
     (-> $ columns), a latency speedup without tok/s/GPU, and a high-next_value lever w/ no gain."""
     src = [{"repo": "x/vllm", "delivery": "overlay"}]
-    return {"baseline_context": "x", "findings": [
-        {"id": "thr_big", "title": "Thr Big", "lifecycle": "done", "baseline": "b", "win": "2.3x",
-         "hardware": "GB300", "deploy_readiness": "deployed", "campaign_ids": [],
-         "next_lever": "roll to fleet", "next_value": "med", "source_refs": src,
-         "gain": {"speedup": 2.3, "tier": "throughput", "tps_gpu_peak": 481, "baseline_tps_gpu": 369}},
-        {"id": "lat_mid", "title": "Lat Mid", "lifecycle": "done", "baseline": "b", "win": "2.1x",
-         "hardware": "GB300", "deploy_readiness": "deployed", "campaign_ids": [],
-         "next_lever": "port to fleet", "next_value": "low", "source_refs": src,
-         "gain": {"speedup": 2.1, "tier": "latency"}},
-        {"id": "no_gain_high", "title": "No Gain High", "lifecycle": "in_progress", "baseline": "b",
-         "win": "tbd", "hardware": "GB300", "deploy_readiness": "fork-local", "campaign_ids": [],
-         "next_lever": "infra fix", "next_value": "high", "source_refs": src},
-    ]}
+    return {
+        "baseline_context": "x",
+        "findings": [
+            {
+                "id": "thr_big",
+                "title": "Thr Big",
+                "lifecycle": "done",
+                "baseline": "b",
+                "win": "2.3x",
+                "hardware": "GB300",
+                "deploy_readiness": "deployed",
+                "campaign_ids": [],
+                "next_lever": "roll to fleet",
+                "next_value": "med",
+                "source_refs": src,
+                "gain": {"speedup": 2.3, "tier": "throughput", "tps_gpu_peak": 481, "baseline_tps_gpu": 369},
+            },
+            {
+                "id": "lat_mid",
+                "title": "Lat Mid",
+                "lifecycle": "done",
+                "baseline": "b",
+                "win": "2.1x",
+                "hardware": "GB300",
+                "deploy_readiness": "deployed",
+                "campaign_ids": [],
+                "next_lever": "port to fleet",
+                "next_value": "low",
+                "source_refs": src,
+                "gain": {"speedup": 2.1, "tier": "latency"},
+            },
+            {
+                "id": "no_gain_high",
+                "title": "No Gain High",
+                "lifecycle": "in_progress",
+                "baseline": "b",
+                "win": "tbd",
+                "hardware": "GB300",
+                "deploy_readiness": "fork-local",
+                "campaign_ids": [],
+                "next_lever": "infra fix",
+                "next_value": "high",
+                "source_refs": src,
+            },
+        ],
+    }
 
 
 def test_frontier_ranks_by_gain_then_next_value(tmp_path):
@@ -258,13 +366,25 @@ def test_evidence_ids_render_supporting_count_no_flags(tmp_path):
     campaigns = tmp_path / "campaigns"
     campaigns.mkdir()
     _mk_campaign(campaigns, "camp-good")
-    reg = {"baseline_context": "x", "findings": [
-        {"id": "w", "title": "W", "lifecycle": "done", "baseline": "b", "win": "1x",
-         "hardware": "GB300", "deploy_readiness": "deployed", "campaign_ids": ["camp-good"],
-         "next_lever": "next", "next_value": "med",
-         "source_refs": [{"repo": "x/vllm", "delivery": "overlay"}],
-         "evidence_ids": ["e1-20260101T000000Z", "e2-20260101T000001Z"]},
-    ]}
+    reg = {
+        "baseline_context": "x",
+        "findings": [
+            {
+                "id": "w",
+                "title": "W",
+                "lifecycle": "done",
+                "baseline": "b",
+                "win": "1x",
+                "hardware": "GB300",
+                "deploy_readiness": "deployed",
+                "campaign_ids": ["camp-good"],
+                "next_lever": "next",
+                "next_value": "med",
+                "source_refs": [{"repo": "x/vllm", "delivery": "overlay"}],
+                "evidence_ids": ["e1-20260101T000000Z", "e2-20260101T000001Z"],
+            },
+        ],
+    }
     view = build_value_view(reg, campaigns)
     # evidence_ids add NO flags (the clean-ledger design goal: only campaign_ids carry flags)
     assert view["findings"][0]["live"]["flags"] == []

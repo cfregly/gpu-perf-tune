@@ -41,9 +41,9 @@ pattern as ``KernelsJsonMalformed``.
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
-
+from typing import Any
 
 # Per-category mapping is loaded from sol-ceilings.yaml's
 # ``category_ceiling_map`` at runtime. This module-level constant is the
@@ -199,7 +199,7 @@ def _format_ceiling(row: dict[str, Any]) -> str:
 
 def render_page(
     fig,
-    cell_kernels: "OrderedDict[str, dict[str, Any]]",
+    cell_kernels: OrderedDict[str, dict[str, Any]],
     rows: Sequence[Any],
     ceilings: dict[str, Any],
     hardware_key: str,
@@ -227,7 +227,6 @@ def render_page(
             f"hardware key {hardware_key!r} not in ceilings",
         )
 
-    import matplotlib.pyplot as plt
     from matplotlib import gridspec
 
     hw_data = ceilings[hardware_key]
@@ -310,7 +309,7 @@ def render_page(
         ax_cat.tick_params(axis="x", labelsize=7)
         ax_cat.set_xlim(0, max(shares) * 1.50 if shares else 1.0)
 
-        for bar, share, clabel, blabel in zip(bars, shares, ceiling_labels, bound_labels):
+        for bar, share, clabel, blabel in zip(bars, shares, ceiling_labels, bound_labels, strict=True):
             ax_cat.text(
                 share + max(shares) * 0.02,
                 bar.get_y() + bar.get_height() / 2,
@@ -341,8 +340,7 @@ def render_page(
         ax_wl.text(
             0.5,
             0.5,
-            "(no atlas rows carry output_tps_per_gpu; "
-            "workload-level SoL skipped)",
+            "(no atlas rows carry output_tps_per_gpu; workload-level SoL skipped)",
             ha="center",
             va="center",
             fontsize=9,
@@ -390,8 +388,7 @@ def render_page(
     ax_cv.text(
         0.5,
         0.55,
-        "Caveat: %SoL derived from zymtrace sample-share is a time-share "
-        "proxy, not byte-traffic or FLOP measurement.",
+        "Caveat: %SoL derived from zymtrace sample-share is a time-share proxy, not byte-traffic or FLOP measurement.",
         ha="center",
         va="center",
         fontsize=7,

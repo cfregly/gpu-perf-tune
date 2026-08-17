@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,14 +20,32 @@ from tools.perf_tune_report.runners.aa_workload import (
     AA_SHAPES,
     MODE_DATASET_REPLAY,
     MODE_SYNTHETIC,
+    REDACTED_API_KEY,
     build_aiperf_command,
     generate_aa_dataset,
     normalize_outputs,
+    redact_aiperf_command,
 )
 from tools.perf_tune_report.runners.common import CellConfig
 from tools.perf_tune_report.schema import BACKEND_AIPERF, STATUS_FAILED, STATUS_FULL
 
 # --- shapes ---------------------------------------------------------------
+
+FAKE_API_KEY = "fake-aa-api-key-not-a-secret"
+
+
+def _load_standalone_script():
+    script = (
+        Path(__file__).resolve().parents[3]
+        / "skills"
+        / "inference-aa-workload"
+        / "assets"
+        / "repro_artificialanalysis.py"
+    )
+    spec = importlib.util.spec_from_file_location("aa_repro_script", script)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def test_aa_shapes_match_methodology():
@@ -41,28 +60,13 @@ def test_aa_shapes_match_methodology():
 def test_standalone_script_shapes_drift_guard():
     """The bundled self-contained script must declare the same shapes as the
     package module (the script intentionally has no package import)."""
-    script = (
-        Path(__file__).resolve().parents[3]
-        / "skills"
-        / "inference-aa-workload"
-        / "assets"
-        / "repro_artificialanalysis.py"
-    )
-    spec = importlib.util.spec_from_file_location("aa_repro_script", script)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    mod = _load_standalone_script()
     pkg = {k: (v.input_tokens, v.output_tokens) for k, v in AA_SHAPES.items()}
     assert mod.AA_SHAPES == pkg
 
 
 def _load_ttfo_probe():
-    script = (
-        Path(__file__).resolve().parents[3]
-        / "skills"
-        / "inference-aa-workload"
-        / "assets"
-        / "aa_ttfo_probe.py"
-    )
+    script = Path(__file__).resolve().parents[3] / "skills" / "inference-aa-workload" / "assets" / "aa_ttfo_probe.py"
     spec = importlib.util.spec_from_file_location("aa_ttfo_probe", script)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -72,12 +76,8 @@ def _load_ttfo_probe():
 def test_ttfo_probe_accepts_only_explicit_loopback_targets():
     probe = _load_ttfo_probe()
 
-    assert probe.parse_probe_target(
-        "http://localhost:8000/v1/chat/completions"
-    ) == ("127.0.0.1", 8000)
-    assert probe.parse_probe_target(
-        "http://127.0.0.1:18000/v1/chat/completions"
-    ) == ("127.0.0.1", 18000)
+    assert probe.parse_probe_target("http://localhost:8000/v1/chat/completions") == ("127.0.0.1", 8000)
+    assert probe.parse_probe_target("http://127.0.0.1:18000/v1/chat/completions") == ("127.0.0.1", 18000)
     assert probe.parse_probe_target("http://[::1]:8000/v1/chat/completions") == (
         "::1",
         8000,
@@ -161,7 +161,6 @@ def test_build_command_synthetic():
         output_artifact_dir="/tmp/out",
         concurrency=4,
         request_count=20,
-        api_key="secret",
         tokenizer="m",
         mode=MODE_SYNTHETIC,
     )
@@ -171,9 +170,30 @@ def test_build_command_synthetic():
     assert cmd[cmd.index("--output-tokens-mean") + 1] == "1500"
     assert "--extra-inputs" in cmd and "temperature:0" in cmd and "top_p:1" in cmd
     assert "min_tokens:1500" in cmd and "ignore_eos:true" in cmd
-    assert cmd[cmd.index("--api-key") + 1] == "secret"
+    assert "--api-key" not in cmd
     assert cmd[cmd.index("--concurrency") + 1] == "4"
     assert "--input-file" not in cmd
+
+
+def test_redact_aiperf_command_copies_and_redacts_api_key_forms():
+    split_form = ["aiperf", "profile", "--api-key", FAKE_API_KEY, "--model", "m"]
+    equals_form = ["aiperf", "profile", f"--api-key={FAKE_API_KEY}"]
+
+    assert redact_aiperf_command(split_form) == [
+        "aiperf",
+        "profile",
+        "--api-key",
+        REDACTED_API_KEY,
+        "--model",
+        "m",
+    ]
+    assert redact_aiperf_command(equals_form) == [
+        "aiperf",
+        "profile",
+        f"--api-key={REDACTED_API_KEY}",
+    ]
+    assert split_form[3] == FAKE_API_KEY
+    assert equals_form[2].endswith(FAKE_API_KEY)
 
 
 def test_build_command_dataset_replay():
@@ -268,9 +288,7 @@ def test_normalize_outputs_happy_path(tmp_path: Path):
             }
         )
     )
-    rows, status = normalize_outputs(
-        cell, cell_dir / "raw", cell_dir, shape=AA_SHAPES["aa-10k"], mode=MODE_SYNTHETIC
-    )
+    rows, status = normalize_outputs(cell, cell_dir / "raw", cell_dir, shape=AA_SHAPES["aa-10k"], mode=MODE_SYNTHETIC)
     assert status == STATUS_FULL
     assert len(rows) == 1
     r = rows[0]
@@ -306,9 +324,7 @@ def test_normalize_outputs_aiperf_0_9_nested_schema(tmp_path: Path):
             }
         )
     )
-    rows, status = normalize_outputs(
-        cell, cell_dir / "raw", cell_dir, shape=AA_SHAPES["aa-1k"], mode=MODE_SYNTHETIC
-    )
+    rows, status = normalize_outputs(cell, cell_dir / "raw", cell_dir, shape=AA_SHAPES["aa-1k"], mode=MODE_SYNTHETIC)
     assert status == STATUS_FULL
     assert len(rows) == 1
     r = rows[0]
@@ -322,9 +338,7 @@ def test_normalize_outputs_no_reports_is_failed(tmp_path: Path):
     cell = _cell()
     cell_dir = tmp_path / "cells" / cell.cell_id
     (cell_dir / "raw").mkdir(parents=True)
-    rows, status = normalize_outputs(
-        cell, cell_dir / "raw", cell_dir, shape=AA_SHAPES["aa-10k"], mode=MODE_SYNTHETIC
-    )
+    rows, status = normalize_outputs(cell, cell_dir / "raw", cell_dir, shape=AA_SHAPES["aa-10k"], mode=MODE_SYNTHETIC)
     assert rows == []
     assert status == STATUS_FAILED
 
@@ -332,7 +346,7 @@ def test_normalize_outputs_no_reports_is_failed(tmp_path: Path):
 # --- runner dry-run -------------------------------------------------------
 
 
-def test_run_cell_aa_dry_run(tmp_path: Path):
+def test_run_cell_aa_dry_run_redacts_api_key_from_receipts(tmp_path: Path):
     cell = CellConfig(
         cell_id="aa-1k",
         model="m",
@@ -350,14 +364,115 @@ def test_run_cell_aa_dry_run(tmp_path: Path):
         shape_name="aa-1k",
         model="m",
         url="http://x:8000",
+        api_key=FAKE_API_KEY,
         mode=MODE_SYNTHETIC,
         dry_run=True,
     )
     assert result.dry_run is True
     assert result.shape == "aa-1k"
     assert len(result.commands) == 2  # one per concurrency
+    assert FAKE_API_KEY not in json.dumps(result.commands)
+    assert all("--api-key" not in command for command in result.commands)
     # The .cmd capture file is written even on dry-run.
-    assert (result.cell_dir / "commands" / "aa-sweep.cmd").is_file()
+    receipt = result.cell_dir / "commands" / "aa-sweep.cmd"
+    assert receipt.is_file()
+    assert FAKE_API_KEY not in receipt.read_text()
+    assert "--api-key" not in receipt.read_text()
+    configs = sorted((result.cell_dir / "commands").glob("*.aiperf.json"))
+    assert len(configs) == 2
+    assert all("${OPENAI_API_KEY}" in path.read_text() for path in configs)
+    assert all(FAKE_API_KEY not in path.read_text() for path in configs)
+
+
+@pytest.mark.parametrize(
+    "aiperf_cmd",
+    [
+        ["aiperf", "--api-key", FAKE_API_KEY],
+        ["aiperf", f"--api-key={FAKE_API_KEY}"],
+    ],
+    ids=["split", "equals"],
+)
+def test_run_cell_aa_rejects_api_key_in_custom_command(tmp_path: Path, aiperf_cmd: list[str]):
+    with pytest.raises(ValueError, match="managed API-key option"):
+        run_cell_aa(
+            _cell(),
+            tmp_path,
+            shape_name="aa-1k",
+            model="m",
+            url="http://x:8000",
+            api_key=FAKE_API_KEY,
+            aiperf_cmd=aiperf_cmd,
+            dry_run=True,
+        )
+
+    assert not (tmp_path / "cells").exists()
+
+
+def test_run_cell_aa_passes_key_only_to_runtime_subprocess(tmp_path: Path):
+    calls = []
+
+    def runner(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(
+            returncode=7,
+            stdout=f"provider output accidentally echoed {FAKE_API_KEY}",
+            stderr=f"provider error accidentally echoed {FAKE_API_KEY}",
+        )
+
+    result = run_cell_aa(
+        _cell(),
+        tmp_path,
+        shape_name="aa-1k",
+        model="m",
+        url="http://x:8000",
+        api_key=FAKE_API_KEY,
+        mode=MODE_SYNTHETIC,
+        subprocess_runner=runner,
+    )
+
+    assert len(calls) == 1
+    command, kwargs = calls[0]
+    assert FAKE_API_KEY not in command
+    assert "--api-key" not in command
+    assert "--config" in command
+    assert kwargs["env"]["OPENAI_API_KEY"] == FAKE_API_KEY
+    assert FAKE_API_KEY not in json.dumps(result.commands)
+    assert all("--api-key" not in item for item in result.commands)
+    assert FAKE_API_KEY not in (result.cell_dir / "commands" / "aa-sweep.cmd").read_text()
+    assert FAKE_API_KEY not in (result.cell_dir / "commands" / "aa-sweep.stdout").read_text()
+    assert FAKE_API_KEY not in (result.cell_dir / "commands" / "aa-sweep.stderr").read_text()
+    assert REDACTED_API_KEY in (result.cell_dir / "commands" / "aa-sweep.stdout").read_text()
+    assert REDACTED_API_KEY in (result.cell_dir / "commands" / "aa-sweep.stderr").read_text()
+
+
+def test_run_cell_aa_kube_streams_key_without_argv_exposure(tmp_path: Path):
+    calls = []
+
+    def runner(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    result = run_cell_aa(
+        _cell(),
+        tmp_path,
+        shape_name="aa-1k",
+        model="m",
+        url="http://x:8000",
+        api_key=FAKE_API_KEY,
+        mode=MODE_SYNTHETIC,
+        kube={"namespace": "ns", "bench_pod": "bench", "kube_context": "ctx"},
+        spec_scrape=False,
+        subprocess_runner=runner,
+    )
+
+    bench_command, bench_kwargs = calls[0]
+    assert bench_command[:3] == ["kubectl", "exec", "-i"]
+    assert FAKE_API_KEY not in bench_command
+    assert "--api-key" not in bench_command
+    assert bench_kwargs["input"].startswith(f"{FAKE_API_KEY}\n")
+    assert "${OPENAI_API_KEY}" in bench_kwargs["input"]
+    assert FAKE_API_KEY not in bench_kwargs["input"].split("\n", 1)[1]
+    assert FAKE_API_KEY not in json.dumps(result.commands)
 
 
 def test_run_cell_aa_unknown_shape(tmp_path: Path):
@@ -378,7 +493,7 @@ def test_run_cell_aa_unknown_shape(tmp_path: Path):
 # --- CLI dispatch ---------------------------------------------------------
 
 
-def test_cli_cell_run_aa_dry_run(tmp_path: Path, capsys):
+def test_cli_cell_run_aa_dry_run_redacts_api_key(tmp_path: Path, capsys, monkeypatch):
     from tools.perf_tune_report.perf_tune_report_cli import build_parser
 
     campaign = tmp_path / "20260529T000000Z-aa"
@@ -408,6 +523,7 @@ def test_cli_cell_run_aa_dry_run(tmp_path: Path, capsys):
     import yaml
 
     (campaign / "config.yaml").write_text(yaml.safe_dump(config))
+    monkeypatch.setenv("WANDB_INFERENCE_API_KEY", FAKE_API_KEY)
 
     parser = build_parser()
     args = parser.parse_args(
@@ -425,8 +541,107 @@ def test_cli_cell_run_aa_dry_run(tmp_path: Path, capsys):
     )
     rc = args.func(args)
     assert rc == 0
-    out = json.loads(capsys.readouterr().out)
+    stdout = capsys.readouterr().out
+    assert FAKE_API_KEY not in stdout
+    out = json.loads(stdout)
     assert out["backend"] == "aa"
     assert out["aa_shape"] == "aa-10k"
     assert out["dry_run"] is True
     assert len(out["commands"]) == 2
+    assert "--api-key" not in json.dumps(out["commands"])
+    receipt = campaign / "cells" / "aa-10k" / "commands" / "aa-sweep.cmd"
+    assert FAKE_API_KEY not in receipt.read_text()
+
+
+def test_standalone_dry_run_omits_managed_api_key(tmp_path: Path, monkeypatch, capsys):
+    mod = _load_standalone_script()
+    monkeypatch.chdir(tmp_path)
+
+    rc = mod.main(
+        [
+            "--aiperf-bin",
+            "aiperf",
+            "--api-key",
+            FAKE_API_KEY,
+            "--shapes",
+            "aa-1k",
+            "--dry-run",
+        ]
+    )
+
+    assert rc == 0
+    stdout = capsys.readouterr().out
+    assert FAKE_API_KEY not in stdout
+    assert "--api-key" not in stdout
+    assert not (tmp_path / "artifacts").exists()
+
+
+@pytest.mark.parametrize(
+    "aiperf_bin",
+    [
+        f"aiperf --api-key {FAKE_API_KEY}",
+        f"aiperf --api-key={FAKE_API_KEY}",
+    ],
+    ids=["split", "equals"],
+)
+def test_standalone_rejects_api_key_in_custom_command(aiperf_bin: str, capsys):
+    mod = _load_standalone_script()
+
+    rc = mod.main(
+        [
+            "--aiperf-bin",
+            aiperf_bin,
+            "--api-key",
+            FAKE_API_KEY,
+            "--shapes",
+            "aa-1k",
+            "--dry-run",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "must not include --api-key" in captured.err
+    assert FAKE_API_KEY not in captured.out
+    assert FAKE_API_KEY not in captured.err
+
+
+def test_standalone_runtime_passes_api_key_to_subprocess(tmp_path: Path, monkeypatch, capsys):
+    mod = _load_standalone_script()
+    calls = []
+
+    def runner(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(
+            returncode=0,
+            stdout=f"child stdout echoed {FAKE_API_KEY}\n",
+            stderr=f"child stderr echoed {FAKE_API_KEY}\n",
+        )
+
+    monkeypatch.setattr(mod.subprocess, "run", runner)
+    rc = mod.main(
+        [
+            "--aiperf-bin",
+            "aiperf",
+            "--api-key",
+            FAKE_API_KEY,
+            "--artifact-root",
+            str(tmp_path / "artifacts"),
+            "--shapes",
+            "aa-1k",
+        ]
+    )
+
+    assert rc == 0
+    command, kwargs = calls[0]
+    assert FAKE_API_KEY not in command
+    assert "--api-key" not in command
+    assert "--config" in command
+    assert kwargs["env"]["OPENAI_API_KEY"] == FAKE_API_KEY
+    assert kwargs["capture_output"] is True
+    assert kwargs["text"] is True
+    captured = capsys.readouterr()
+    assert FAKE_API_KEY not in captured.out
+    assert FAKE_API_KEY not in captured.err
+    assert REDACTED_API_KEY in captured.out
+    assert REDACTED_API_KEY in captured.err

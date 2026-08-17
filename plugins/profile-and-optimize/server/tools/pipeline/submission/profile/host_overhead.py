@@ -90,7 +90,15 @@ def cmd_top(args: argparse.Namespace) -> int:
 
 
 def _record_flamegraph(
-    *, pyspy: str, pid: int, duration: int, rate: int, subprocesses: bool, gil: bool, idle: bool, out: Path,
+    *,
+    pyspy: str,
+    pid: int,
+    duration: int,
+    rate: int,
+    subprocesses: bool,
+    gil: bool,
+    idle: bool,
+    out: Path,
 ) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -118,7 +126,16 @@ def _record_flamegraph(
 
 
 def _record_top_summary(
-    *, pyspy: str, pid: int, duration: int, rate: int, subprocesses: bool, gil: bool, idle: bool, out: Path, top_n: int,
+    *,
+    pyspy: str,
+    pid: int,
+    duration: int,
+    rate: int,
+    subprocesses: bool,
+    gil: bool,
+    idle: bool,
+    out: Path,
+    top_n: int,
 ) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     speedscope = out.with_suffix(".speedscope.json")
@@ -172,7 +189,7 @@ def _summarise_speedscope(path: Path, *, top_n: int) -> str:
             continue
         if len(weights) != len(samples):
             continue
-        for stack, weight in zip(samples, weights):
+        for stack, weight in zip(samples, weights, strict=True):
             if not stack:
                 continue
             total_units += weight
@@ -290,53 +307,61 @@ def populate_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     common_pid = argparse.ArgumentParser(add_help=False)
-    common_pid.add_argument("--pid", type=int, required=True,
-                            help="PID of the rank-0 (or any) process to sample.")
-    common_pid.add_argument("--rate", type=int, default=DEFAULT_RATE_HZ,
-                            help=f"Sampling rate in Hz. Default {DEFAULT_RATE_HZ}.")
-    common_pid.add_argument("--subprocesses", action="store_true",
-                            help="Profile all subprocesses (e.g. dataloader workers).")
-    common_pid.add_argument("--gil", action="store_true",
-                            help="Only sample threads holding the Python GIL.")
-    common_pid.add_argument("--idle", action="store_true",
-                            help="Include idle/blocked threads in the sample stream.")
+    common_pid.add_argument("--pid", type=int, required=True, help="PID of the rank-0 (or any) process to sample.")
+    common_pid.add_argument(
+        "--rate", type=int, default=DEFAULT_RATE_HZ, help=f"Sampling rate in Hz. Default {DEFAULT_RATE_HZ}."
+    )
+    common_pid.add_argument(
+        "--subprocesses", action="store_true", help="Profile all subprocesses (e.g. dataloader workers)."
+    )
+    common_pid.add_argument("--gil", action="store_true", help="Only sample threads holding the Python GIL.")
+    common_pid.add_argument("--idle", action="store_true", help="Include idle/blocked threads in the sample stream.")
 
     top = sub.add_parser("top", parents=[common_pid], help="Live CPU-time-by-function display (Ctrl-C to exit).")
-    top.add_argument("--json", action="store_true",
-                     help="No-op; py-spy top is interactive and prints to the terminal.")
+    top.add_argument("--json", action="store_true", help="No-op; py-spy top is interactive and prints to the terminal.")
     top.set_defaults(func=cmd_top)
 
-    record = sub.add_parser("record", parents=[common_pid],
-                            help="Record stacks for --duration seconds; emit flamegraph + top-N summary.")
-    record.add_argument("--duration", type=int, default=DEFAULT_DURATION_SEC,
-                        help=f"Sampling duration in seconds. Default {DEFAULT_DURATION_SEC}.")
-    record.add_argument("--top-n", type=int, default=DEFAULT_TOP_N,
-                        help=f"Number of top frames in the text summary. Default {DEFAULT_TOP_N}.")
-    record.add_argument("--art-dir", type=Path, default=None,
-                        help="Artifact dir; flame -> host-overhead-flame.svg; "
-                             "text -> host-overhead.txt.")
-    record.add_argument("--flame-out", type=Path, default=None,
-                        help="Override the flamegraph output path.")
-    record.add_argument("--text-out", type=Path, default=None,
-                        help="Override the top-N text summary output path.")
-    record.add_argument("--json", action="store_true",
-                        help="No-op; record emits the flamegraph SVG + top-N text summary.")
+    record = sub.add_parser(
+        "record", parents=[common_pid], help="Record stacks for --duration seconds; emit flamegraph + top-N summary."
+    )
+    record.add_argument(
+        "--duration",
+        type=int,
+        default=DEFAULT_DURATION_SEC,
+        help=f"Sampling duration in seconds. Default {DEFAULT_DURATION_SEC}.",
+    )
+    record.add_argument(
+        "--top-n",
+        type=int,
+        default=DEFAULT_TOP_N,
+        help=f"Number of top frames in the text summary. Default {DEFAULT_TOP_N}.",
+    )
+    record.add_argument(
+        "--art-dir",
+        type=Path,
+        default=None,
+        help="Artifact dir; flame -> host-overhead-flame.svg; text -> host-overhead.txt.",
+    )
+    record.add_argument("--flame-out", type=Path, default=None, help="Override the flamegraph output path.")
+    record.add_argument("--text-out", type=Path, default=None, help="Override the top-N text summary output path.")
+    record.add_argument(
+        "--json", action="store_true", help="No-op; record emits the flamegraph SVG + top-N text summary."
+    )
     record.set_defaults(func=cmd_record)
 
-    dump = sub.add_parser("dump", parents=[common_pid],
-                          help="One-shot stack snapshot (cheapest).")
-    dump.add_argument("--out", type=Path, default=None,
-                      help="Write the dump here (default: stdout).")
-    dump.add_argument("--locals", action="store_true",
-                      help="Show local variables in each frame.")
-    dump.add_argument("--json", action="store_true",
-                      help="No-op; py-spy dump emits a stack snapshot to --out / stdout.")
+    dump = sub.add_parser("dump", parents=[common_pid], help="One-shot stack snapshot (cheapest).")
+    dump.add_argument("--out", type=Path, default=None, help="Write the dump here (default: stdout).")
+    dump.add_argument("--locals", action="store_true", help="Show local variables in each frame.")
+    dump.add_argument(
+        "--json", action="store_true", help="No-op; py-spy dump emits a stack snapshot to --out / stdout."
+    )
     dump.set_defaults(func=cmd_dump)
     return parser
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    description = (__doc__ or "Sample a running process with py-spy").splitlines()[0]
+    parser = argparse.ArgumentParser(description=description)
     populate_parser(parser)
     return parser.parse_args(argv)
 

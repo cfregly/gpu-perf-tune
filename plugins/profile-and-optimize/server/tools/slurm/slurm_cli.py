@@ -670,7 +670,7 @@ def cmd_quiet_window(args: argparse.Namespace) -> int:
     try:
         try:
             drain_proc = RUN(drain_argv, capture=True, timeout=60)
-        except BaseException as exc:
+        except BaseException as exc:  # noqa: BLE001 - resume must run after interrupts.
             drain_exception = exc
             if not isinstance(exc, Exception):
                 pending_exception = exc
@@ -720,7 +720,7 @@ def cmd_quiet_window(args: argparse.Namespace) -> int:
                 try:
                     inner_proc = RUN(inner_argv, capture=True, timeout=None)
                     inner_rc = inner_proc.returncode
-                except BaseException as exc:
+                except BaseException as exc:  # noqa: BLE001 - resume must run after interrupts.
                     inner_exception = exc
                     inner_rc = 1
                     if not isinstance(exc, Exception):

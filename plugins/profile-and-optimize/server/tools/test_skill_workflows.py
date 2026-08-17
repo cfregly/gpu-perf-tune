@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_ROOT = PLUGIN_ROOT / "skills"
 
@@ -27,7 +26,6 @@ def test_optimization_skills_do_not_require_absent_private_helpers() -> None:
     absent_helpers = {
         "bench-all-workloads.sh",
         "bench-with-sol.sh",
-        "bench-all-workloads.sh",
         "capture-run-env.sh",
         "capture-sol-window.sh",
         "known-good-config-gate.sh",
@@ -57,67 +55,18 @@ def test_public_runtime_docs_do_not_claim_absent_capture_helpers() -> None:
         PLUGIN_ROOT / "server" / "docs" / "learnings" / "evidence-shape.md",
         PLUGIN_ROOT / "server" / "docs" / "zymtrace-query-hygiene.md",
         PLUGIN_ROOT / "server" / "tools" / "loader_advisor.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "importers"
-        / "inference_perf_bench.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "importers"
-        / "zymtrace_kernels.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "ROOFLINE-METHODOLOGY.md",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "importers" / "inference_perf_bench.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "importers" / "zymtrace_kernels.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "ROOFLINE-METHODOLOGY.md",
         PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "lake_writer.py",
         PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "perf_tune_report_cli.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "importers"
-        / "roofline_sweep.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "importers"
-        / "variant_ab.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "importers"
-        / "workloads.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "renderer"
-        / "champion_select.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "renderer"
-        / "prefill_decode_roofline.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "renderer"
-        / "render_report.py",
-        PLUGIN_ROOT
-        / "server"
-        / "tools"
-        / "perf_tune_report"
-        / "renderer"
-        / "render_status.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "importers" / "roofline_sweep.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "importers" / "variant_ab.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "importers" / "workloads.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "renderer" / "champion_select.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "renderer" / "prefill_decode_roofline.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "renderer" / "render_report.py",
+        PLUGIN_ROOT / "server" / "tools" / "perf_tune_report" / "renderer" / "render_status.py",
         SKILLS_ROOT / "inference-aa-workload" / "SKILL.md",
         SKILLS_ROOT / "inference-kernel-profile" / "SKILL.md",
         SKILLS_ROOT / "inference-kernel-ncu-profile" / "SKILL.md",

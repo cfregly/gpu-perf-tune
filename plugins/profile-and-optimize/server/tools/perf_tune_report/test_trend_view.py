@@ -14,17 +14,32 @@ if str(REPO_ROOT) not in sys.path:
 
 from tools.perf_tune_report.perf_tune_report_cli import main
 from tools.perf_tune_report.schema import AtlasCell, write_jsonl
-from tools.perf_tune_report.trend_view import build_trends, read_lake_rows, render_markdown
+from tools.perf_tune_report.trend_view import build_trends, read_lake_rows
 
 
 def _row(captured_at: str, tps: float, **kw) -> AtlasCell:
     base = dict(
-        cell_id="c", model="GLM-5.1-NVFP4", hardware="GB300", quant="NVFP4",
-        tensor_parallel=4, parallel_strategy="TP", mtp=False, max_num_batched_tokens=8192,
-        concurrency=64, status="full", output_tps_per_gpu=tps, tpot_median_ms=20.0,
-        ttft_avg_ms=100.0, request_throughput_avg=1.0, cache_mode="cold",
-        dataset="random", cudagraph_mode="full", kv_cache_dtype="fp8_e4m3",
-        image="infr/vllm:v2.12.3", captured_at=captured_at, backend="vllm-sweep",
+        cell_id="c",
+        model="GLM-5.1-NVFP4",
+        hardware="GB300",
+        quant="NVFP4",
+        tensor_parallel=4,
+        parallel_strategy="TP",
+        mtp=False,
+        max_num_batched_tokens=8192,
+        concurrency=64,
+        status="full",
+        output_tps_per_gpu=tps,
+        tpot_median_ms=20.0,
+        ttft_avg_ms=100.0,
+        request_throughput_avg=1.0,
+        cache_mode="cold",
+        dataset="random",
+        cudagraph_mode="full",
+        kv_cache_dtype="fp8_e4m3",
+        image="infr/vllm:v2.12.3",
+        captured_at=captured_at,
+        backend="vllm-sweep",
     )
     base.update(kw)
     return AtlasCell(**base)
@@ -71,13 +86,27 @@ def test_lower_better_metric_regression_direction():
 
 def test_cli_trend_view(tmp_path: Path, capsys):
     camps = tmp_path / "campaigns"
-    for name, ts, tps in [("a-20260601T000000Z", "2026-06-01T00:00:00Z", 1000.0),
-                          ("b-20260607T000000Z", "2026-06-07T00:00:00Z", 700.0)]:
+    for name, ts, tps in [
+        ("a-20260601T000000Z", "2026-06-01T00:00:00Z", 1000.0),
+        ("b-20260607T000000Z", "2026-06-07T00:00:00Z", 700.0),
+    ]:
         d = camps / name
         d.mkdir(parents=True)
         write_jsonl([_row(ts, tps)], d / "atlas.jsonl")
-    rc = main(["trend_view", "--campaigns-dir", str(camps), "--metric", "output_tps_per_gpu",
-               "--concurrency", "64", "--out", str(tmp_path / "TREND.md"), "--json"])
+    rc = main(
+        [
+            "trend_view",
+            "--campaigns-dir",
+            str(camps),
+            "--metric",
+            "output_tps_per_gpu",
+            "--concurrency",
+            "64",
+            "--out",
+            str(tmp_path / "TREND.md"),
+            "--json",
+        ]
+    )
     assert rc == 0
     env = json.loads(capsys.readouterr().out)
     assert env["n_trends"] == 1 and env["n_regressions"] == 1
@@ -91,7 +120,7 @@ def test_read_lake_rows_joins_vllm_commit_and_trends(tmp_path: Path):
     group into ONE trend, and the engine-version axis shows the joined vllm_commit, not the
     image tag (the A3 outcome)."""
     pq = pytest.importorskip("pyarrow.parquet")
-    import pyarrow as pa  # noqa: WPS433 - test-only
+    import pyarrow as pa
 
     from tools.perf_tune_report.lake_writer import build_atlas_table
 
@@ -106,16 +135,15 @@ def test_read_lake_rows_joins_vllm_commit_and_trends(tmp_path: Path):
         pq.write_table(build_atlas_table([_row(ts, tps)], camp), adir / "part-0.parquet")
         cdir = tmp_path / f"perflake/perf-report/campaign_v1/dt=2026-06-07/campaign={camp}"
         cdir.mkdir(parents=True)
-        pq.write_table(pa.table({"campaign_id": [camp], "vllm_commit": [commit]}),
-                       cdir / "part-0.parquet")
+        pq.write_table(pa.table({"campaign_id": [camp], "vllm_commit": [commit]}), cdir / "part-0.parquet")
 
     rows = read_lake_rows(tmp_path)
     assert len(rows) == 2
     view = build_trends(rows, metric="output_tps_per_gpu", regression_pct=10.0)
-    assert view["n_trends"] == 1          # same variant_key -> ONE trend across engine versions
+    assert view["n_trends"] == 1  # same variant_key -> ONE trend across engine versions
     t = view["trends"][0]
     assert t["n_points"] == 2
-    assert t["regression"] is True        # 1000 -> 750 tok/s
+    assert t["regression"] is True  # 1000 -> 750 tok/s
     assert set(t["images"]) == {"aaaaaaa1", "bbbbbbb2"}  # vllm_commit, not image tag
 
 
@@ -125,8 +153,7 @@ def test_cli_trend_view_lake_dir(tmp_path: Path, capsys):
 
     adir = tmp_path / "perflake/perf-report/atlas_v1/dt=2026-06-07/campaign=camp-a"
     adir.mkdir(parents=True)
-    pq.write_table(build_atlas_table([_row("2026-06-01T00:00:00Z", 1000.0)], "camp-a"),
-                   adir / "part-0.parquet")
+    pq.write_table(build_atlas_table([_row("2026-06-01T00:00:00Z", 1000.0)], "camp-a"), adir / "part-0.parquet")
     rc = main(["trend_view", "--lake-dir", str(tmp_path), "--json"])
     assert rc == 0
     env = json.loads(capsys.readouterr().out)

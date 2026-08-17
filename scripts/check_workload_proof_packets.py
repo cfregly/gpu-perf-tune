@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_VERSION = "workload_proof_packet_v1"
 WORKFLOW_HANDOFF_SCHEMA_VERSION = "workflow_handoff_v1"

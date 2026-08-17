@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 try:  # Package import, e.g. import tools.ai_tuning.proposals.
-    from .ai_tuning import (
+    from .cmd_proposal import (
         command_proposal_diff,
         command_proposal_validate,
+    )
+    from .cmd_template_patch import (
         command_template_patch_validate,
     )
     from .helpers import (
@@ -23,9 +32,11 @@ try:  # Package import, e.g. import tools.ai_tuning.proposals.
         validate_patched_template_structure,
     )
 except ImportError:  # Direct import from tools/ai_tuning.
-    from ai_tuning import (
+    from cmd_proposal import (
         command_proposal_diff,
         command_proposal_validate,
+    )
+    from cmd_template_patch import (
         command_template_patch_validate,
     )
     from helpers import (

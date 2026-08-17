@@ -7,8 +7,8 @@ Security fixes land on `main` while the next release is in development.
 | Version | Status |
 | --- | --- |
 | `main` | Supported development branch |
-| `0.3.x` | Supported release line |
-| `0.2.x` and earlier | Unsupported |
+| `0.4.x` | Supported release line |
+| `0.3.x` and earlier | Unsupported |
 
 The latest published release may not contain fixes that have landed on `main`.
 Check the [release history](https://github.com/cfregly/gpu-perf-tune/releases) before deploying.

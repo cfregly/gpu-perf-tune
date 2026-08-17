@@ -178,9 +178,7 @@ def test_rows_without_output_tps_are_skipped():
 
 
 def test_discover_tpm_config_reads_block(tmp_path):
-    (tmp_path / "config.yaml").write_text(
-        "name: c\ntpm:\n  ttft_sla_ms: 500\n  tpot_sla_ms: 50\n  gpus_per_node: 4\n"
-    )
+    (tmp_path / "config.yaml").write_text("name: c\ntpm:\n  ttft_sla_ms: 500\n  tpot_sla_ms: 50\n  gpus_per_node: 4\n")
     cfg = discover_tpm_config(tmp_path)
     assert cfg.ttft_sla_ms == 500.0
     assert cfg.tpot_sla_ms == 50.0
@@ -220,14 +218,12 @@ def test_discover_tpm_config_partial_block_fills_defaults(tmp_path):
 def test_discover_tpm_config_cost_block_overlays_defaults(tmp_path):
     # A cost: block overrides one default rate AND adds a brand-new hardware
     # key; the other default rates remain.
-    (tmp_path / "config.yaml").write_text(
-        "cost:\n  usd_per_gpu_hour:\n    B200: 5.0\n    MI325X: 3.0\n"
-    )
+    (tmp_path / "config.yaml").write_text("cost:\n  usd_per_gpu_hour:\n    B200: 5.0\n    MI325X: 3.0\n")
     cfg = discover_tpm_config(tmp_path)
-    assert cfg.usd_per_gpu_hour["B200"] == 5.0          # override of default
-    assert cfg.usd_per_gpu_hour["MI325X"] == 3.0        # brand-new key added
-    assert cfg.usd_per_gpu_hour["H100"] == 6.16         # default retained
-    assert cfg.usd_per_gpu_hour["GB300"] == 12.00       # default estimate retained
+    assert cfg.usd_per_gpu_hour["B200"] == 5.0  # override of default
+    assert cfg.usd_per_gpu_hour["MI325X"] == 3.0  # brand-new key added
+    assert cfg.usd_per_gpu_hour["H100"] == 6.16  # default retained
+    assert cfg.usd_per_gpu_hour["GB300"] == 12.00  # default estimate retained
     assert "campaign config cost: block" in cfg.cost_rate_source
 
 
@@ -259,10 +255,10 @@ def test_discover_tpm_config_overlays_fleet_cost_yaml(tmp_path):
         "usd_per_gpu_hour:\n  GB300: 8.60\n  B200: 6.50\n  default: 8.60\n",
     )
     cfg = discover_tpm_config(camp)
-    assert cfg.usd_per_gpu_hour["GB300"] == 8.60   # cost.yaml overrides the 12.00 default
-    assert cfg.usd_per_gpu_hour["B200"] == 6.50    # cost.yaml overrides the 8.60 default
-    assert cfg.usd_per_gpu_hour["H200"] == 6.31    # default retained (absent from cost.yaml)
-    assert "default" not in cfg.usd_per_gpu_hour   # the fallback key is not a hardware
+    assert cfg.usd_per_gpu_hour["GB300"] == 8.60  # cost.yaml overrides the 12.00 default
+    assert cfg.usd_per_gpu_hour["B200"] == 6.50  # cost.yaml overrides the 8.60 default
+    assert cfg.usd_per_gpu_hour["H200"] == 6.31  # default retained (absent from cost.yaml)
+    assert "default" not in cfg.usd_per_gpu_hour  # the fallback key is not a hardware
     assert "cost.yaml" in cfg.cost_rate_source
 
 
@@ -274,15 +270,20 @@ def test_discover_tpm_config_campaign_block_wins_over_cost_yaml(tmp_path):
         config_text="cost:\n  usd_per_gpu_hour:\n    GB300: 4.00\n",
     )
     cfg = discover_tpm_config(camp)
-    assert cfg.usd_per_gpu_hour["GB300"] == 4.00   # campaign block wins
+    assert cfg.usd_per_gpu_hour["GB300"] == 4.00  # campaign block wins
     assert "campaign config cost: block" in cfg.cost_rate_source
 
 
 def test_group_carries_mean_isl_osl_and_cache_mode():
     rows = [
         _row(concurrency=1, mean_input_tokens=3200.0, mean_output_tokens=512.0, cache_mode="warm"),
-        _row(concurrency=8, output_tps_per_gpu=30.0, mean_input_tokens=3200.0,
-             mean_output_tokens=512.0, cache_mode="warm"),
+        _row(
+            concurrency=8,
+            output_tps_per_gpu=30.0,
+            mean_input_tokens=3200.0,
+            mean_output_tokens=512.0,
+            cache_mode="warm",
+        ),
     ]
     s = compute_tpm_summary(rows)
     g = s.groups[0]

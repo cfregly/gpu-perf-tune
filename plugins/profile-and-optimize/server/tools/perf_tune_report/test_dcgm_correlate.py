@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -30,7 +30,6 @@ if str(REPO_ROOT) not in sys.path:
 
 from tools.perf_tune_report.dcgm_correlate import (
     DcgmCorrelateInputs,
-    PrometheusClient,
     TimeSeries,
     build_queries,
     correlate,
@@ -40,7 +39,6 @@ from tools.perf_tune_report.dcgm_correlate import (
     read_sweep_window_from_bundle,
     write_correlation,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fake Prometheus client
@@ -121,14 +119,14 @@ _CEILINGS: dict = {
         },
     },
     "category_ceiling_map": {
-        "NCCL":         {"metric": "nvlink5_tbps",       "bound": "bandwidth"},
-        "MoE":          {"metric": "nvfp4_dense_pflops", "bound": "compute"},
-        "FMHA":         {"metric": "hbm3e_tbps",         "bound": "bandwidth"},
-        "BMM-NVFP4":    {"metric": "nvfp4_dense_pflops", "bound": "compute"},
-        "Triton-fused": {"metric": "bf16_dense_pflops",  "bound": "compute"},
-        "cuBLAS":       {"metric": "bf16_dense_pflops",  "bound": "compute"},
-        "Elementwise":  {"metric": "hbm3e_tbps",         "bound": "bandwidth"},
-        "Other":        {"metric": "hbm3e_tbps",         "bound": "bandwidth"},
+        "NCCL": {"metric": "nvlink5_tbps", "bound": "bandwidth"},
+        "MoE": {"metric": "nvfp4_dense_pflops", "bound": "compute"},
+        "FMHA": {"metric": "hbm3e_tbps", "bound": "bandwidth"},
+        "BMM-NVFP4": {"metric": "nvfp4_dense_pflops", "bound": "compute"},
+        "Triton-fused": {"metric": "bf16_dense_pflops", "bound": "compute"},
+        "cuBLAS": {"metric": "bf16_dense_pflops", "bound": "compute"},
+        "Elementwise": {"metric": "hbm3e_tbps", "bound": "bandwidth"},
+        "Other": {"metric": "hbm3e_tbps", "bound": "bandwidth"},
     },
     "dcgm_config": {
         "default_labels": ["gpu", "device"],
@@ -162,7 +160,7 @@ def _series(metric: str, gpu: str, samples: list[tuple[float, float]]) -> TimeSe
     return TimeSeries(metric=metric, labels={"gpu": gpu}, samples=samples)
 
 
-_START = datetime(2026, 5, 27, 13, 30, 0, tzinfo=timezone.utc)
+_START = datetime(2026, 5, 27, 13, 30, 0, tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -248,11 +246,15 @@ def test_correlate_ratio_resource_happy_path(tmp_path):
     """
     # DCGM_FI_PROF_DRAM_ACTIVE: 8 GPUs each at 0.5 across the sweep.
     dram_series = [
-        _series("DCGM_FI_PROF_DRAM_ACTIVE", str(i), [
-            (_START.timestamp(), 0.5),
-            (_START.timestamp() + 60, 0.5),
-            (_START.timestamp() + 120, 0.5),
-        ])
+        _series(
+            "DCGM_FI_PROF_DRAM_ACTIVE",
+            str(i),
+            [
+                (_START.timestamp(), 0.5),
+                (_START.timestamp() + 60, 0.5),
+                (_START.timestamp() + 120, 0.5),
+            ],
+        )
         for i in range(8)
     ]
     client = _FakePromClient(
@@ -279,9 +281,7 @@ def test_correlate_bytes_per_s_resource_happy_path(tmp_path):
     """
     target_bps = 0.9e12  # 0.9 TB/s per GPU
     nvl_series = [
-        _series("nvlink_combined", str(i), [
-            (_START.timestamp() + t, target_bps) for t in range(0, 121, 15)
-        ])
+        _series("nvlink_combined", str(i), [(_START.timestamp() + t, target_bps) for t in range(0, 121, 15)])
         for i in range(8)
     ]
     client = _FakePromClient(
@@ -322,10 +322,16 @@ def test_correlate_dry_run_emits_queries_without_executing(tmp_path):
 
 def test_correlate_short_sweep_warns(tmp_path):
     """30-second sweep is below the 60s min_sweep_seconds threshold."""
-    dram = [_series("DCGM_FI_PROF_DRAM_ACTIVE", "0", [
-        (_START.timestamp(), 0.3),
-        (_START.timestamp() + 30, 0.3),
-    ])]
+    dram = [
+        _series(
+            "DCGM_FI_PROF_DRAM_ACTIVE",
+            "0",
+            [
+                (_START.timestamp(), 0.3),
+                (_START.timestamp() + 30, 0.3),
+            ],
+        )
+    ]
     client = _FakePromClient(
         instant_responses={"DCGM_FI_PROF_DRAM_ACTIVE": dram},
         range_responses={"DCGM_FI_PROF_DRAM_ACTIVE": dram},
@@ -346,12 +352,16 @@ def test_correlate_short_sweep_warns(tmp_path):
 def test_read_sweep_window_happy_path(tmp_path):
     bundle = tmp_path / "bundle"
     bundle.mkdir()
-    (bundle / "inference_perfbench_v1.json").write_text(json.dumps({
-        "bench": {
-            "captured_at": "2026-05-26T23:18:47Z",
-            "duration_effective_s": 400.5,
-        },
-    }))
+    (bundle / "inference_perfbench_v1.json").write_text(
+        json.dumps(
+            {
+                "bench": {
+                    "captured_at": "2026-05-26T23:18:47Z",
+                    "duration_effective_s": 400.5,
+                },
+            }
+        )
+    )
     start, end = read_sweep_window_from_bundle(bundle)
     assert start.tzinfo is not None
     assert (end - start).total_seconds() == pytest.approx(400.5)
@@ -409,25 +419,27 @@ _KERNELS_PAYLOAD = {
 }
 
 
-def _make_workload_result(tmp_path: Path) -> "object":
+def _make_workload_result(tmp_path: Path) -> object:
     """Helper: produce a populated DcgmCorrelationResult by running correlate
     against canned series for HBM (0.5 ratio) + NVLink (0.9 TB/s/GPU) +
     Tensor pipe (0.2 ratio = 1800 TFLOPS/GPU avg) across 120s on 8 GPUs."""
     dram = [
-        _series("DCGM_FI_PROF_DRAM_ACTIVE", str(i),
-                [(_START.timestamp(), 0.5), (_START.timestamp() + 60, 0.5),
-                 (_START.timestamp() + 120, 0.5)])
+        _series(
+            "DCGM_FI_PROF_DRAM_ACTIVE",
+            str(i),
+            [(_START.timestamp(), 0.5), (_START.timestamp() + 60, 0.5), (_START.timestamp() + 120, 0.5)],
+        )
         for i in range(8)
     ]
     nvl = [
-        _series("nvl_combined", str(i),
-                [(_START.timestamp() + t, 0.9e12) for t in range(0, 121, 15)])
-        for i in range(8)
+        _series("nvl_combined", str(i), [(_START.timestamp() + t, 0.9e12) for t in range(0, 121, 15)]) for i in range(8)
     ]
     tensor = [
-        _series("DCGM_FI_PROF_PIPE_TENSOR_ACTIVE", str(i),
-                [(_START.timestamp(), 0.2), (_START.timestamp() + 60, 0.2),
-                 (_START.timestamp() + 120, 0.2)])
+        _series(
+            "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE",
+            str(i),
+            [(_START.timestamp(), 0.2), (_START.timestamp() + 60, 0.2), (_START.timestamp() + 120, 0.2)],
+        )
         for i in range(8)
     ]
     client = _FakePromClient(
@@ -501,8 +513,7 @@ def test_correlate_with_kernels_json_path_populates_attribution(tmp_path):
     kj = tmp_path / "kernels.json"
     kj.write_text(json.dumps(_KERNELS_PAYLOAD))
 
-    dram = [_series("DCGM_FI_PROF_DRAM_ACTIVE", "0", [(_START.timestamp(), 0.5),
-                                                       (_START.timestamp() + 120, 0.5)])]
+    dram = [_series("DCGM_FI_PROF_DRAM_ACTIVE", "0", [(_START.timestamp(), 0.5), (_START.timestamp() + 120, 0.5)])]
     client = _FakePromClient(
         instant_responses={"DCGM_FI_PROF_DRAM_ACTIVE": dram},
         range_responses={"DCGM_FI_PROF_DRAM_ACTIVE": dram},
@@ -535,9 +546,13 @@ def test_correlate_without_kernels_json_path_no_attribution(tmp_path):
 
 def test_correlate_captures_power_watts_per_gpu(tmp_path):
     """Live correlate() reads DCGM_FI_DEV_POWER_USAGE -> mean per-GPU watts."""
-    power = [_series("DCGM_FI_DEV_POWER_USAGE", "0",
-                     [(_START.timestamp(), 650.0), (_START.timestamp() + 15, 700.0),
-                      (_START.timestamp() + 30, 750.0)])]
+    power = [
+        _series(
+            "DCGM_FI_DEV_POWER_USAGE",
+            "0",
+            [(_START.timestamp(), 650.0), (_START.timestamp() + 15, 700.0), (_START.timestamp() + 30, 750.0)],
+        )
+    ]
     client = _FakePromClient(range_responses={"DCGM_FI_DEV_POWER_USAGE": power})
     inp = _inputs(tmp_path, start=_START, duration_s=120)
 
@@ -601,26 +616,30 @@ def test_correlate_from_frozen_preserves_nodes(tmp_path):
     """A frozen YAML carrying nodes/namespace/pod_label_selector round-trips
     into the result so offline re-runs keep the re-query provenance."""
     frozen = tmp_path / "frozen.yaml"
-    frozen.write_text(yaml.safe_dump({
-        "schema_version": 1,
-        "hw_key": "b200_sm100",
-        "n_gpus": 8,
-        "sweep_start_utc": "2026-05-27T13:30:00Z",
-        "sweep_end_utc": "2026-05-27T13:32:00Z",
-        "data_tier": "prof",
-        "scrape_interval_s": 30.0,
-        "nodes": ["g55dc2e", "g04ade0"],
-        "namespace": "<slurm-namespace>",
-        "pod_label_selector": "exported_pod=glm51-baseline-e2e-lat-x",
-        "resources": [
+    frozen.write_text(
+        yaml.safe_dump(
             {
-                "peak_key": "hbm3e_tbps",
-                "metric": "DCGM_FI_PROF_DRAM_ACTIVE",
-                "unit": "ratio",
-                "measured_avg": 0.05,
+                "schema_version": 1,
+                "hw_key": "b200_sm100",
+                "n_gpus": 8,
+                "sweep_start_utc": "2026-05-27T13:30:00Z",
+                "sweep_end_utc": "2026-05-27T13:32:00Z",
+                "data_tier": "prof",
+                "scrape_interval_s": 30.0,
+                "nodes": ["g55dc2e", "g04ade0"],
+                "namespace": "<slurm-namespace>",
+                "pod_label_selector": "exported_pod=glm51-baseline-e2e-lat-x",
+                "resources": [
+                    {
+                        "peak_key": "hbm3e_tbps",
+                        "metric": "DCGM_FI_PROF_DRAM_ACTIVE",
+                        "unit": "ratio",
+                        "measured_avg": 0.05,
+                    }
+                ],
             }
-        ],
-    }))
+        )
+    )
     result = correlate_from_frozen(frozen, _CEILINGS)
     assert result.nodes == ["g55dc2e", "g04ade0"]
     assert result.namespace == "<slurm-namespace>"
@@ -658,13 +677,11 @@ def test_dcgm_correlation_json_includes_attribution_block(tmp_path):
     kj = tmp_path / "kernels.json"
     kj.write_text(json.dumps(_KERNELS_PAYLOAD))
 
-    dram = [_series("DCGM_FI_PROF_DRAM_ACTIVE", "0", [(_START.timestamp(), 0.5),
-                                                       (_START.timestamp() + 120, 0.5)])]
+    dram = [_series("DCGM_FI_PROF_DRAM_ACTIVE", "0", [(_START.timestamp(), 0.5), (_START.timestamp() + 120, 0.5)])]
     nvl = [_series("nvl", "0", [(_START.timestamp() + t, 0.9e12) for t in range(0, 121, 15)])]
     client = _FakePromClient(
         instant_responses={"DCGM_FI_PROF_DRAM_ACTIVE": dram},
-        range_responses={"DCGM_FI_PROF_DRAM_ACTIVE": dram,
-                          "DCGM_FI_PROF_NVLINK": nvl},
+        range_responses={"DCGM_FI_PROF_DRAM_ACTIVE": dram, "DCGM_FI_PROF_NVLINK": nvl},
     )
     inp = _inputs(tmp_path, start=_START, duration_s=120)
     result = correlate(inp, _CEILINGS, client, kernels_json_path=kj)

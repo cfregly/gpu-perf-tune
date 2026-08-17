@@ -14,29 +14,47 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Protocol
+
+
+class _YamlModule(Protocol):
+    def safe_load(self, stream: str) -> Any: ...
+
+    def safe_dump(
+        self,
+        data: Any,
+        *,
+        sort_keys: bool,
+        default_flow_style: bool,
+    ) -> str: ...
+
 
 # yaml is required for round-tripping; install via the bundled server's `dev` extras.
 try:
-    import yaml
+    import yaml as _yaml
 except ImportError:  # pragma: no cover
-    yaml = None  # type: ignore[assignment]
+    _yaml = None
 
 
 VALID_SEVERITIES = ("critical", "high", "medium", "low", "informational")
 VALID_STATUSES = ("open", "in_progress", "resolved")
 
 
-def _require_yaml() -> None:
-    if yaml is None:
-        print("FATAL: PyYAML not available. Install via `bash plugins/profile-and-optimize/server/install.sh --with-dev`.", file=sys.stderr)
+def _require_yaml() -> _YamlModule:
+    if _yaml is None:
+        print(
+            "FATAL: PyYAML not available. Install via `bash plugins/profile-and-optimize/server/install.sh --with-dev`.",
+            file=sys.stderr,
+        )
         sys.exit(2)
+    return _yaml
 
 
 def _load_findings(path: Path) -> dict[str, Any]:
-    _require_yaml()
+    yaml = _require_yaml()
     if not path.exists():
         return {"findings": []}
     raw = path.read_text()
@@ -50,7 +68,7 @@ def _load_findings(path: Path) -> dict[str, Any]:
 
 
 def _dump_findings(path: Path, data: dict[str, Any]) -> None:
-    _require_yaml()
+    yaml = _require_yaml()
     path.write_text(yaml.safe_dump(data, sort_keys=False, default_flow_style=False))
 
 
@@ -92,7 +110,7 @@ def _record(args: argparse.Namespace) -> int:
             finding["affected_entities"].append({"kind": kind, "value": value})
     if args.notes:
         finding["notes"] = args.notes
-    finding["detected_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    finding["detected_at_utc"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     errors = _validate_finding(finding)
     if errors:
@@ -155,7 +173,9 @@ def _render(args: argparse.Namespace) -> int:
             counters[bucket] += 1
             num = f"{prefix}{counters[bucket]}"
             src = f"{f.get('source_skill', '?')} / {f.get('source_query', '?')}"
-            lines.append(f"| {num} | {f.get('headline', '?')} | {src} | {f.get('recommended_action', '?')} | {f.get('status', 'open')} |")
+            lines.append(
+                f"| {num} | {f.get('headline', '?')} | {src} | {f.get('recommended_action', '?')} | {f.get('status', 'open')} |"
+            )
         lines.append("")
 
     for sev in ("critical", "high", "medium", "low", "informational"):
@@ -238,11 +258,19 @@ def _diff(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="findings", description="Structured findings library: record + render + diff.")
+    parser = argparse.ArgumentParser(
+        prog="findings", description="Structured findings library: record + render + diff."
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    rec = sub.add_parser("record", help="Append a finding to a bundle's findings.yaml.", description="Append a finding to a bundle's findings.yaml.")
-    rec.add_argument("--findings-yaml", required=True, help="Path to the findings.yaml file (will be created if missing)")
+    rec = sub.add_parser(
+        "record",
+        help="Append a finding to a bundle's findings.yaml.",
+        description="Append a finding to a bundle's findings.yaml.",
+    )
+    rec.add_argument(
+        "--findings-yaml", required=True, help="Path to the findings.yaml file (will be created if missing)"
+    )
     rec.add_argument("--id", required=True)
     rec.add_argument("--severity", required=True, choices=VALID_SEVERITIES)
     rec.add_argument("--source-skill", required=True)
@@ -251,18 +279,32 @@ def build_parser() -> argparse.ArgumentParser:
     rec.add_argument("--recommended-action", required=True)
     rec.add_argument("--status", choices=VALID_STATUSES, default="open")
     rec.add_argument("--evidence-path", default=None)
-    rec.add_argument("--affected-entity", action="append", default=None, metavar="KIND=VALUE", help="May be passed multiple times (e.g. --affected-entity zone=<ZONE>)")
+    rec.add_argument(
+        "--affected-entity",
+        action="append",
+        default=None,
+        metavar="KIND=VALUE",
+        help="May be passed multiple times (e.g. --affected-entity zone=<ZONE>)",
+    )
     rec.add_argument("--notes", default=None)
     rec.add_argument("--json", action="store_true")
     rec.set_defaults(func=_record)
 
-    rdr = sub.add_parser("render", help="Convert findings.yaml -> findings.md.", description="Convert findings.yaml -> findings.md (table grouped by severity).")
+    rdr = sub.add_parser(
+        "render",
+        help="Convert findings.yaml -> findings.md.",
+        description="Convert findings.yaml -> findings.md (table grouped by severity).",
+    )
     rdr.add_argument("--findings-yaml", required=True)
     rdr.add_argument("--out", default=None, help="Write markdown to this path; default stdout")
     rdr.add_argument("--json", action="store_true")
     rdr.set_defaults(func=_render)
 
-    dff = sub.add_parser("diff", help="Compare two findings.yaml files + emit drift report.", description="Compare two findings.yaml files and emit a markdown drift report.")
+    dff = sub.add_parser(
+        "diff",
+        help="Compare two findings.yaml files + emit drift report.",
+        description="Compare two findings.yaml files and emit a markdown drift report.",
+    )
     dff.add_argument("--baseline", required=True)
     dff.add_argument("--current", required=True)
     dff.add_argument("--out", default=None, help="Write markdown to this path; default stdout")
@@ -281,7 +323,15 @@ def main(argv: Iterable[str] | None = None) -> int:
 CONTRACT: dict[str, dict] = {
     "record": {
         "safety": "writes_artifacts",
-        "required": ("--findings-yaml", "--id", "--severity", "--source-skill", "--source-query", "--headline", "--recommended-action"),
+        "required": (
+            "--findings-yaml",
+            "--id",
+            "--severity",
+            "--source-skill",
+            "--source-query",
+            "--headline",
+            "--recommended-action",
+        ),
         "optional": ("--status", "--evidence-path", "--affected-entity", "--notes", "--json"),
         "json": True,
         "ack": None,

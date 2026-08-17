@@ -45,6 +45,12 @@ AA_SHAPES: dict[str, tuple[int, int]] = {
     "aa-100k": (100000, 2000),
 }
 AA_SHAPE_ORDER = ("aa-1k", "aa-10k", "aa-100k")
+REDACTED_API_KEY = "<redacted>"
+API_KEY_ENV = "OPENAI_API_KEY"
+API_KEY_FLAG_ERROR = (
+    "custom AIPerf commands must not include --api-key. "
+    "Use --api-key or set API_KEY or WANDB_INFERENCE_API_KEY instead."
+)
 
 AA_TEMPERATURE = 0
 AA_TOP_P = 1
@@ -142,13 +148,19 @@ def generate_dataset(shape: str, count: int, out_path: Path) -> dict:
         for _ in range(count):
             f.write(json.dumps({"text_input": text, "output_length": out_tokens}))
             f.write("\n")
-    return {"shape": shape, "rows": count, "path": str(out_path), "used_tiktoken": used_tiktoken}
+    return {
+        "shape": shape,
+        "rows": count,
+        "path": str(out_path),
+        "used_tiktoken": used_tiktoken,
+    }
 
 
 def build_command(cfg: argparse.Namespace, aiperf_cmd: list[str], shape: str) -> list[str]:
     in_tokens, out_tokens = AA_SHAPES[shape]
     artifact_dir = str(Path(cfg.artifact_root) / shape)
-    cmd = list(aiperf_cmd) + [
+    cmd = [
+        *aiperf_cmd,
         "profile",
         "--model",
         cfg.model,
@@ -160,8 +172,6 @@ def build_command(cfg: argparse.Namespace, aiperf_cmd: list[str], shape: str) ->
         "--url",
         cfg.url,
     ]
-    if cfg.api_key:
-        cmd += ["--api-key", cfg.api_key]
     if cfg.tokenizer:
         cmd += ["--tokenizer", cfg.tokenizer]
         if cfg.tokenizer_trust_remote_code:
@@ -169,7 +179,12 @@ def build_command(cfg: argparse.Namespace, aiperf_cmd: list[str], shape: str) ->
 
     if cfg.mode == "dataset-replay":
         input_file = str(Path(cfg.dataset_dir) / f"{shape}.jsonl")
-        cmd += ["--input-file", input_file, "--custom-dataset-type", cfg.custom_dataset_type]
+        cmd += [
+            "--input-file",
+            input_file,
+            "--custom-dataset-type",
+            cfg.custom_dataset_type,
+        ]
     else:
         cmd += [
             "--synthetic-input-tokens-mean",
@@ -182,9 +197,19 @@ def build_command(cfg: argparse.Namespace, aiperf_cmd: list[str], shape: str) ->
             "0",
         ]
 
-    cmd += ["--extra-inputs", f"temperature:{AA_TEMPERATURE}", "--extra-inputs", f"top_p:{AA_TOP_P}"]
+    cmd += [
+        "--extra-inputs",
+        f"temperature:{AA_TEMPERATURE}",
+        "--extra-inputs",
+        f"top_p:{AA_TOP_P}",
+    ]
     if cfg.extra_output_controls:
-        cmd += ["--extra-inputs", f"min_tokens:{out_tokens}", "--extra-inputs", "ignore_eos:true"]
+        cmd += [
+            "--extra-inputs",
+            f"min_tokens:{out_tokens}",
+            "--extra-inputs",
+            "ignore_eos:true",
+        ]
     cmd += [
         "--concurrency",
         str(cfg.concurrency),
@@ -194,6 +219,89 @@ def build_command(cfg: argparse.Namespace, aiperf_cmd: list[str], shape: str) ->
         artifact_dir,
     ]
     return cmd
+
+
+def build_auth_config(cfg: argparse.Namespace, shape: str) -> dict:
+    """Build a complete AIPerf config whose key comes from the child env."""
+    in_tokens, out_tokens = AA_SHAPES[shape]
+    artifact_dir = str(Path(cfg.artifact_root) / shape)
+    if cfg.mode == "dataset-replay":
+        dataset = {
+            "type": "file",
+            "path": str(Path(cfg.dataset_dir) / f"{shape}.jsonl"),
+            "format": cfg.custom_dataset_type,
+            "entries": cfg.request_count,
+            "force_min_tokens": True,
+        }
+    else:
+        dataset = {
+            "type": "synthetic",
+            "entries": cfg.request_count,
+            "prompts": {
+                "isl": {"mean": in_tokens, "stddev": 0},
+                "osl": {"mean": out_tokens, "stddev": 0},
+            },
+        }
+    extra = {"temperature": AA_TEMPERATURE, "top_p": AA_TOP_P}
+    if cfg.extra_output_controls:
+        extra.update({"min_tokens": out_tokens, "ignore_eos": True})
+    return {
+        "schemaVersion": "2.0",
+        "benchmark": {
+            "model": cfg.model,
+            "endpoint": {
+                "url": cfg.url,
+                "type": cfg.endpoint_type,
+                "path": cfg.endpoint,
+                "api_key": f"${{{API_KEY_ENV}}}",
+                "streaming": True,
+                "extra": extra,
+            },
+            "dataset": dataset,
+            "phases": {
+                "type": "concurrency",
+                "concurrency": cfg.concurrency,
+                "requests": cfg.request_count,
+            },
+            "artifacts": {"dir": artifact_dir},
+        },
+    }
+
+
+def auth_config_path(cfg: argparse.Namespace, shape: str) -> Path:
+    """Return the secret-free AIPerf config path without touching disk."""
+    return Path(cfg.artifact_root) / shape / "aiperf-auth.json"
+
+
+def write_auth_config(cfg: argparse.Namespace, shape: str) -> Path:
+    """Write the secret-free config consumed by AIPerf profile."""
+    path = auth_config_path(cfg, shape)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(build_auth_config(cfg, shape), indent=2, sort_keys=True) + "\n")
+    return path
+
+
+def redact_aiperf_command(command: list[str]) -> list[str]:
+    """Return a copy with every AIPerf API-key value redacted."""
+    redacted = list(command)
+    for index, token in enumerate(redacted):
+        if token == "--api-key" and index + 1 < len(redacted):
+            redacted[index + 1] = REDACTED_API_KEY
+        elif token.startswith("--api-key="):
+            redacted[index] = f"--api-key={REDACTED_API_KEY}"
+    return redacted
+
+
+def validate_aiperf_command(command: list[str]) -> None:
+    """Reject custom commands that could put an API key back in argv."""
+    if any("--api-key" in token for token in command):
+        raise ValueError(API_KEY_FLAG_ERROR)
+
+
+def redact_subprocess_output(text: str | None, api_key: str | None) -> str:
+    """Remove the managed API key from captured child output."""
+    output = text or ""
+    return output.replace(api_key, REDACTED_API_KEY) if api_key else output
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -272,7 +380,19 @@ def main(argv: list[str] | None = None) -> int:
     shapes = [s.strip() for s in cfg.shapes.split(",") if s.strip()]
     for s in shapes:
         if s not in AA_SHAPES:
-            print(f"error: unknown shape {s!r}; expected {sorted(AA_SHAPES)}", file=sys.stderr)
+            print(
+                f"error: unknown shape {s!r}; expected {sorted(AA_SHAPES)}",
+                file=sys.stderr,
+            )
+            return 2
+
+    aiperf_cmd = None
+    if not cfg.generate_dataset_only:
+        aiperf_cmd = resolve_aiperf_cmd(cfg.aiperf_bin)
+        try:
+            validate_aiperf_command(aiperf_cmd)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
             return 2
 
     if cfg.reasoning:
@@ -303,17 +423,36 @@ def main(argv: list[str] | None = None) -> int:
         if cfg.generate_dataset_only:
             return 0
 
-    aiperf_cmd = resolve_aiperf_cmd(cfg.aiperf_bin)
+    assert aiperf_cmd is not None
     validate_auth(cfg.url, cfg.api_key)
+    if cfg.api_key and ("\n" in cfg.api_key or "\r" in cfg.api_key):
+        print("error: API keys must not contain newline characters", file=sys.stderr)
+        return 2
+    child_env = os.environ.copy()
+    if cfg.api_key:
+        child_env[API_KEY_ENV] = cfg.api_key
 
     rc = 0
     for s in shapes:
         cmd = build_command(cfg, aiperf_cmd, s)
+        if cfg.api_key:
+            config_path = auth_config_path(cfg, s)
+            if not cfg.dry_run:
+                write_auth_config(cfg, s)
+            cmd += ["--config", str(config_path)]
         if cfg.dry_run:
-            print(shlex.join(cmd))
+            print(shlex.join(redact_aiperf_command(cmd)))
             continue
         print(f"=== running {s} (mode={cfg.mode}, concurrency={cfg.concurrency}) ===")
-        proc = subprocess.run(cmd, check=False)
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            env=child_env,
+            capture_output=True,
+            text=True,
+        )
+        sys.stdout.write(redact_subprocess_output(proc.stdout, cfg.api_key))
+        sys.stderr.write(redact_subprocess_output(proc.stderr, cfg.api_key))
         if proc.returncode != 0:
             print(f"warning: {s} exited {proc.returncode}", file=sys.stderr)
             rc = proc.returncode

@@ -1,0 +1,28 @@
+{
+  "include": [
+    "plugins/profile-and-optimize/server",
+    "plugins/profile-and-optimize/hooks",
+    "plugins/profile-and-optimize/skills",
+    "scripts"
+  ],
+  "exclude": [
+    "**/.venv/**",
+    "**/__pycache__/**",
+    "**/.pytest_cache/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/*.egg-info/**",
+    "**/experiments/**",
+    "**/test_*.py",
+    "**/tests/**",
+    "**/testdata/**"
+  ],
+  "extraPaths": [
+    "plugins/profile-and-optimize/server",
+    "plugins/profile-and-optimize/server/tools/profile_and_optimize_mcp/src"
+  ],
+  "pythonVersion": "3.11",
+  "venvPath": "plugins/profile-and-optimize/server",
+  "venv": ".venv",
+  "typeCheckingMode": "basic"
+}

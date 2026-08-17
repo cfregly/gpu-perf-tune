@@ -20,7 +20,7 @@ from tools.perf_tune_report.runners.spec_metrics import (
     compute_spec_window,
     parse_spec_totals,
 )
-from tools.perf_tune_report.schema import AtlasCell, STATUS_FULL
+from tools.perf_tune_report.schema import STATUS_FULL, AtlasCell
 
 
 def _scrape_text(drafts: float, draft_tokens: float, accepted: float, *, pos0: float = 0.0) -> str:
@@ -171,9 +171,7 @@ class _FakeRunner:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if "python" in cmd and "-c" in cmd:  # the /metrics scrape
             out = self.scrape_texts.pop(0) if self.scrape_texts else ""
-            return subprocess.CompletedProcess(
-                cmd, self.scrape_rc, stdout=out, stderr="scrape boom"
-            )
+            return subprocess.CompletedProcess(cmd, self.scrape_rc, stdout=out, stderr="scrape boom")
         return subprocess.CompletedProcess(cmd, 0, stdout="bench ok", stderr="")
 
 

@@ -12,6 +12,7 @@ codegen/registration site (e.g. `task_register.cc`) into the marked block -- the
 scaffolder emits the canonical `linear_sm100_mpk`-shaped skeleton + the correct build
 flags so the boilerplate is not hand-retyped each time.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -164,17 +165,30 @@ def scaffold_reproducer(
     sh = out_dir / f"build_repro_{kernel_name}.sh"
     dims = {"MMA_M": mma_m, "MMA_N": mma_n, "BATCH": batch, "OUT": out, "K": k}
     cu_text = _CU_TEMPLATE.format(
-        kernel_name=kernel_name, header=header,
-        mma_m=mma_m, mma_n=mma_n, batch=batch, out=out, k=k,
+        kernel_name=kernel_name,
+        header=header,
+        mma_m=mma_m,
+        mma_n=mma_n,
+        batch=batch,
+        out=out,
+        k=k,
     )
     sh_text = _SH_TEMPLATE.format(
-        kernel_name=kernel_name, mirage_tree=mirage_tree, arch=arch, nvcc=nvcc,
-        cu_pod_path=cu_pod_path, exe_pod_path=exe_pod_path,
+        kernel_name=kernel_name,
+        mirage_tree=mirage_tree,
+        arch=arch,
+        nvcc=nvcc,
+        cu_pod_path=cu_pod_path,
+        exe_pod_path=exe_pod_path,
     )
     if not dry_run:
         out_dir.mkdir(parents=True, exist_ok=True)
         cu.write_text(cu_text)
         sh.write_text(sh_text)
     return ScaffoldResult(
-        cu_path=str(cu), build_path=str(sh), kernel_name=kernel_name, dims=dims, wrote=not dry_run,
+        cu_path=str(cu),
+        build_path=str(sh),
+        kernel_name=kernel_name,
+        dims=dims,
+        wrote=not dry_run,
     )

@@ -10,20 +10,12 @@ from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BASH = shutil.which("bash") or "/bin/bash"
 
 
 def _load_stage_model_parallel():
-    script = (
-        REPO_ROOT
-        / "plugins"
-        / "profile-and-optimize"
-        / "server"
-        / "tools"
-        / "stage-model-parallel.py"
-    )
+    script = REPO_ROOT / "plugins" / "profile-and-optimize" / "server" / "tools" / "stage-model-parallel.py"
     spec = importlib.util.spec_from_file_location("stage_model_parallel", script)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -181,9 +173,7 @@ def test_nsys_capture_rejects_non_numeric_size_before_arithmetic(
         }
     )
 
-    result = subprocess.run(
-        [BASH, str(script)], env=env, text=True, capture_output=True, check=False
-    )
+    result = subprocess.run([BASH, str(script)], env=env, text=True, capture_output=True, check=False)
 
     assert result.returncode == 1
     assert "MIN_REP_MB must be a positive integer" in result.stdout
@@ -205,10 +195,7 @@ def test_profile_run_dry_run_uses_operator_launcher(tmp_path: Path) -> None:
     artifact_root = tmp_path / "artifacts"
     marker = tmp_path / "launcher-ran"
     launcher = tmp_path / "sentinel-launcher"
-    launcher.write_text(
-        "#!/usr/bin/env bash\n"
-        "touch \"${PROFILE_RUN_SENTINEL:?}\"\n"
-    )
+    launcher.write_text('#!/usr/bin/env bash\ntouch "${PROFILE_RUN_SENTINEL:?}"\n')
     launcher.chmod(0o755)
     env = os.environ.copy()
     env["ART_ROOT"] = str(artifact_root)
@@ -240,14 +227,7 @@ def test_profile_run_dry_run_uses_operator_launcher(tmp_path: Path) -> None:
     assert f"launcher: {launcher} --nodes two\\ words" in result.stdout
     assert "tools/benchmarks" not in result.stdout + result.stderr
     assert not marker.exists()
-    capture_log = (
-        artifact_root
-        / "campaign"
-        / "llama31_8b"
-        / "public-dry-run"
-        / "profiling"
-        / "capture.log"
-    )
+    capture_log = artifact_root / "campaign" / "llama31_8b" / "public-dry-run" / "profiling" / "capture.log"
     assert capture_log.is_file()
     assert f"launcher={launcher} --nodes two\\ words" in capture_log.read_text()
 

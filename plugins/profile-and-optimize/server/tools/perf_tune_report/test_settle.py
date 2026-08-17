@@ -58,6 +58,7 @@ def test_build_prewarm_command_unknown_shape():
 def test_prewarm_returns_false_on_failure():
     def runner(cmd, **kw):
         return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="boom")
+
     assert prewarm("http://x:8000", "m", ["aa-1k"], kube_wrap=lambda c: c, subprocess_runner=runner) is False
 
 

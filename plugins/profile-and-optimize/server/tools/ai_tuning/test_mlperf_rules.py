@@ -10,7 +10,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from mlperf_rules import (  # noqa: E402
+from mlperf_rules import (
     EXAMPLE_RULES_PATH,
     load_rules,
     parse_args,

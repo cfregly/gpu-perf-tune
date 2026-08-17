@@ -37,8 +37,7 @@ def test_import_model_eval_writes_quality_cell(tmp_path: Path):
     res.write_text(json.dumps(_RESULTS))
     camp = tmp_path / "campaigns" / "glm51-eval-20260607T000000Z"
     camp.mkdir(parents=True)
-    out = import_model_eval(res, camp, model="GLM-5.1-NVFP4", hardware="GB300",
-                            quant="NVFP4", tensor_parallel=4)
+    out = import_model_eval(res, camp, model="GLM-5.1-NVFP4", hardware="GB300", quant="NVFP4", tensor_parallel=4)
     assert out["n_metrics"] == 3
     norm = json.loads((camp / "cells" / "model-eval" / "normalized.json").read_text())
     assert isinstance(norm, list) and len(norm) == 1
@@ -66,9 +65,26 @@ def test_cli_import_model_eval(tmp_path: Path, capsys):
     camps = tmp_path / "campaigns"
     camp = camps / "glm51-eval-20260607T000000Z"
     camp.mkdir(parents=True)
-    rc = main(["import_model_eval", "--results", str(res), "--campaign", str(camp),
-               "--model", "GLM-5.1-NVFP4", "--hardware", "GB300", "--quant", "NVFP4",
-               "--tensor-parallel", "4", "--campaigns-dir", str(camps), "--json"])
+    rc = main(
+        [
+            "import_model_eval",
+            "--results",
+            str(res),
+            "--campaign",
+            str(camp),
+            "--model",
+            "GLM-5.1-NVFP4",
+            "--hardware",
+            "GB300",
+            "--quant",
+            "NVFP4",
+            "--tensor-parallel",
+            "4",
+            "--campaigns-dir",
+            str(camps),
+            "--json",
+        ]
+    )
     assert rc == 0
     env = json.loads(capsys.readouterr().out)
     assert env["n_metrics"] == 3 and env["cell_id"] == "model-eval"

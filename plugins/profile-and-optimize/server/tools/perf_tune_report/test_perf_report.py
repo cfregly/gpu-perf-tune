@@ -21,9 +21,7 @@ from __future__ import annotations
 
 import io
 import json
-import shutil
 import sys
-import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -32,6 +30,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from datetime import UTC
 
 from tools.perf_tune_report.aggregator import aggregate
 from tools.perf_tune_report.capture_signature import variant_key_for
@@ -57,15 +57,12 @@ from tools.perf_tune_report.runners.vllm_sweep import (
     normalize_outputs as normalize_outputs_vllm_sweep,
 )
 from tools.perf_tune_report.schema import (
-    STATUS_EVICTED,
     STATUS_FAILED,
     STATUS_FULL,
-    STATUS_PARTIAL,
     AtlasCell,
     read_jsonl,
     write_jsonl,
 )
-
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "synthetic_atlas.jsonl"
 
@@ -74,36 +71,66 @@ FIXTURE_PATH = Path(__file__).parent / "fixtures" / "synthetic_atlas.jsonl"
 # schema.py
 # ---------------------------------------------------------------------------
 
+
 def test_schema_rejects_unknown_status():
     with pytest.raises(ValueError, match="status must be one of"):
         AtlasCell(
-            cell_id="x", model="m", hardware="H100", quant="FP8",
-            tensor_parallel=8, parallel_strategy="EP", mtp=False,
-            max_num_batched_tokens=1024, concurrency=1, status="bogus",
+            cell_id="x",
+            model="m",
+            hardware="H100",
+            quant="FP8",
+            tensor_parallel=8,
+            parallel_strategy="EP",
+            mtp=False,
+            max_num_batched_tokens=1024,
+            concurrency=1,
+            status="bogus",
         )
 
 
 def test_schema_rejects_unknown_parallel_strategy():
     with pytest.raises(ValueError, match="parallel_strategy"):
         AtlasCell(
-            cell_id="x", model="m", hardware="H100", quant="FP8",
-            tensor_parallel=8, parallel_strategy="PP", mtp=False,
-            max_num_batched_tokens=1024, concurrency=1, status=STATUS_FULL,
+            cell_id="x",
+            model="m",
+            hardware="H100",
+            quant="FP8",
+            tensor_parallel=8,
+            parallel_strategy="PP",
+            mtp=False,
+            max_num_batched_tokens=1024,
+            concurrency=1,
+            status=STATUS_FULL,
         )
 
 
 def test_schema_has_metrics_property():
     cell = AtlasCell(
-        cell_id="x", model="m", hardware="H100", quant="FP8",
-        tensor_parallel=8, parallel_strategy="EP", mtp=False,
-        max_num_batched_tokens=1024, concurrency=1, status=STATUS_FULL,
-        ttft_avg_ms=100.0, request_throughput_avg=0.1,
+        cell_id="x",
+        model="m",
+        hardware="H100",
+        quant="FP8",
+        tensor_parallel=8,
+        parallel_strategy="EP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrency=1,
+        status=STATUS_FULL,
+        ttft_avg_ms=100.0,
+        request_throughput_avg=0.1,
     )
     assert cell.has_metrics is True
     cell_no_metrics = AtlasCell(
-        cell_id="x", model="m", hardware="H100", quant="FP8",
-        tensor_parallel=8, parallel_strategy="EP", mtp=False,
-        max_num_batched_tokens=1024, concurrency=0, status=STATUS_FAILED,
+        cell_id="x",
+        model="m",
+        hardware="H100",
+        quant="FP8",
+        tensor_parallel=8,
+        parallel_strategy="EP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrency=0,
+        status=STATUS_FAILED,
     )
     assert cell_no_metrics.has_metrics is False
 
@@ -136,6 +163,7 @@ def test_schema_jsonl_skips_blank_and_comment_lines():
 # coverage.py
 # ---------------------------------------------------------------------------
 
+
 def test_coverage_matches_pdf_header():
     rows = read_jsonl(FIXTURE_PATH)
     summary = summarize(rows)
@@ -159,11 +187,20 @@ def test_coverage_header_line_format():
 def test_coverage_note_line_omitted_when_no_evicted():
     rows = [
         AtlasCell(
-            cell_id="x", model="m", hardware="H100", quant="FP8",
-            tensor_parallel=8, parallel_strategy="EP", mtp=False,
-            max_num_batched_tokens=1024, concurrency=1, status=STATUS_FULL,
-            ttft_avg_ms=1.0, request_throughput_avg=0.1,
-            output_tps_per_user=1.0, output_tps_per_gpu=1.0,
+            cell_id="x",
+            model="m",
+            hardware="H100",
+            quant="FP8",
+            tensor_parallel=8,
+            parallel_strategy="EP",
+            mtp=False,
+            max_num_batched_tokens=1024,
+            concurrency=1,
+            status=STATUS_FULL,
+            ttft_avg_ms=1.0,
+            request_throughput_avg=0.1,
+            output_tps_per_user=1.0,
+            output_tps_per_gpu=1.0,
         ),
     ]
     summary = summarize(rows)
@@ -172,12 +209,20 @@ def test_coverage_note_line_omitted_when_no_evicted():
 
 def _full_cell(cell_id: str, *, plottable: bool) -> AtlasCell:
     return AtlasCell(
-        cell_id=cell_id, model="m", hardware="B200", quant="NVFP4",
-        tensor_parallel=8, parallel_strategy="TP", mtp=False,
-        max_num_batched_tokens=1024, concurrency=1, status=STATUS_FULL,
+        cell_id=cell_id,
+        model="m",
+        hardware="B200",
+        quant="NVFP4",
+        tensor_parallel=8,
+        parallel_strategy="TP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrency=1,
+        status=STATUS_FULL,
         ttft_avg_ms=1.0 if plottable else None,
         request_throughput_avg=0.1 if plottable else None,
-        output_tps_per_user=1.0, output_tps_per_gpu=1.0,
+        output_tps_per_user=1.0,
+        output_tps_per_gpu=1.0,
     )
 
 
@@ -248,24 +293,33 @@ def test_renderer_zero_plot_ready_records_empty_scatter(tmp_path):
 
 def _row_with_capture(captured_at: str) -> AtlasCell:
     return AtlasCell(
-        cell_id="ctrl-nomtp", model="GLM-5.1-NVFP4", hardware="B200", quant="NVFP4",
-        tensor_parallel=8, parallel_strategy="EP", mtp=False,
-        max_num_batched_tokens=512, concurrency=1, status=STATUS_FULL,
-        ttft_avg_ms=1.0, request_throughput_avg=0.1,
-        output_tps_per_user=1.0, output_tps_per_gpu=1.0,
+        cell_id="ctrl-nomtp",
+        model="GLM-5.1-NVFP4",
+        hardware="B200",
+        quant="NVFP4",
+        tensor_parallel=8,
+        parallel_strategy="EP",
+        mtp=False,
+        max_num_batched_tokens=512,
+        concurrency=1,
+        status=STATUS_FULL,
+        ttft_avg_ms=1.0,
+        request_throughput_avg=0.1,
+        output_tps_per_user=1.0,
+        output_tps_per_gpu=1.0,
         captured_at=captured_at,
     )
 
 
 def test_pdf_provenance_embeds_utc_runid_and_window():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from tools.perf_tune_report.renderer.render_report import build_pdf_provenance
 
     # A local-clock instant a calendar day BEHIND the UTC instant (22:41 PDT on
     # 05-30 == 05:41Z on 05-31) is exactly the off-by-a-day confusion this
     # provenance stamp removes -- the stamp is computed in UTC.
-    rendered_at = datetime(2026, 5, 31, 5, 41, 0, tzinfo=timezone.utc)
+    rendered_at = datetime(2026, 5, 31, 5, 41, 0, tzinfo=UTC)
     rid = "20260531T081514Z-glm51-deepep-shapes-5k1k"
     prov = build_pdf_provenance(rid, [_row_with_capture("2026-05-31T05:43:09Z")], rendered_at)
 
@@ -282,7 +336,7 @@ def test_pdf_provenance_embeds_utc_runid_and_window():
 
 
 def test_pdf_provenance_brackets_multiple_capture_windows():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from tools.perf_tune_report.renderer.render_report import build_pdf_provenance
 
@@ -291,16 +345,16 @@ def test_pdf_provenance_brackets_multiple_capture_windows():
         _row_with_capture("2026-05-31T08:12:00Z"),
         _row_with_capture("2026-05-31T05:43:09Z"),  # duplicate collapses
     ]
-    prov = build_pdf_provenance("rid", rows, datetime.now(timezone.utc))
+    prov = build_pdf_provenance("rid", rows, datetime.now(UTC))
     assert prov["bench_window"] == "2026-05-31T05:43:09Z .. 2026-05-31T08:12:00Z"
 
 
 def test_pdf_provenance_handles_missing_capture():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from tools.perf_tune_report.renderer.render_report import build_pdf_provenance
 
-    prov = build_pdf_provenance("rid", [_row_with_capture("")], datetime.now(timezone.utc))
+    prov = build_pdf_provenance("rid", [_row_with_capture("")], datetime.now(UTC))
     assert prov["bench_window"] == "unknown"
 
 
@@ -308,21 +362,40 @@ def test_pdf_provenance_handles_missing_capture():
 # CONTRACT shape
 # ---------------------------------------------------------------------------
 
+
 def test_contract_verb_set():
     """The perf_tune_report CONTRACT verb set, including champion_select and
     import_variant_ab."""
     assert set(CONTRACT) == {
-        "campaign_init", "cell_run", "atlas_aggregate",
-        "report_render", "report_smoke", "publish_to_lake",
-        "import_perf_bench", "campaign_run",
-        "kernel_profile", "graph_diff",
-        "raw_bench_compare", "import_ncu", "import_nsys", "dcgm_correlate",
-        "experiments_index", "tpm_summary", "value_view",
-        "import_roofline_sweep", "fleet_leaderboard",
-        "champion_select", "import_variant_ab",
-        "capture_plan", "materialize_capture_reuse",
-        "experiment_inventory", "portability_view", "import_model_eval", "trend_view",
-        "kernel_reproducer_scaffold", "import_workloads",
+        "campaign_init",
+        "cell_run",
+        "atlas_aggregate",
+        "report_render",
+        "report_smoke",
+        "publish_to_lake",
+        "import_perf_bench",
+        "campaign_run",
+        "kernel_profile",
+        "graph_diff",
+        "raw_bench_compare",
+        "import_ncu",
+        "import_nsys",
+        "dcgm_correlate",
+        "experiments_index",
+        "tpm_summary",
+        "value_view",
+        "import_roofline_sweep",
+        "fleet_leaderboard",
+        "champion_select",
+        "import_variant_ab",
+        "capture_plan",
+        "materialize_capture_reuse",
+        "experiment_inventory",
+        "portability_view",
+        "import_model_eval",
+        "trend_view",
+        "kernel_reproducer_scaffold",
+        "import_workloads",
     }
 
 
@@ -388,8 +461,11 @@ def test_contract_publish_to_lake_is_external_and_ack_gated():
 
 def test_contract_writes_artifacts_verbs():
     for verb in (
-        "campaign_init", "atlas_aggregate", "report_render",
-        "import_perf_bench", "graph_diff",
+        "campaign_init",
+        "atlas_aggregate",
+        "report_render",
+        "import_perf_bench",
+        "graph_diff",
     ):
         assert CONTRACT[verb]["safety"] == "writes_artifacts"
         assert CONTRACT[verb]["ack"] is None
@@ -399,18 +475,27 @@ def test_contract_writes_artifacts_verbs():
 # CLI ack-gating
 # ---------------------------------------------------------------------------
 
+
 def _make_campaign(tmp_path: Path, monkeypatch) -> Path:
     import yaml
+
     monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(tmp_path))
     cfg = {
         "name": "test",
-        "cells": [{
-            "cell_id": "cell1",
-            "model": "X", "hardware": "H100", "quant": "FP8",
-            "tensor_parallel": 8, "parallel_strategy": "EP", "mtp": False,
-            "max_num_batched_tokens": 1024, "concurrencies": [1, 8],
-            "vllm_sweep": {"serve_cmd": "vllm serve X", "bench_cmd": "vllm bench serve --model X"},
-        }],
+        "cells": [
+            {
+                "cell_id": "cell1",
+                "model": "X",
+                "hardware": "H100",
+                "quant": "FP8",
+                "tensor_parallel": 8,
+                "parallel_strategy": "EP",
+                "mtp": False,
+                "max_num_batched_tokens": 1024,
+                "concurrencies": [1, 8],
+                "vllm_sweep": {"serve_cmd": "vllm serve X", "bench_cmd": "vllm bench serve --model X"},
+            }
+        ],
     }
     cfg_path = tmp_path / "test.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
@@ -594,10 +679,18 @@ def test_kernel_importers_reject_cell_symlink_escape(
 
 def test_cli_cell_run_refuses_without_ack(tmp_path, monkeypatch, capsys):
     _make_campaign(tmp_path, monkeypatch)
-    rc = main([
-        "cell_run", "--campaign", "test", "--cell", "cell1",
-        "--backend", "vllm-sweep", "--json",
-    ])
+    rc = main(
+        [
+            "cell_run",
+            "--campaign",
+            "test",
+            "--cell",
+            "cell1",
+            "--backend",
+            "vllm-sweep",
+            "--json",
+        ]
+    )
     captured = capsys.readouterr()
     assert rc == 2
     assert "ack-gated" in captured.err
@@ -605,10 +698,19 @@ def test_cli_cell_run_refuses_without_ack(tmp_path, monkeypatch, capsys):
 
 def test_cli_cell_run_dry_run_does_not_require_ack(tmp_path, monkeypatch):
     _make_campaign(tmp_path, monkeypatch)
-    rc = main([
-        "cell_run", "--campaign", "test", "--cell", "cell1",
-        "--backend", "vllm-sweep", "--dry-run", "--json",
-    ])
+    rc = main(
+        [
+            "cell_run",
+            "--campaign",
+            "test",
+            "--cell",
+            "cell1",
+            "--backend",
+            "vllm-sweep",
+            "--dry-run",
+            "--json",
+        ]
+    )
     assert rc == 0
 
 
@@ -620,13 +722,17 @@ def test_campaign_run_dry_run_accepts_campaign_init_config(
     campaign = _make_campaign(tmp_path, monkeypatch)
     capsys.readouterr()
 
-    rc = main([
-        "campaign_run",
-        "--config", str(tmp_path / "test.yaml"),
-        "--campaign", str(campaign),
-        "--dry-run",
-        "--json",
-    ])
+    rc = main(
+        [
+            "campaign_run",
+            "--config",
+            str(tmp_path / "test.yaml"),
+            "--campaign",
+            str(campaign),
+            "--dry-run",
+            "--json",
+        ]
+    )
 
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
@@ -649,26 +755,37 @@ def test_campaign_run_endpoint_only_needs_no_fake_helm_config(
     config = {
         "name": "endpoint-only",
         "focus": "latency",
-        "cells": [{
-            "cell_id": "endpoint-cell",
-            "backend": "aa",
-            "model": "example/model",
-            "hardware": "B200",
-            "quant": "FP8",
-            "tensor_parallel": 4,
-            "parallel_strategy": "TP",
-            "mtp": False,
-            "max_num_batched_tokens": 2048,
-            "concurrencies": [1],
-            "aa": {"model": "example/model", "url": "http://example", "shape": "aa-1k"},
-        }],
+        "cells": [
+            {
+                "cell_id": "endpoint-cell",
+                "backend": "aa",
+                "model": "example/model",
+                "hardware": "B200",
+                "quant": "FP8",
+                "tensor_parallel": 4,
+                "parallel_strategy": "TP",
+                "mtp": False,
+                "max_num_batched_tokens": 2048,
+                "concurrencies": [1],
+                "aa": {"model": "example/model", "url": "http://example", "shape": "aa-1k"},
+            }
+        ],
     }
     config_path = tmp_path / "endpoint.yaml"
     config_path.write_text(yaml.safe_dump(config))
-    assert main([
-        "campaign_init", "--config", str(config_path),
-        "--slug", "endpoint", "--json",
-    ]) == 0
+    assert (
+        main(
+            [
+                "campaign_init",
+                "--config",
+                str(config_path),
+                "--slug",
+                "endpoint",
+                "--json",
+            ]
+        )
+        == 0
+    )
     campaign = next(tmp_path.glob("*-endpoint"))
     capsys.readouterr()
     helm_calls: list[object] = []
@@ -690,13 +807,17 @@ def test_campaign_run_endpoint_only_needs_no_fake_helm_config(
         lambda: step_fns,
     )
 
-    rc = main([
-        "campaign_run",
-        "--config", str(config_path),
-        "--campaign", str(campaign),
-        "--i-understand-this-mutates-cluster",
-        "--json",
-    ])
+    rc = main(
+        [
+            "campaign_run",
+            "--config",
+            str(config_path),
+            "--campaign",
+            str(campaign),
+            "--i-understand-this-mutates-cluster",
+            "--json",
+        ]
+    )
 
     assert rc == 0
     assert helm_calls == []
@@ -719,6 +840,7 @@ def test_campaign_init_copies_provenance_from_bundle(tmp_path, monkeypatch):
     campaign: provenance.json sidecar + config.yaml provenance: + SOURCE.md
     source bullets (so it flows to the lake's campaign_v1 source columns)."""
     import yaml
+
     monkeypatch.setenv("PERFREPORT_CAMPAIGNS_DIR", str(tmp_path / "campaigns"))
     bundle = tmp_path / "bundle"
     bundle.mkdir()
@@ -739,11 +861,18 @@ def test_campaign_init_copies_provenance_from_bundle(tmp_path, monkeypatch):
     )
     cfg_path = tmp_path / "x.yaml"
     cfg_path.write_text(yaml.safe_dump({"name": "x", "cells": []}))
-    rc = main([
-        "campaign_init", "--config", str(cfg_path),
-        "--experiment-id", "glm51-x-20260604T103817Z",
-        "--evidence-bundle", str(bundle), "--json",
-    ])
+    rc = main(
+        [
+            "campaign_init",
+            "--config",
+            str(cfg_path),
+            "--experiment-id",
+            "glm51-x-20260604T103817Z",
+            "--evidence-bundle",
+            str(bundle),
+            "--json",
+        ]
+    )
     assert rc == 0
     camp = tmp_path / "campaigns" / "glm51-x-20260604T103817Z"
     assert (camp / "provenance.json").is_file()
@@ -757,6 +886,7 @@ def test_campaign_init_copies_provenance_from_bundle(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # Aggregator
 # ---------------------------------------------------------------------------
+
 
 def _seed_campaign_from_fixture(tmp_path: Path) -> Path:
     """Build a campaign dir from the bundled synthetic fixture."""
@@ -793,9 +923,7 @@ def test_aggregator_raises_on_schema_drift(tmp_path):
     campaign_dir = tmp_path / "drift"
     cell_dir = campaign_dir / "cells" / "bad"
     cell_dir.mkdir(parents=True)
-    (cell_dir / "normalized.json").write_text(
-        json.dumps([{"cell_id": "bad", "status": "weird-status"}])
-    )
+    (cell_dir / "normalized.json").write_text(json.dumps([{"cell_id": "bad", "status": "weird-status"}]))
     with pytest.raises(ValueError, match="schema"):
         aggregate(campaign_dir)
 
@@ -804,6 +932,7 @@ def test_aggregator_raises_on_schema_drift(tmp_path):
 # Runner parser fixture tests (gap 5 -- field-name mappings against
 # representative backend output rather than only the dry-run command path).
 # ---------------------------------------------------------------------------
+
 
 def _make_test_cell(concurrencies=(1, 8, 32)) -> CellConfig:
     return CellConfig(
@@ -832,12 +961,16 @@ def test_runner_vllm_sweep_normalize_full_status_and_derived_metrics(tmp_path):
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()
     for c in cell.concurrencies:
-        (raw_dir / f"c{c}.json").write_text(json.dumps({
-            "max_concurrency": c,
-            "median_ttft_ms": 100.0 * c,
-            "request_throughput": 0.1 * c,
-            "output_throughput": 800.0 * c,
-        }))
+        (raw_dir / f"c{c}.json").write_text(
+            json.dumps(
+                {
+                    "max_concurrency": c,
+                    "median_ttft_ms": 100.0 * c,
+                    "request_throughput": 0.1 * c,
+                    "output_throughput": 800.0 * c,
+                }
+            )
+        )
 
     cell_dir = tmp_path / "cells" / cell.cell_id
     cell_dir.mkdir(parents=True)
@@ -889,12 +1022,16 @@ def _normalize_one(cell: CellConfig, tmp_path):
     work = tmp_path / f"work-{cell.cell_id}-{_normalize_one.n}"
     raw_dir = work / "raw"
     raw_dir.mkdir(parents=True)
-    (raw_dir / "c1.json").write_text(json.dumps({
-        "max_concurrency": 1,
-        "median_ttft_ms": 50.0,
-        "request_throughput": 1.0,
-        "output_throughput": 60.0,
-    }))
+    (raw_dir / "c1.json").write_text(
+        json.dumps(
+            {
+                "max_concurrency": 1,
+                "median_ttft_ms": 50.0,
+                "request_throughput": 1.0,
+                "output_throughput": 60.0,
+            }
+        )
+    )
     cell_dir = work / "cells" / cell.cell_id
     cell_dir.mkdir(parents=True)
     rows, _ = normalize_outputs_vllm_sweep(cell, raw_dir, cell_dir)
@@ -919,9 +1056,7 @@ def test_runner_vllm_sweep_variant_key_distinguishes_mtp_k(tmp_path):
     row_k3 = _normalize_one(_spec_cell(3), tmp_path)
     assert variant_key_for(row_k2) != variant_key_for(row_k3)
     # And it is image-INDEPENDENT: same K + same knobs, different image == same key.
-    row_k3_newimg = _normalize_one(
-        _spec_cell(3, extras_overrides={"image": "infr/vllm:v9.9.9"}), tmp_path
-    )
+    row_k3_newimg = _normalize_one(_spec_cell(3, extras_overrides={"image": "infr/vllm:v9.9.9"}), tmp_path)
     assert variant_key_for(row_k3) == variant_key_for(row_k3_newimg)
 
 
@@ -936,29 +1071,41 @@ def test_runner_aiperf_normalize_extracts_nested_metrics(tmp_path):
 
     # c1: metrics at the TOP level using primary field names.
     (raw_dir / "c1").mkdir(parents=True)
-    (raw_dir / "c1" / "profile_export_aiperf.json").write_text(json.dumps({
-        "median_ttft_ms": 50.0,
-        "request_throughput": 0.5,
-        "output_throughput": 1000.0,
-    }))
+    (raw_dir / "c1" / "profile_export_aiperf.json").write_text(
+        json.dumps(
+            {
+                "median_ttft_ms": 50.0,
+                "request_throughput": 0.5,
+                "output_throughput": 1000.0,
+            }
+        )
+    )
     # c8: metrics nested under `results` using SECONDARY field aliases.
     (raw_dir / "c8").mkdir(parents=True)
-    (raw_dir / "c8" / "profile_export_aiperf.json").write_text(json.dumps({
-        "results": {
-            "mean_ttft_ms": 150.0,
-            "request_throughput_avg": 1.5,
-            "output_throughput_tps": 8000.0,
-        }
-    }))
+    (raw_dir / "c8" / "profile_export_aiperf.json").write_text(
+        json.dumps(
+            {
+                "results": {
+                    "mean_ttft_ms": 150.0,
+                    "request_throughput_avg": 1.5,
+                    "output_throughput_tps": 8000.0,
+                }
+            }
+        )
+    )
     # c32: metrics nested under `summary` using TERTIARY field aliases.
     (raw_dir / "c32").mkdir(parents=True)
-    (raw_dir / "c32" / "profile_export_aiperf.json").write_text(json.dumps({
-        "summary": {
-            "ttft_avg_ms": 300.0,
-            "request_throughput": 3.0,
-            "output_tps": 24000.0,
-        }
-    }))
+    (raw_dir / "c32" / "profile_export_aiperf.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "ttft_avg_ms": 300.0,
+                    "request_throughput": 3.0,
+                    "output_tps": 24000.0,
+                }
+            }
+        )
+    )
 
     cell_dir = tmp_path / "cells" / cell.cell_id
     cell_dir.mkdir(parents=True)
@@ -991,9 +1138,7 @@ def test_runner_normalize_no_data_yields_failed(tmp_path):
     # aiperf: raw_dir with a JSON file missing all metric fields.
     aiperf_raw = tmp_path / "aiperf-raw"
     (aiperf_raw / "c1").mkdir(parents=True)
-    (aiperf_raw / "c1" / "profile_export_aiperf.json").write_text(
-        json.dumps({"unrelated": "data"})
-    )
+    (aiperf_raw / "c1" / "profile_export_aiperf.json").write_text(json.dumps({"unrelated": "data"}))
     rows_aiperf, status_aiperf = normalize_outputs_aiperf(cell, aiperf_raw, cell_dir)
     assert status_aiperf == STATUS_FAILED
     assert rows_aiperf == []

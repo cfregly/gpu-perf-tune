@@ -40,7 +40,7 @@ for r in $(seq 1 "${ROUNDS}"); do
     OUT=$(req)
   else
     # c>1: launch CONCURRENCY identical long generations in parallel, wait all
-    pids=(); outs=()
+    pids=()
     for _ in $(seq 1 "${CONCURRENCY}"); do req & pids+=($!); done
     for p in "${pids[@]}"; do wait "$p" || true; done
     OUT="(${CONCURRENCY} parallel streams)"

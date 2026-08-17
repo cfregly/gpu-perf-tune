@@ -4,7 +4,6 @@ import json
 import unittest
 from pathlib import Path
 
-
 PLUGIN_ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -14,9 +13,7 @@ class PluginManifestTests(unittest.TestCase):
 
         self.assertEqual(set(manifest["mcpServers"]), {"profile_and_optimize"})
         server = manifest["mcpServers"]["profile_and_optimize"]
-        self.assertEqual(
-            server["command"], "${CLAUDE_PLUGIN_ROOT}/server/.venv/bin/python"
-        )
+        self.assertEqual(server["command"], "${CLAUDE_PLUGIN_ROOT}/server/.venv/bin/python")
         self.assertEqual(
             server["env"],
             {"PROFILE_AND_OPTIMIZE_REPO_ROOT": "${CLAUDE_PLUGIN_ROOT}/server"},

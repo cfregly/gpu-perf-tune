@@ -125,10 +125,10 @@ inputs = DcgmCorrelateInputs(
     cell_dir=cell,
     sweep_start=start,
     sweep_end=end,
-    hw_key="b200_sm100",          # GB300: "gb300_nvl72"
+    hw_key="b200_sm100",  # GB300: "gb300_nvl72"
     pod_label_selector="app=basic-inference",
     namespace="inference",
-    expected_n_gpus=8,            # GB300 node = 4 (the deploy TP), NOT 8
+    expected_n_gpus=8,  # GB300 node = 4 (the deploy TP), NOT 8
 )
 
 # Dry-run first to print the PromQL the correlator WILL fire:

@@ -62,15 +62,15 @@ def plan(config: HyperbandConfig) -> list[Bracket]:
     eta = max(2, int(config.eta))
     min_budget = max(1e-9, float(config.min_budget))
     max_budget = max(min_budget * eta, float(config.max_budget))
-    s_max = max(0, int(math.floor(_log(max_budget / min_budget, eta))))
+    s_max = max(0, math.floor(_log(max_budget / min_budget, eta)))
     brackets: list[Bracket] = []
     for s_index, s in enumerate(range(s_max, -1, -1)):
-        n_s = int(math.ceil((s_max + 1) / (s + 1) * (eta ** s)))
+        n_s = math.ceil((s_max + 1) / (s + 1) * (eta**s))
         n_s = max(1, n_s)
         rungs: list[Rung] = []
         for i in range(s + 1):
-            n_i = max(1, int(math.floor(n_s / (eta ** i))))
-            budget_i = min_budget * (eta ** i)
+            n_i = max(1, math.floor(n_s / (eta**i)))
+            budget_i = min_budget * (eta**i)
             if budget_i > max_budget:
                 budget_i = max_budget
             rungs.append(
@@ -108,13 +108,18 @@ class HyperbandState:
     def from_dict(cls, data: dict[str, object] | None) -> HyperbandState:
         if not isinstance(data, dict):
             return cls()
+        raw_bracket_index = data.get("bracket_index", 0)
+        raw_rung_index = data.get("rung_index", 0)
+        raw_bracket_keys = data.get("bracket_keys", [])
+        bracket_keys = (
+            [[str(key) for key in row] for row in raw_bracket_keys if isinstance(row, list)]
+            if isinstance(raw_bracket_keys, list)
+            else []
+        )
         return cls(
-            bracket_index=int(data.get("bracket_index", 0) or 0),
-            rung_index=int(data.get("rung_index", 0) or 0),
-            bracket_keys=[
-                [str(key) for key in row]
-                for row in data.get("bracket_keys", []) or []
-            ],
+            bracket_index=(int(raw_bracket_index) if isinstance(raw_bracket_index, (int, str)) else 0),
+            rung_index=(int(raw_rung_index) if isinstance(raw_rung_index, (int, str)) else 0),
+            bracket_keys=bracket_keys,
             completed=bool(data.get("completed", False)),
         )
 
@@ -210,10 +215,7 @@ def propose(
             sampled.append(params)
         sampled_keys = [_trial_key(params) for params in sampled]
         state.bracket_keys = [sampled_keys]
-        out_candidates = [
-            {"parameters": params, "fidelity": rung.budget}
-            for params in sampled
-        ]
+        out_candidates = [{"parameters": params, "fidelity": rung.budget} for params in sampled]
         out_state.update(state.to_dict())
         out_state.update(
             {
@@ -235,7 +237,7 @@ def propose(
         key = _trial_key({k: decoded[k] for k in decoded})
         if key in previous_keys:
             observed_pairs.append((key, float(o.value)))
-    needed = max(1, int(math.floor(len(previous_keys) / max(2, config.eta))))
+    needed = max(1, math.floor(len(previous_keys) / max(2, config.eta)))
     survivors = _select_top(observed_pairs, needed, direction)
     if not survivors:
         # Without observed evidence, repeat the previous rung's keys at the new budget.
@@ -252,10 +254,7 @@ def propose(
             name, _, value = chunk.partition("=")
             params[name] = value
         survivor_params.append(params)
-    out_candidates = [
-        {"parameters": params, "fidelity": rung.budget}
-        for params in survivor_params
-    ]
+    out_candidates = [{"parameters": params, "fidelity": rung.budget} for params in survivor_params]
     out_state.update(state.to_dict())
     out_state.update(
         {

@@ -24,6 +24,7 @@ calls (the math is structural); fail-loud on missing/degenerate inputs (asset-va
 Worked cross-check (the "3M TPM, 18 pods" thread): per-replica 2916 tok/s at c=128 (tok/s/user
 22.78), 8-GPU pod, util=1.0 -> ceil(50000/2916) = 18 pods = 144 GPUs.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,6 +32,7 @@ import dataclasses
 import json
 import math
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 GPU_HOURLY_USD = 8.6
@@ -50,12 +52,12 @@ class Anchor:
 @dataclasses.dataclass
 class SizingRow:
     sla_toks_per_user: float
-    concurrency: float          # c* (the max concurrency meeting the SLA)
+    concurrency: float  # c* (the max concurrency meeting the SLA)
     per_replica_tps: float
     replicas: int
     gpus: int
     usd_per_month: float
-    regime: str                 # measured-anchor | interp | below-knee-plateau | latency-tier-infeasible
+    regime: str  # measured-anchor | interp | below-knee-plateau | latency-tier-infeasible
 
 
 @dataclasses.dataclass
@@ -89,17 +91,18 @@ def parse_anchors(spec: str) -> list[Anchor]:
         raise ValueError("need at least one (concurrency:toks_per_user) anchor")
     anchors.sort(key=lambda a: a.concurrency)
     # tok/s/user must be non-increasing in concurrency (more concurrent streams -> <= per-user rate)
-    for lo, hi in zip(anchors, anchors[1:]):
+    for lo, hi in pairwise(anchors):
         if hi.toks_per_user > lo.toks_per_user + 1e-9:
             raise ValueError(
                 f"non-monotonic curve: tok/s/user rose from {lo.toks_per_user} @c{lo.concurrency} "
-                f"to {hi.toks_per_user} @c{hi.concurrency} (must be non-increasing in concurrency)")
+                f"to {hi.toks_per_user} @c{hi.concurrency} (must be non-increasing in concurrency)"
+            )
     return anchors
 
 
 def _interp_concurrency_for_sla(anchors: list[Anchor], sla: float) -> tuple[float, float, str]:
     """Return (c*, per_replica_tps, regime) for a target SLA via log-c piecewise interpolation."""
-    hi_tpu = anchors[0].toks_per_user   # largest tok/s/user (lowest concurrency)
+    hi_tpu = anchors[0].toks_per_user  # largest tok/s/user (lowest concurrency)
     lo_tpu = anchors[-1].toks_per_user  # smallest tok/s/user (highest concurrency = knee)
 
     if sla > hi_tpu + 1e-9:
@@ -112,7 +115,7 @@ def _interp_concurrency_for_sla(anchors: list[Anchor], sla: float) -> tuple[floa
         return a.concurrency, a.per_replica_tps, "below-knee-plateau"
 
     # bracket: find adjacent anchors with tpu[i] >= sla >= tpu[i+1]
-    for lo, hi in zip(anchors, anchors[1:]):
+    for lo, hi in pairwise(anchors):
         if lo.toks_per_user + 1e-9 >= sla >= hi.toks_per_user - 1e-9:
             if abs(lo.toks_per_user - sla) < 1e-9:
                 return lo.concurrency, lo.per_replica_tps, "measured-anchor"
@@ -120,7 +123,7 @@ def _interp_concurrency_for_sla(anchors: list[Anchor], sla: float) -> tuple[floa
                 return hi.concurrency, hi.per_replica_tps, "measured-anchor"
             frac = (lo.toks_per_user - sla) / (lo.toks_per_user - hi.toks_per_user)
             log_c = math.log10(lo.concurrency) + frac * (math.log10(hi.concurrency) - math.log10(lo.concurrency))
-            c = 10.0 ** log_c
+            c = 10.0**log_c
             per_replica = c * sla
             return c, per_replica, "interp"
     # unreachable given the guards above
@@ -161,27 +164,37 @@ def resolve(
 
     notes: list[str] = []
     if any(r.regime == "interp" for r in rows):
-        notes.append("interp rows are log-c interpolated between measured anchors (DRAFT); feed the full "
-                     "roofline sweep (c=8..128) for a VERDICT.")
+        notes.append(
+            "interp rows are log-c interpolated between measured anchors (DRAFT); feed the full "
+            "roofline sweep (c=8..128) for a VERDICT."
+        )
     if any(r.regime == "below-knee-plateau" for r in rows):
-        notes.append("below-knee SLAs share the knee per-replica throughput (throughput plateaus past the "
-                     "knee; the workload is host/KV-bound there), so the pod count is flat.")
+        notes.append(
+            "below-knee SLAs share the knee per-replica throughput (throughput plateaus past the "
+            "knee; the workload is host/KV-bound there), so the pod count is flat."
+        )
     if any(r.regime == "latency-tier-infeasible" for r in rows):
-        notes.append("an SLA above the c=1 anchor is a latency-tier point; serving a large TPM there needs "
-                     "an impractical pod count.")
+        notes.append(
+            "an SLA above the c=1 anchor is a latency-tier point; serving a large TPM there needs "
+            "an impractical pod count."
+        )
     return SizingResult(model, tpm, tok_per_s, gpus_per_pod, util, gpu_hourly_usd, anchors, rows, notes)
 
 
 def render_md(r: SizingResult) -> str:
     lines = [f"# Capacity sizing (SLA-first): {r.model}", ""]
-    lines.append(f"TPM target {r.tpm:,.0f} output tok/min ({r.tok_per_s_target:,.0f} tok/s); "
-                 f"pod = {r.gpus_per_pod} GPUs; util {r.util:.0%}; ${r.gpu_hourly_usd}/GPU-hour.")
+    lines.append(
+        f"TPM target {r.tpm:,.0f} output tok/min ({r.tok_per_s_target:,.0f} tok/s); "
+        f"pod = {r.gpus_per_pod} GPUs; util {r.util:.0%}; ${r.gpu_hourly_usd}/GPU-hour."
+    )
     lines.append("")
     lines.append("| SLA tok/s/user | c* | per-pod tok/s | pods | GPUs | $/month | regime |")
     lines.append("| ---: | ---: | ---: | ---: | ---: | ---: | --- |")
     for row in r.rows:
-        lines.append(f"| {row.sla_toks_per_user:g} | {row.concurrency:g} | {row.per_replica_tps:,.0f} | "
-                     f"{row.replicas} | {row.gpus} | ${row.usd_per_month:,.0f} | {row.regime} |")
+        lines.append(
+            f"| {row.sla_toks_per_user:g} | {row.concurrency:g} | {row.per_replica_tps:,.0f} | "
+            f"{row.replicas} | {row.gpus} | ${row.usd_per_month:,.0f} | {row.regime} |"
+        )
     if r.notes:
         lines += ["", "## Notes"]
         lines += [f"- {n}" for n in r.notes]
@@ -192,10 +205,12 @@ def render_md(r: SizingResult) -> str:
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="SLA-first capacity sizing (TPM + tok/s/user SLA -> pods/GPUs).")
     p.add_argument("--tpm", type=float, required=True, help="total output tokens per minute target (e.g. 3000000)")
-    p.add_argument("--sla", required=True,
-                   help="tokens/s/user SLA(s), comma-separated (e.g. '20,50,100' or a single '50')")
-    p.add_argument("--anchors", required=True,
-                   help="measured curve as 'c:tok_per_user,...' (e.g. '1:215.5,10:122.2,256:41.8')")
+    p.add_argument(
+        "--sla", required=True, help="tokens/s/user SLA(s), comma-separated (e.g. '20,50,100' or a single '50')"
+    )
+    p.add_argument(
+        "--anchors", required=True, help="measured curve as 'c:tok_per_user,...' (e.g. '1:215.5,10:122.2,256:41.8')"
+    )
     p.add_argument("--gpus-per-pod", type=int, default=4, help="GPUs per replica/pod (GB300 TP4 node = 4)")
     p.add_argument("--util", type=float, default=0.70, help="target utilization headroom (default 0.70)")
     p.add_argument("--gpu-hourly-usd", type=float, default=GPU_HOURLY_USD)
@@ -208,8 +223,15 @@ def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     anchors = parse_anchors(args.anchors)
     sla_list = [float(s) for s in str(args.sla).split(",") if s.strip()]
-    r = resolve(tpm=args.tpm, sla_list=sla_list, anchors=anchors, gpus_per_pod=args.gpus_per_pod,
-                util=args.util, gpu_hourly_usd=args.gpu_hourly_usd, model=args.model)
+    r = resolve(
+        tpm=args.tpm,
+        sla_list=sla_list,
+        anchors=anchors,
+        gpus_per_pod=args.gpus_per_pod,
+        util=args.util,
+        gpu_hourly_usd=args.gpu_hourly_usd,
+        model=args.model,
+    )
     md = render_md(r)
     sys.stdout.write(md)
     if args.emit:

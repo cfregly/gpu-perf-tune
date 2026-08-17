@@ -42,7 +42,7 @@ def _split_good_bad(
     else:
         sorted_obs = sorted(observations, key=lambda obs: obs.value)
     n = len(sorted_obs)
-    n_good = max(1, int(math.ceil(gamma * n)))
+    n_good = max(1, math.ceil(gamma * n))
     n_good = min(n_good, n - 1) if n > 1 else 1
     good = sorted_obs[:n_good]
     bad = sorted_obs[n_good:] or [sorted_obs[-1]]
@@ -59,10 +59,7 @@ def _bandwidth(values: list[float]) -> float:
     if len(values) < 2:
         return 0.25
     sorted_values = sorted(values)
-    diffs = [
-        max(sorted_values[idx + 1] - sorted_values[idx], 0.0)
-        for idx in range(len(sorted_values) - 1)
-    ]
+    diffs = [max(sorted_values[idx + 1] - sorted_values[idx], 0.0) for idx in range(len(sorted_values) - 1)]
     width = max(diffs) if diffs else 0.0
     span = sorted_values[-1] - sorted_values[0] if sorted_values else 0.0
     return max(width, span / max(len(values), 1), 0.05)
@@ -106,11 +103,7 @@ def propose(
 ) -> tuple[list[dict[str, str]], dict[str, object]]:
     """Return up to `limit` decoded candidate parameter dicts plus state metadata."""
 
-    obs_list = [
-        obs
-        for obs in observations
-        if isinstance(obs.value, (int, float)) and math.isfinite(obs.value)
-    ]
+    obs_list = [obs for obs in observations if isinstance(obs.value, (int, float)) and math.isfinite(obs.value)]
     state: dict[str, object] = {
         "strategy": "bayesian",
         "variant": "tpe",

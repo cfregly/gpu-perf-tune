@@ -25,6 +25,7 @@ FIXTURES = Path(__file__).resolve().parent / "testdata"
 B200_SPACE = REPO_ROOT / "tuning" / "examples" / "b200-offline.json"
 GB300_SPACE = REPO_ROOT / "tuning" / "examples" / "gb300-offline.json"
 
+
 class UtcTimestampTest(unittest.TestCase):
     """Locks Python 3.10 compat for the UTC timestamp helpers.
 
@@ -50,6 +51,7 @@ class UtcTimestampTest(unittest.TestCase):
         # filename: <stem>.cursor-<YYYYMMDDTHHMMSSZ><suffix>
         self.assertTrue(derived.stem.startswith("foo.cursor-"), msg=str(derived))
         self.assertTrue(derived.stem.endswith("Z"), msg=str(derived))
+
 
 class ProposalDiffTests(unittest.TestCase):
     """Tests for ai_tuning proposal diff PROPOSAL1 PROPOSAL2."""
@@ -189,6 +191,7 @@ class ProposalDiffTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 class AiTuningCliTestPart1(unittest.TestCase):
     def test_operational_commands_require_explicit_space(self) -> None:
@@ -674,6 +677,7 @@ class AiTuningCliTestPart1(unittest.TestCase):
             self.assertTrue(result["contract_validation"]["objective_known"])
             self.assertTrue(result["contract_validation"]["required_config_patches"][0]["provided"])
 
+
 class AiTuningCliTestPart2(unittest.TestCase):
     def make_finalize_fixture(self, root: Path, run_count: int = 5) -> tuple[Path, Path]:
         workdir = root / "workdir"
@@ -951,7 +955,9 @@ class AiTuningCliTestPart2(unittest.TestCase):
             target = Path(tmp) / "run.sub"
             patch = Path(tmp) / "patch.json"
             output = Path(tmp) / "patch-report.json"
-            original = "#SBATCH --nodes=8\n#SBATCH --partition=<partition>\n#SBATCH --gres=gpu:b200:8\nenv -i bash run.sh\n"
+            original = (
+                "#SBATCH --nodes=8\n#SBATCH --partition=<partition>\n#SBATCH --gres=gpu:b200:8\nenv -i bash run.sh\n"
+            )
             target.write_text(original, encoding="utf-8")
             patch.write_text(
                 json.dumps(
@@ -1054,9 +1060,7 @@ class AiTuningCliTestPart2(unittest.TestCase):
             self.assertEqual(rc, 0)
             summary = json.loads(summary_output.read_text(encoding="utf-8"))
             self.assertEqual(summary["experiment_count"], 2)
-            submitted = [
-                item for item in summary["experiments"] if item["experiment_id"] == exp_id
-            ][0]
+            submitted = next(item for item in summary["experiments"] if item["experiment_id"] == exp_id)
             self.assertEqual(submitted["status"], "submitted")
             self.assertEqual(submitted["slurm_job_id"], "12345")
 
@@ -1140,6 +1144,7 @@ class AiTuningCliTestPart2(unittest.TestCase):
                         "mystery",
                     ]
                 )
+
 
 class AiTuningCliTestPart3(unittest.TestCase):
     def make_finalize_fixture(self, root: Path, run_count: int = 5) -> tuple[Path, Path]:
@@ -1607,6 +1612,7 @@ class AiTuningCliTestPart3(unittest.TestCase):
         self.assertIn("nccl_ib_create_ah_no_device", codes)
         self.assertIn("nccl_ib_devx_rtr_qp", codes)
         self.assertIn("nccl_ib_modify_qp_no_device", codes)
+
 
 class AiTuningCliTestPart4(unittest.TestCase):
     def make_finalize_fixture(self, root: Path, run_count: int = 5) -> tuple[Path, Path]:

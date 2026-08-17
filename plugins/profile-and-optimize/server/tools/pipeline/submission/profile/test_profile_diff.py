@@ -19,7 +19,7 @@ from tempfile import TemporaryDirectory
 THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
 
-import profile_diff  # noqa: E402
+import profile_diff
 
 
 def _write(path: Path, text: str) -> Path:
@@ -119,7 +119,7 @@ class ParseTests(unittest.TestCase):
                 '"Time (%)","Total Time (ns)","Instances","Avg (ns)","Med (ns)",'
                 '"Min (ns)","Max (ns)","StdDev (ns)","Range"\n'
                 '50.0,1000000000,10,100000000,100000000,90000000,110000000,1000000,"good"\n'
-                '50.0,truncated_row\n',
+                "50.0,truncated_row\n",
             )
             rows = profile_diff.parse_nvtx(csv)
         self.assertEqual([r.name for r in rows], ["good"])
@@ -259,13 +259,20 @@ class EndToEndTests(unittest.TestCase):
             out_json = root / "out" / "profile-diff.json"
             rc = profile_diff.main(
                 [
-                    "--baseline-csv-dir", str(base),
-                    "--candidate-csv-dir", str(cand),
-                    "--baseline-label", "B",
-                    "--candidate-label", "C",
-                    "--out", str(out_md),
-                    "--json-out", str(out_json),
-                    "--limit", "5",
+                    "--baseline-csv-dir",
+                    str(base),
+                    "--candidate-csv-dir",
+                    str(cand),
+                    "--baseline-label",
+                    "B",
+                    "--candidate-label",
+                    "C",
+                    "--out",
+                    str(out_md),
+                    "--json-out",
+                    str(out_json),
+                    "--limit",
+                    "5",
                 ]
             )
             self.assertEqual(rc, 0)

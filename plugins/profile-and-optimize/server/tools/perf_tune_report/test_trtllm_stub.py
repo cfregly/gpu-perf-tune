@@ -30,9 +30,16 @@ def test_backend_trtllm_in_backends_set():
 def test_atlas_cell_accepts_trtllm_backend():
     """AtlasCell schema validation must accept 'trtllm' as a backend value."""
     cell = AtlasCell(
-        cell_id="x", model="m", hardware="H100", quant="FP8",
-        tensor_parallel=8, parallel_strategy="EP", mtp=False,
-        max_num_batched_tokens=1024, concurrency=1, status="full",
+        cell_id="x",
+        model="m",
+        hardware="H100",
+        quant="FP8",
+        tensor_parallel=8,
+        parallel_strategy="EP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrency=1,
+        status="full",
         backend=BACKEND_TRTLLM,
     )
     assert cell.backend == "trtllm"
@@ -40,29 +47,49 @@ def test_atlas_cell_accepts_trtllm_backend():
 
 def test_run_cell_raises_not_implemented(tmp_path):
     cfg = CellConfig(
-        cell_id="x", model="m", hardware="H100", quant="FP8",
-        tensor_parallel=8, parallel_strategy="EP", mtp=False,
-        max_num_batched_tokens=1024, concurrencies=(1,),
+        cell_id="x",
+        model="m",
+        hardware="H100",
+        quant="FP8",
+        tensor_parallel=8,
+        parallel_strategy="EP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrencies=(1,),
     )
     with pytest.raises(NotImplementedError, match="TRT-LLM backend is a stub"):
         run_cell(
-            cfg, tmp_path,
-            namespace="ns", bench_pod="pod", kube_context="ctx",
-            endpoint_url="http://x", served_model="m",
+            cfg,
+            tmp_path,
+            namespace="ns",
+            bench_pod="pod",
+            kube_context="ctx",
+            endpoint_url="http://x",
+            served_model="m",
         )
 
 
 def test_run_cell_error_message_cites_contract():
     cfg = CellConfig(
-        cell_id="x", model="m", hardware="H100", quant="FP8",
-        tensor_parallel=8, parallel_strategy="EP", mtp=False,
-        max_num_batched_tokens=1024, concurrencies=(1,),
+        cell_id="x",
+        model="m",
+        hardware="H100",
+        quant="FP8",
+        tensor_parallel=8,
+        parallel_strategy="EP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrencies=(1,),
     )
     try:
         run_cell(
-            cfg, Path("/tmp"),
-            namespace="ns", bench_pod="pod", kube_context="ctx",
-            endpoint_url="http://x", served_model="m",
+            cfg,
+            Path("/tmp"),
+            namespace="ns",
+            bench_pod="pod",
+            kube_context="ctx",
+            endpoint_url="http://x",
+            served_model="m",
         )
     except NotImplementedError as exc:
         msg = str(exc)

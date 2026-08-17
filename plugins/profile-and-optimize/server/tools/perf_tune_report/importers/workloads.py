@@ -11,12 +11,13 @@ workload's ``dataset`` + typed ISL/OSL -- closing the ``dataset=unknown`` gap at
 The serve-config identity (model / hardware / TP / kv-cache / image / ...) is NOT in the bench
 output, so it is supplied by the caller (the same overrides ``import_perf_bench`` takes).
 """
+
 from __future__ import annotations
 
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -184,7 +185,7 @@ def import_workloads(
             continue
         by_tag.setdefault(m.group("tag"), []).append((int(m.group("c")), fp))
 
-    captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     tags_done: list[str] = []
     skipped: list[str] = []
     n_rows = 0

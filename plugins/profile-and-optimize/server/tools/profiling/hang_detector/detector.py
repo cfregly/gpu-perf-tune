@@ -10,7 +10,7 @@ does not exist. It also propagates stride-detector errors.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -63,13 +63,11 @@ def run_detector(
         nodelist=nodelist,
         port=port,
     )
-    alerts = detect_stride_lag(
-        snapshots, stride=stride, lag_threshold=lag_threshold
-    )
+    alerts = detect_stride_lag(snapshots, stride=stride, lag_threshold=lag_threshold)
     result: dict[str, Any] = {
         "schema_version": 1,
         "jobid": jobid,
-        "captured_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "captured_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "stride": stride,
         "lag_threshold": lag_threshold,
         "rank_count": len(snapshots),
@@ -79,8 +77,7 @@ def run_detector(
         parent = output_path.parent
         if not parent.is_dir():
             raise FileNotFoundError(
-                f"output_path parent does not exist: {parent}; "
-                f"create it explicitly (orchestrator does not auto-mkdir)."
+                f"output_path parent does not exist: {parent}; create it explicitly (orchestrator does not auto-mkdir)."
             )
         with output_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(result, sort_keys=True) + "\n")

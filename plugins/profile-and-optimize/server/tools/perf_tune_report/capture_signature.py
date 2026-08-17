@@ -11,10 +11,11 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from tools.perf_tune_report.schema import AtlasCell, read_jsonl
 
@@ -167,11 +168,7 @@ def _normalize_value(v: Any) -> Any:
 
 
 def _pick_extra(extra: dict[str, Any]) -> dict[str, Any]:
-    return {
-        k: _normalize_value(extra[k])
-        for k in _EXTRA_KEYS
-        if k in extra and extra[k] not in (None, "", "unknown")
-    }
+    return {k: _normalize_value(extra[k]) for k in _EXTRA_KEYS if k in extra and extra[k] not in (None, "", "unknown")}
 
 
 def _variant_fields(row: AtlasCell) -> dict[str, Any]:
@@ -208,9 +205,7 @@ def _variant_fields(row: AtlasCell) -> dict[str, Any]:
             else extra.get("prefix_cache")
         ),
         "bench_backend": getattr(row, "bench_backend", "") or "",
-        "max_num_batched_tokens": (
-            int(row.max_num_batched_tokens) if row.max_num_batched_tokens is not None else None
-        ),
+        "max_num_batched_tokens": (int(row.max_num_batched_tokens) if row.max_num_batched_tokens is not None else None),
         "cudagraph_mode": row.cudagraph_mode,
         "gpu_memory_utilization": row.gpu_memory_utilization,
         "cache_mode": row.cache_mode,
@@ -274,10 +269,14 @@ def _artifact_cell_id(campaign_dir: Path, row: AtlasCell) -> str:
     """
 
     arm = (row.extra or {}).get("arm")
-    if isinstance(arm, str) and arm and (
-        (campaign_dir / "cells" / arm).is_dir()
-        or (campaign_dir / "cells" / f"{arm}-decode").is_dir()
-        or (campaign_dir / "cells" / f"{arm}-prefill").is_dir()
+    if (
+        isinstance(arm, str)
+        and arm
+        and (
+            (campaign_dir / "cells" / arm).is_dir()
+            or (campaign_dir / "cells" / f"{arm}-decode").is_dir()
+            or (campaign_dir / "cells" / f"{arm}-prefill").is_dir()
+        )
     ):
         return arm
     return row.cell_id
@@ -299,8 +298,7 @@ def _artifact_target_path(campaign_dir: Path, cell_id: str, artifact: str) -> Pa
 
 
 def _cell_artifacts(campaign_dir: Path, cell_id: str) -> dict[str, bool]:
-    return {artifact: _artifact_path(campaign_dir, cell_id, artifact).is_file()
-            for artifact in CAPTURE_ARTIFACTS}
+    return {artifact: _artifact_path(campaign_dir, cell_id, artifact).is_file() for artifact in CAPTURE_ARTIFACTS}
 
 
 def collect_cells(campaign_dirs: Iterable[Path]) -> list[CellCaptureState]:
@@ -379,7 +377,7 @@ def build_plan(target_campaign_dirs: list[Path], source_campaign_dirs: list[Path
 
     return CapturePlan(
         schema_version=PLAN_SCHEMA_VERSION,
-        generated_at_utc=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        generated_at_utc=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         target_campaigns=[str(p.resolve()) for p in target_campaign_dirs],
         source_campaigns=[str(p.resolve()) for p in source_campaign_dirs],
         cells=targets,
@@ -395,8 +393,7 @@ def _load_plan(path: Path) -> dict[str, Any]:
         raise ValueError(f"capture reuse plan is not valid JSON: {path}: {exc}") from exc
     if data.get("schema_version") != PLAN_SCHEMA_VERSION:
         raise ValueError(
-            f"capture reuse plan schema mismatch: expected {PLAN_SCHEMA_VERSION}, "
-            f"got {data.get('schema_version')!r}"
+            f"capture reuse plan schema mismatch: expected {PLAN_SCHEMA_VERSION}, got {data.get('schema_version')!r}"
         )
     return data
 
@@ -408,7 +405,6 @@ def materialize_reuse(plan_path: Path, *, dry_run: bool = False) -> Materialized
     copied: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     for item in plan.get("reuse_candidates", []):
-        artifact = str(item["artifact"])
         src = Path(item["source_path"]).expanduser()
         dst = Path(item["target_path"]).expanduser()
         if not src.is_file():
@@ -438,7 +434,7 @@ def materialize_reuse(plan_path: Path, *, dry_run: bool = False) -> Materialized
             if existing.get("schema_version") != REUSE_SCHEMA_VERSION:
                 existing = {
                     "schema_version": REUSE_SCHEMA_VERSION,
-                    "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "generated_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "artifacts": [],
                 }
             existing.setdefault("artifacts", []).append(record)
@@ -446,7 +442,7 @@ def materialize_reuse(plan_path: Path, *, dry_run: bool = False) -> Materialized
         copied.append(record)
     return MaterializedReuse(
         schema_version=REUSE_SCHEMA_VERSION,
-        generated_at_utc=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        generated_at_utc=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         copied=copied,
         skipped=skipped,
     )

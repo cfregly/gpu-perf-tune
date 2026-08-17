@@ -36,15 +36,15 @@ def _fmt_throughput(res: dict[str, Any]) -> str:
     if res.get("measured_bytes_per_s") is not None:
         bps = float(res["measured_bytes_per_s"])
         if bps >= 1e12:
-            return f"{bps/1e12:.2f} TB/s/GPU"
+            return f"{bps / 1e12:.2f} TB/s/GPU"
         elif bps >= 1e9:
-            return f"{bps/1e9:.1f} GB/s/GPU"
+            return f"{bps / 1e9:.1f} GB/s/GPU"
         else:
-            return f"{bps/1e6:.0f} MB/s/GPU"
+            return f"{bps / 1e6:.0f} MB/s/GPU"
     if res.get("measured_tflops_avg") is not None:
         tf = float(res["measured_tflops_avg"])
         if tf >= 1000:
-            return f"{tf/1000:.2f} PFLOPS/GPU"
+            return f"{tf / 1000:.2f} PFLOPS/GPU"
         else:
             return f"{tf:.1f} TFLOPS/GPU"
     return "(no measurement)"
@@ -61,7 +61,7 @@ def _fmt_peak(res: dict[str, Any]) -> str:
 
 def render_page(
     fig,
-    cell_dcgm: "OrderedDict[str, dict[str, Any]]",
+    cell_dcgm: OrderedDict[str, dict[str, Any]],
 ) -> None:
     """Draw the DCGM workload-level SoL page onto a matplotlib Figure.
 
@@ -73,7 +73,6 @@ def render_page(
     if not cell_dcgm:
         raise ValueError("dcgm_sol.render_page: cell_dcgm is empty")
 
-    import matplotlib.pyplot as plt
     from matplotlib import gridspec
 
     # For simplicity, the first cell drives the layout; multi-cell
@@ -112,8 +111,7 @@ def render_page(
     ax_hdr.text(
         0.5,
         0.47,
-        f"variant: {first_vid}  |  hardware: {hw_key}  |  "
-        f"GPUs: {n_gpus}  |  DCGM group: {group_level}",
+        f"variant: {first_vid}  |  hardware: {hw_key}  |  GPUs: {n_gpus}  |  DCGM group: {group_level}",
         ha="center",
         va="center",
         fontsize=8,
@@ -149,10 +147,7 @@ def render_page(
             key=lambda r: (r.get("peak_per_gpu_units", "") != "TB/s", r.get("peak_key", "")),
         )
         labels = [r.get("peak_key", "?") for r in ordered]
-        sol_values = [
-            (r.get("sol_pct") if r.get("sol_pct") is not None else 0.0)
-            for r in ordered
-        ]
+        sol_values = [(r.get("sol_pct") if r.get("sol_pct") is not None else 0.0) for r in ordered]
 
         y_pos = list(range(len(labels)))
         bars = ax.barh(y_pos, sol_values, edgecolor="white", linewidth=0.5)
@@ -170,7 +165,7 @@ def render_page(
         ax.axvline(100, color="#cc3333", linestyle="--", linewidth=0.7, alpha=0.7)
         ax.text(99, -0.6, "ceiling", color="#cc3333", fontsize=7, ha="right")
 
-        for bar, res in zip(bars, ordered):
+        for bar, res in zip(bars, ordered, strict=True):
             sol = res.get("sol_pct")
             sol_str = f"{sol:.1f}%" if sol is not None else "n/a"
             label = f"{sol_str}  |  {_fmt_throughput(res)}  |  {_fmt_peak(res)}"
@@ -192,8 +187,7 @@ def render_page(
         ax_cv.text(
             0.5,
             cav_y,
-            "Warning: short sweep < dcgm_config.min_sweep_seconds; "
-            "DCGM scrape granularity makes integration coarse.",
+            "Warning: short sweep < dcgm_config.min_sweep_seconds; DCGM scrape granularity makes integration coarse.",
             ha="center",
             va="center",
             fontsize=7,
@@ -204,8 +198,7 @@ def render_page(
         ax_cv.text(
             0.5,
             cav_y,
-            "DCGM_FI_PROF group not exported on this cluster; "
-            "falling back to DCGM_FI_DEV_* counter-tier (coarser).",
+            "DCGM_FI_PROF group not exported on this cluster; falling back to DCGM_FI_DEV_* counter-tier (coarser).",
             ha="center",
             va="center",
             fontsize=7,
@@ -216,8 +209,7 @@ def render_page(
         ax_cv.text(
             0.5,
             cav_y,
-            "DCGM exporter not detected on this cluster; "
-            "no byte-grounded measurements available.",
+            "DCGM exporter not detected on this cluster; no byte-grounded measurements available.",
             ha="center",
             va="center",
             fontsize=7,

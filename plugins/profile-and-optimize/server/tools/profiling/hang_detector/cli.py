@@ -70,8 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--stride",
         type=int,
         default=None,
-        help="Bucket modulus (default 32 matches the MOD-32 hang signature). "
-        "Mutually exclusive with --auto-stride.",
+        help="Bucket modulus (default 32 matches the MOD-32 hang signature). Mutually exclusive with --auto-stride.",
     )
     stride_group.add_argument(
         "--auto-stride",
@@ -104,14 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=Path,
-        help="When set, append the result as one JSONL row to this path. "
-        "Parent directory must exist.",
+        help="When set, append the result as one JSONL row to this path. Parent directory must exist.",
     )
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit the full result dict to stdout (default just emits a "
-        "one-line summary).",
+        help="Emit the full result dict to stdout (default just emits a one-line summary).",
     )
     return parser
 
@@ -158,9 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         nodelist = [
-            line.strip()
-            for line in args.nodelist_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
+            line.strip() for line in args.nodelist_file.read_text(encoding="utf-8").splitlines() if line.strip()
         ]
 
     # Auto-stride sweep: invoke run_detector once per candidate stride
@@ -188,9 +183,7 @@ def main(argv: list[str] | None = None) -> int:
             per_stride.append(single)
             aggregated_alerts.extend(single["alerts"])
         # Stable sort: largest lag first, then by stride, then by bucket.
-        aggregated_alerts.sort(
-            key=lambda a: (-a["lag"], a["stride"], a["lagging_bucket"])
-        )
+        aggregated_alerts.sort(key=lambda a: (-a["lag"], a["stride"], a["lagging_bucket"]))
         result = {
             "schema_version": 1,
             "mode": "auto_stride",
@@ -206,22 +199,16 @@ def main(argv: list[str] | None = None) -> int:
         else:
             if aggregated_alerts:
                 buckets_by_stride = {
-                    stride: sorted(
-                        a["lagging_bucket"] for a in aggregated_alerts if a["stride"] == stride
-                    )
+                    stride: sorted(a["lagging_bucket"] for a in aggregated_alerts if a["stride"] == stride)
                     for stride in candidates
                 }
-                stride_summary = ", ".join(
-                    f"stride={s}->{buckets_by_stride[s] or '[]'}" for s in candidates
-                )
+                stride_summary = ", ".join(f"stride={s}->{buckets_by_stride[s] or '[]'}" for s in candidates)
                 print(
-                    f"HANG-DETECTED: {len(aggregated_alerts)} alert(s) across "
-                    f"strides {candidates}. {stride_summary}."
+                    f"HANG-DETECTED: {len(aggregated_alerts)} alert(s) across strides {candidates}. {stride_summary}."
                 )
             else:
                 print(
-                    f"OK: no stride-pattern lag detected across strides "
-                    f"{candidates} on {result['rank_count']} rank(s)."
+                    f"OK: no stride-pattern lag detected across strides {candidates} on {result['rank_count']} rank(s)."
                 )
         return 1 if aggregated_alerts else 0
 
@@ -248,10 +235,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"Affected buckets: {sorted(a['lagging_bucket'] for a in alerts)}."
             )
         else:
-            print(
-                f"OK: no stride-pattern lag detected at stride={stride} "
-                f"across {result['rank_count']} rank(s)."
-            )
+            print(f"OK: no stride-pattern lag detected at stride={stride} across {result['rank_count']} rank(s).")
     # Non-zero exit when alerts present so callers can chain.
     return 1 if result["alerts"] else 0
 

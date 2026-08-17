@@ -87,9 +87,12 @@ From a clone of this repository:
 ```bash
 make install-skills CLIENT=codex
 make install-mcp CLIENT=codex
+codex mcp get profile_and_optimize
 ```
 
-Restart Codex after installation. Codex discovers the linked skills under
+The registration check should report `enabled: true`. Run
+`make smoke-mcp-runtime` for a live server handshake, then restart Codex after
+installation. Codex discovers the linked skills under
 `~/.agents/skills`. Use `/skills`, invoke a skill with `$skill-name`, or
 describe the task and let Codex select one. The MCP configuration is shared by
 Codex CLI, the IDE extension, and the desktop app. See the official Codex
@@ -107,11 +110,14 @@ claude plugin install --scope user \
 # Install the bundled MCP server inside the current plugin cache entry.
 # Add --full when you need the PDF report dependencies.
 bash "$(ls -dt ~/.claude/plugins/cache/profile-and-optimize-plugins/profile-and-optimize/*/server/install.sh | head -1)"
+
+claude mcp get plugin:profile-and-optimize:profile_and_optimize
 ```
 
-Restart Claude Code. Invoke a skill such as `/inference-perf-bench`, or describe
-the task and let Claude Code select a matching skill. The plugin installs its
-provenance hook, but the hook remains inactive until
+The health check should report `Status: ✔ Connected`. Restart Claude Code.
+Invoke a skill such as `/inference-perf-bench`, or describe the task and let
+Claude Code select a matching skill. The plugin installs its provenance hook,
+but the hook remains inactive until
 `PROVENANCE_COMMIT_GATE=ask` or `PROVENANCE_COMMIT_GATE=deny` is present in the
 Claude hook environment. Install `jq` on `PATH` before enabling either mode.
 
@@ -126,6 +132,12 @@ not block a release. The full command list and generic stdio form live in the
 make install-skills CLIENT=cursor
 make install-mcp CLIENT=cursor
 ```
+
+## Upgrading
+
+Read [`docs/UPGRADING.md`](docs/UPGRADING.md) before changing release lines. It
+lists the client refresh commands and required installer, AI tuning, MLPerf
+rules, and MCP acknowledgement changes.
 
 ## Value bar
 

@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TRANSITION = REPO_ROOT / "scripts" / "check-version-transition.py"
 TAG_GATE = REPO_ROOT / "scripts" / "check-release-tag.sh"
@@ -24,8 +23,7 @@ def run(*args: str, cwd: Path, stdin: str | None = None) -> subprocess.Completed
         cwd=cwd,
         input=stdin,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
 

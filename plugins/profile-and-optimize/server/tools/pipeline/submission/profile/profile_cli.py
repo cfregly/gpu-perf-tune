@@ -29,7 +29,6 @@ from tools.pipeline.submission.profile import (  # noqa: E402
     profile_diff,
 )
 
-
 CONTRACT: dict[str, dict[str, Any]] = {
     "host-overhead": {
         "safety": "writes_artifacts",
@@ -43,9 +42,17 @@ CONTRACT: dict[str, dict[str, Any]] = {
         "safety": "writes_artifacts",
         "required": (),
         "optional": (
-            "--baseline", "--baseline-csv-dir", "--candidate",
-            "--candidate-csv-dir", "--baseline-label", "--candidate-label",
-            "--out", "--json-out", "--limit", "--scratch", "--json",
+            "--baseline",
+            "--baseline-csv-dir",
+            "--candidate",
+            "--candidate-csv-dir",
+            "--baseline-label",
+            "--candidate-label",
+            "--out",
+            "--json-out",
+            "--limit",
+            "--scratch",
+            "--json",
         ),
         "json": True,
         "ack": None,
@@ -79,7 +86,8 @@ _POPULATE = {
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    description = (__doc__ or "Operator-facing profiling CLI").splitlines()[0]
+    parser = argparse.ArgumentParser(description=description)
     sub = parser.add_subparsers(dest="verb", required=True)
     for verb, description in _VERB_DESCRIPTIONS.items():
         verb_parser = sub.add_parser(verb, description=description)

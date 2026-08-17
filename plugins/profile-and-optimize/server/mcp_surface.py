@@ -62,8 +62,10 @@ ALLOWED_SAFETIES = {
     "mutates_cluster",
 }
 LIBRARIES = (
-    "ai_tuning", "profile",
-    "perf_baseline", "evidence",
+    "ai_tuning",
+    "profile",
+    "perf_baseline",
+    "evidence",
     "slurm",
     "findings",
     # Backs the inference-perf-tune-report skill.
@@ -143,9 +145,7 @@ def verify_canonical_counts() -> dict[str, int]:
     """
     contract_tools = len(derive_tool_specs())
     libraries = len(LIBRARIES)
-    assert libraries == _TOTAL_LIBRARIES, (
-        f"LIBRARIES has {libraries} entries; expected {_TOTAL_LIBRARIES}"
-    )
+    assert libraries == _TOTAL_LIBRARIES, f"LIBRARIES has {libraries} entries; expected {_TOTAL_LIBRARIES}"
     assert contract_tools == _TOTAL_CONTRACT_TOOLS, (
         f"derive_tool_specs() returned {contract_tools} tools; "
         f"expected {_TOTAL_CONTRACT_TOOLS}. Update _TOTAL_CONTRACT_TOOLS "
@@ -338,8 +338,7 @@ def _print_counts(*, json_mode: bool) -> int:
                 "total_mcp_tools": _TOTAL_MCP_TOOLS,
             },
             "live": live,
-            "verified": live["contract_tools"] == _TOTAL_CONTRACT_TOOLS
-                       and live["libraries"] == _TOTAL_LIBRARIES,
+            "verified": live["contract_tools"] == _TOTAL_CONTRACT_TOOLS and live["libraries"] == _TOTAL_LIBRARIES,
         }
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
@@ -354,11 +353,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Contract-derived MCP-tool surface for the bundled profile_and_optimize MCP server.",
     )
-    parser.add_argument("--json", action="store_true", help="emit machine-readable output for list / safety / counts / call")
+    parser.add_argument(
+        "--json", action="store_true", help="emit machine-readable output for list / safety / counts / call"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="list every derived MCP tool")
     sub.add_parser("safety", help="print derived tools grouped by safety class")
-    sub.add_parser("counts", help="print canonical counts (libraries / contract_tools / aux_tools / total_mcp_tools) and verify they match the live derivation")
+    sub.add_parser(
+        "counts",
+        help="print canonical counts (libraries / contract_tools / aux_tools / total_mcp_tools) and verify they match the live derivation",
+    )
     call = sub.add_parser("call", help="invoke a derived MCP tool by name")
     call.add_argument("tool", help="tool name (for example, slurm_triage)")
     call.add_argument("args", nargs=argparse.REMAINDER, help="extra args forwarded to the underlying CLI verb")

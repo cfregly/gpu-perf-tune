@@ -54,7 +54,7 @@ def _compute_peak(ceilings_hw: dict[str, Any], quant: str) -> tuple[float, float
     return float(comp) if comp else 15.0, float(hbm) if hbm else 8.0
 
 
-def _resolve_shape(payload: dict[str, Any]) -> "roofline_math.ModelShape | None":
+def _resolve_shape(payload: dict[str, Any]) -> roofline_math.ModelShape | None:
     """The analytical ModelShape for this config: prefer the importer-embedded
     ``analytical_shape`` block (self-contained, captured from the in-pod
     config.json), else the registry lookup by served model name. None => the
@@ -63,8 +63,8 @@ def _resolve_shape(payload: dict[str, Any]) -> "roofline_math.ModelShape | None"
     if isinstance(embedded, dict) and embedded.get("hidden_size"):
         try:
             return roofline_math.shape_from_dict(embedded)
-        except Exception:  # noqa: BLE001  (malformed embed -> fall through to registry)
-            pass
+        except TypeError:
+            return roofline_math.shape_for_model(payload.get("model", ""))
     return roofline_math.shape_for_model(payload.get("model", ""))
 
 
@@ -91,7 +91,7 @@ def _prefill_rate(pt: dict[str, Any]) -> float | None:
 
 def render_page(
     fig,
-    cell_roofline: "OrderedDict[str, dict[str, Any]]",
+    cell_roofline: OrderedDict[str, dict[str, Any]],
     ceilings: dict[str, Any],
     hardware_key: str,
 ) -> None:
@@ -104,14 +104,12 @@ def render_page(
         if missing:
             raise RooflineSweepJsonMalformed(cid, f"missing fields: {missing}")
 
-    import matplotlib.pyplot as plt  # noqa: E402
     from matplotlib import gridspec
 
     hw = ceilings.get(hardware_key, {})
     hw_name = hw.get("hw_name", hardware_key)
 
-    gs = gridspec.GridSpec(2, 2, width_ratios=[1.35, 1.0], height_ratios=[1, 1],
-                           hspace=0.34, wspace=0.26, figure=fig)
+    gs = gridspec.GridSpec(2, 2, width_ratios=[1.35, 1.0], height_ratios=[1, 1], hspace=0.34, wspace=0.26, figure=fig)
     axR = fig.add_subplot(gs[:, 0])
     axB = fig.add_subplot(gs[0, 1])
     axC = fig.add_subplot(gs[1, 1])
@@ -125,8 +123,13 @@ def render_page(
     # ---- Panel A: per-GPU roofline ----
     # memory diagonal in TFLOPS/GPU: y = AI * hbm_tb (the 1e12 cancels TB/s vs TFLOP/s)
     ai_axis = [10 ** (i / 8) for i in range(-8, 33)]  # ~0.1 .. ~1e4
-    axR.plot(ai_axis, [min(a * hbm_tb, comp_ceil) for a in ai_axis], "k-", lw=2,
-             label=f"roofline (per-GPU: {comp_pf:.0f} PFLOPS / {hbm_tb:.0f} TB/s)")
+    axR.plot(
+        ai_axis,
+        [min(a * hbm_tb, comp_ceil) for a in ai_axis],
+        "k-",
+        lw=2,
+        label=f"roofline (per-GPU: {comp_pf:.0f} PFLOPS / {hbm_tb:.0f} TB/s)",
+    )
     axR.axvline(ridge, color="#bbb", ls=":", lw=1)
     axR.text(ridge * 1.05, comp_ceil * 0.35, f"ridge\nAI={ridge:.0f}", fontsize=7, color="#666")
 
@@ -166,10 +169,11 @@ def render_page(
                 x = (t / d) * ridge
                 y = t * comp_ceil
             if x and y:
-                dx.append(x); dy.append(y); dc.append(c)
+                dx.append(x)
+                dy.append(y)
+                dc.append(c)
         if dx:
-            sc = axR.scatter(dx, dy, c=dc, cmap="viridis", s=70, marker=mk,
-                             edgecolor="k", linewidth=0.4, zorder=5)
+            sc = axR.scatter(dx, dy, c=dc, cmap="viridis", s=70, marker=mk, edgecolor="k", linewidth=0.4, zorder=5)
             axR.plot(dx, dy, "-", color="#3b7", lw=0.8, alpha=0.5, zorder=4)
             if not colorbar_done:
                 cb = fig.colorbar(sc, ax=axR, pad=0.01, fraction=0.045)
@@ -190,22 +194,28 @@ def render_page(
                 if not t or not d:
                     continue
                 any_proxy = True
-                px.append((t / d) * ridge); py.append(t * comp_ceil)
+                px.append((t / d) * ridge)
+                py.append(t * comp_ceil)
         if px:
-            axR.scatter(px, py, marker=mk, c="#d33", s=95, edgecolor="k",
-                        linewidth=0.4, zorder=6, label=f"prefill {lab}")
+            axR.scatter(
+                px, py, marker=mk, c="#d33", s=95, edgecolor="k", linewidth=0.4, zorder=6, label=f"prefill {lab}"
+            )
 
-    axR.set_xscale("log"); axR.set_yscale("log")
-    xlab = ("arithmetic intensity (FLOP/byte) [analytical, from config.json]"
-            if not any_proxy else
-            "arithmetic intensity (FLOP/byte) [analytical; * = DCGM-proxy fallback]")
-    ylab = ("achieved compute / GPU (TFLOP/s) [flop_per_token x measured tok/s]"
-            if not any_proxy else
-            "achieved compute / GPU (TFLOP/s)")
+    axR.set_xscale("log")
+    axR.set_yscale("log")
+    xlab = (
+        "arithmetic intensity (FLOP/byte) [analytical, from config.json]"
+        if not any_proxy
+        else "arithmetic intensity (FLOP/byte) [analytical; * = DCGM-proxy fallback]"
+    )
+    ylab = (
+        "achieved compute / GPU (TFLOP/s) [flop_per_token x measured tok/s]"
+        if not any_proxy
+        else "achieved compute / GPU (TFLOP/s)"
+    )
     axR.set_xlabel(xlab, fontsize=8)
     axR.set_ylabel(ylab, fontsize=8)
-    axR.set_title("Prefill + Decode Roofline (per-GPU; analytical AI x measured tok/s)",
-                  fontsize=10, loc="left")
+    axR.set_title("Prefill + Decode Roofline (per-GPU; analytical AI x measured tok/s)", fontsize=10, loc="left")
     axR.grid(True, which="both", ls=":", alpha=0.35)
     axR.legend(fontsize=6.5, loc="lower right")
     axR.set_ylim(comp_ceil / 1e4, comp_ceil * 2)
@@ -229,21 +239,29 @@ def render_page(
                 c, rate = pt.get("c"), _decode_rate(pt)
                 if not c or not rate:
                     continue
-                union = (min(shape.n_routed_experts, shape.n_experts_per_tok * c)
-                         if shape.is_moe else 0)
+                union = min(shape.n_routed_experts, shape.n_experts_per_tok * c) if shape.is_moe else 0
                 wb_per_tok = shape.active_weight_bytes(union, quant) / c
                 kv_per_tok = shape.kv_bytes_per_token(_decode_ctx(pt), kvd)
                 delivered = (wb_per_tok + kv_per_tok) * rate / tp  # bytes/s per GPU
-                bg_cs.append(c); bg.append(delivered / (hbm_tb * 1e12) * 100)
+                bg_cs.append(c)
+                bg.append(delivered / (hbm_tb * 1e12) * 100)
             if bg_cs:
-                axB.plot(bg_cs, bg, "s--", lw=1.3, alpha=0.8,
-                         label=f"delivered HBM-BW % (bytes x tok/s) {_cfg_label(cid, tp)}")
+                axB.plot(
+                    bg_cs,
+                    bg,
+                    "s--",
+                    lw=1.3,
+                    alpha=0.8,
+                    label=f"delivered HBM-BW % (bytes x tok/s) {_cfg_label(cid, tp)}",
+                )
     axB.axhline(75, color="#d33", ls="--", lw=1.4, label="target 75%")
-    axB.set_xscale("log", base=2); axB.set_ylim(0, 100)
+    axB.set_xscale("log", base=2)
+    axB.set_ylim(0, 100)
     axB.set_xlabel("decode concurrency C", fontsize=8)
     axB.set_ylabel("HBM-BW utilization %", fontsize=8)
     axB.set_title("Q2: decode HBM-BW utilization vs concurrency", fontsize=9, loc="left")
-    axB.grid(True, ls=":", alpha=0.35); axB.legend(fontsize=6.0, loc="upper left")
+    axB.grid(True, ls=":", alpha=0.35)
+    axB.legend(fontsize=6.0, loc="upper left")
 
     # ---- Panel C: tensor + SM util vs concurrency (Q1) ----
     peak_decode_tensor = 0.0
@@ -256,21 +274,24 @@ def render_page(
             axC.plot(cs, te, "s-", lw=1.8, label=f"tensor {_l}")
             axC.plot(cs, sm, "d:", lw=1.2, alpha=0.7, label=f"SM {_l}")
             peak_decode_tensor = max(peak_decode_tensor, max(te))
-    axC.set_xscale("log", base=2); axC.set_ylim(0, 100)
+    axC.set_xscale("log", base=2)
+    axC.set_ylim(0, 100)
     axC.set_xlabel("decode concurrency C", fontsize=8)
     axC.set_ylabel("utilization %", fontsize=8)
     axC.set_title("Q1: compute (tensor) + SM utilization vs concurrency", fontsize=9, loc="left")
-    axC.grid(True, ls=":", alpha=0.35); axC.legend(fontsize=6, loc="upper left")
+    axC.grid(True, ls=":", alpha=0.35)
+    axC.legend(fontsize=6, loc="upper left")
 
     # ---- auto mechanism annotation (observation, not interpretation) ----
-    note = (
-        f"decode peak: tensor {peak_decode_tensor:.0f}% of compute, "
-        f"HBM {peak_decode_hbm:.0f}% (target 75%). "
-        + ("memory-bound: decode never saturates compute; prefill is the compute phase."
-           if peak_decode_tensor < 25 else
-           "decode engages compute -- check prefill vs decode split.")
+    note = f"decode peak: tensor {peak_decode_tensor:.0f}% of compute, HBM {peak_decode_hbm:.0f}% (target 75%). " + (
+        "memory-bound: decode never saturates compute; prefill is the compute phase."
+        if peak_decode_tensor < 25
+        else "decode engages compute -- check prefill vs decode split."
     )
     fig.text(0.5, 0.012, note, ha="center", fontsize=7.5, color="#444", wrap=True)
 
-    fig.suptitle(f"Prefill/Decode Roofline -- {hw_name} (measured DCGM x analytical AI; "
-                 f"{len(cell_roofline)} config(s))", fontsize=12, y=0.98)
+    fig.suptitle(
+        f"Prefill/Decode Roofline -- {hw_name} (measured DCGM x analytical AI; {len(cell_roofline)} config(s))",
+        fontsize=12,
+        y=0.98,
+    )

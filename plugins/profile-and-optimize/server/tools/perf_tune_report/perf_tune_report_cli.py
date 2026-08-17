@@ -34,14 +34,25 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import shutil
 import sys
 from pathlib import Path
 from typing import Any
 
+from tools.perf_tune_report import champion_select as champion_select_lib
 from tools.perf_tune_report.aggregator import aggregate
+from tools.perf_tune_report.capture_signature import (
+    build_plan as build_capture_plan,
+)
+from tools.perf_tune_report.capture_signature import (
+    materialize_reuse,
+)
 from tools.perf_tune_report.coverage import summarize
+from tools.perf_tune_report.graph_diff import (
+    diff_graph_logs,
+)
 from tools.perf_tune_report.helpers import (
     emit,
     load_yaml,
@@ -54,31 +65,25 @@ from tools.perf_tune_report.helpers import (
     synthetic_fixture_path,
     utc_timestamp_slug,
 )
-from tools.perf_tune_report.importers import import_bundle_auto, import_perf_bench_bundle
-from tools.perf_tune_report.importers import import_roofline_sweep_bundle
-from tools.perf_tune_report.importers import detect_variant_ab, import_variant_ab_bundle
+from tools.perf_tune_report.importers import (
+    detect_variant_ab,
+    import_bundle_auto,
+    import_roofline_sweep_bundle,
+    import_variant_ab_bundle,
+)
 from tools.perf_tune_report.importers.ncu_kernels import import_ncu_kernels
 from tools.perf_tune_report.importers.nsys_kernels import import_nsys_kernels
 from tools.perf_tune_report.kernel_profile import (
-    KernelProfileResult,
     capture_kernel_profile,
-)
-from tools.perf_tune_report.graph_diff import (
-    GraphDiffResult,
-    diff_graph_logs,
 )
 from tools.perf_tune_report.kernel_reproducer import scaffold_reproducer
 from tools.perf_tune_report.orchestrator import CellPlan, run_campaign
 from tools.perf_tune_report.runners.aa_bench import run_cell as run_cell_aa
+from tools.perf_tune_report.runners.aa_workload import redact_aiperf_command
 from tools.perf_tune_report.runners.aiperf_bench import run_cell as run_cell_aiperf
 from tools.perf_tune_report.runners.common import cell_config_from_dict
 from tools.perf_tune_report.runners.vllm_sweep import run_cell as run_cell_vllm_sweep
 from tools.perf_tune_report.schema import read_jsonl
-from tools.perf_tune_report import champion_select as champion_select_lib
-from tools.perf_tune_report.capture_signature import (
-    build_plan as build_capture_plan,
-    materialize_reuse,
-)
 from tools.perf_tune_report.value_view import (
     build_value_view,
     default_registry_path,
@@ -86,13 +91,13 @@ from tools.perf_tune_report.value_view import (
     render_report,
 )
 
+logger = logging.getLogger(__name__)
 
 CONTRACT: dict[str, dict[str, Any]] = {
     "value_view": {
         "safety": "writes_artifacts",
         "required": (),
-        "optional": ("--registry", "--out", "--format", "--title", "--gpu-hr",
-                     "--campaigns-dir", "--json"),
+        "optional": ("--registry", "--out", "--format", "--title", "--gpu-hr", "--campaigns-dir", "--json"),
         "json": True,
         "ack": None,
         "description": "Render the leadership value-prop ledger: join the curated "
@@ -115,8 +120,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
     "campaign_init": {
         "safety": "writes_artifacts",
         "required": ("--config",),
-        "optional": ("--slug", "--experiment-id", "--family", "--evidence-bundle",
-                     "--campaigns-dir", "--json"),
+        "optional": ("--slug", "--experiment-id", "--family", "--evidence-bundle", "--campaigns-dir", "--json"),
         "json": True,
         "ack": None,
         "description": "Scaffold a new campaign directory from a YAML config. Pass "
@@ -126,9 +130,17 @@ CONTRACT: dict[str, dict[str, Any]] = {
     "experiments_index": {
         "safety": "writes_artifacts",
         "required": (),
-        "optional": ("--family", "--out", "--include-s3", "--s3-endpoint",
-                     "--s3-bucket", "--s3-access-key-file", "--s3-secret-key-file",
-                     "--campaigns-dir", "--json"),
+        "optional": (
+            "--family",
+            "--out",
+            "--include-s3",
+            "--s3-endpoint",
+            "--s3-bucket",
+            "--s3-access-key-file",
+            "--s3-secret-key-file",
+            "--campaigns-dir",
+            "--json",
+        ),
         "json": True,
         "ack": None,
         "description": "Enumerate all local campaigns into a cross-experiment index "
@@ -138,9 +150,17 @@ CONTRACT: dict[str, dict[str, Any]] = {
     "experiment_inventory": {
         "safety": "writes_artifacts",
         "required": (),
-        "optional": ("--bundle-root", "--out", "--include-s3", "--s3-endpoint",
-                     "--s3-bucket", "--s3-access-key-file", "--s3-secret-key-file",
-                     "--campaigns-dir", "--json"),
+        "optional": (
+            "--bundle-root",
+            "--out",
+            "--include-s3",
+            "--s3-endpoint",
+            "--s3-bucket",
+            "--s3-access-key-file",
+            "--s3-secret-key-file",
+            "--campaigns-dir",
+            "--json",
+        ),
         "json": True,
         "ack": None,
         "description": "Canonical experiment count: unify local perf-report campaigns with "
@@ -152,8 +172,15 @@ CONTRACT: dict[str, dict[str, Any]] = {
     "import_model_eval": {
         "safety": "writes_artifacts",
         "required": ("--results", "--campaign", "--model", "--hardware", "--quant"),
-        "optional": ("--tensor-parallel", "--cell-id", "--parallel-strategy",
-                     "--kv-cache-dtype", "--image", "--campaigns-dir", "--json"),
+        "optional": (
+            "--tensor-parallel",
+            "--cell-id",
+            "--parallel-strategy",
+            "--kv-cache-dtype",
+            "--image",
+            "--campaigns-dir",
+            "--json",
+        ),
         "json": True,
         "ack": None,
         "description": "Import an lm-eval-harness results.json into a perf-report quality cell "
@@ -163,10 +190,19 @@ CONTRACT: dict[str, dict[str, Any]] = {
     "import_workloads": {
         "safety": "writes_artifacts",
         "required": ("--bench-dir", "--campaign", "--model", "--hardware", "--tensor-parallel"),
-        "optional": ("--quant", "--parallel-strategy", "--max-num-batched-tokens",
-                     "--kv-cache-dtype", "--image", "--cudagraph-mode",
-                     "--gpu-memory-utilization", "--bench-backend", "--dry-run",
-                     "--campaigns-dir", "--json"),
+        "optional": (
+            "--quant",
+            "--parallel-strategy",
+            "--max-num-batched-tokens",
+            "--kv-cache-dtype",
+            "--image",
+            "--cudagraph-mode",
+            "--gpu-memory-utilization",
+            "--bench-backend",
+            "--dry-run",
+            "--campaigns-dir",
+            "--json",
+        ),
         "json": True,
         "ack": None,
         "description": "Import a workload result directory (one <tag>-c<c>.txt per "
@@ -177,8 +213,16 @@ CONTRACT: dict[str, dict[str, Any]] = {
     "trend_view": {
         "safety": "writes_artifacts",
         "required": (),
-        "optional": ("--metric", "--concurrency", "--regression-pct", "--hardware",
-                     "--out", "--campaigns-dir", "--lake-dir", "--json"),
+        "optional": (
+            "--metric",
+            "--concurrency",
+            "--regression-pct",
+            "--hardware",
+            "--out",
+            "--campaigns-dir",
+            "--lake-dir",
+            "--json",
+        ),
         "json": True,
         "ack": None,
         "description": "Longitudinal (model, variant_key) perf/quality trend across campaigns: "
@@ -730,6 +774,7 @@ CONTRACT: dict[str, dict[str, Any]] = {
 # Verb implementations
 # ----------------------------------------------------------------------------
 
+
 def cmd_campaign_init(args: argparse.Namespace) -> int:
     config_path = Path(args.config).expanduser().resolve()
     if not config_path.is_file():
@@ -767,6 +812,7 @@ def cmd_campaign_init(args: argparse.Namespace) -> int:
         # Lazy import: lake_writer's module top is light (pyarrow is imported
         # inside its functions), so this does not pull pyarrow into campaign_init.
         from tools.perf_tune_report.lake_writer import _CAMPAIGN_UTC_RE
+
         if not _CAMPAIGN_UTC_RE.search(experiment_id):
             print(
                 f"FATAL: --experiment-id {experiment_id!r} must contain a "
@@ -822,9 +868,7 @@ def cmd_campaign_init(args: argparse.Namespace) -> int:
     if prov:
         import json as _json
 
-        (campaign_dir / "provenance.json").write_text(
-            _json.dumps(prov, indent=2, sort_keys=True)
-        )
+        (campaign_dir / "provenance.json").write_text(_json.dumps(prov, indent=2, sort_keys=True))
         if "provenance" not in config:
             # Append (not re-dump) so the original config bytes are preserved.
             import yaml as _yaml
@@ -845,13 +889,10 @@ def cmd_campaign_init(args: argparse.Namespace) -> int:
         f"- backend(s): {sorted({c.get('backend', 'unspecified') for c in cells})}\n"
         f"- experiment_id: {experiment_id}\n"
         f"- family: {family}\n"
-        f"- evidence_bundle_path: {evidence_bundle}\n"
-        + prov_bullets
+        f"- evidence_bundle_path: {evidence_bundle}\n" + prov_bullets
     )
     (campaign_dir / "SOURCE.md").write_text(source_md)
-    (campaign_dir / "summary.md").write_text(
-        "# Verdict\n\n_TBD: fill in after the run is complete._\n"
-    )
+    (campaign_dir / "summary.md").write_text("# Verdict\n\n_TBD: fill in after the run is complete._\n")
 
     payload = {
         "tool": "perf_tune_report_campaign_init",
@@ -889,8 +930,7 @@ def cmd_cell_run(args: argparse.Namespace) -> int:
     cells_by_id = {c["cell_id"]: c for c in config.get("cells", [])}
     if args.cell not in cells_by_id:
         print(
-            f"FATAL: cell {args.cell!r} not in campaign config; available: "
-            f"{sorted(cells_by_id)}",
+            f"FATAL: cell {args.cell!r} not in campaign config; available: {sorted(cells_by_id)}",
             file=sys.stderr,
         )
         return 2
@@ -1057,14 +1097,13 @@ def cmd_cell_run(args: argparse.Namespace) -> int:
             "status": result.status,
             "row_count": result.row_count,
             "dry_run": result.dry_run,
-            "commands": result.commands,
+            "commands": [redact_aiperf_command(command) for command in result.commands],
         }
         if result.dataset_info:
             payload["dataset_info"] = result.dataset_info
         if result.spec_windows:
             payload["spec_decode"] = {
-                str(c): {"al": w["al"], "accept_rate": w["accept_rate"]}
-                for c, w in sorted(result.spec_windows.items())
+                str(c): {"al": w["al"], "accept_rate": w["accept_rate"]} for c, w in sorted(result.spec_windows.items())
             }
     else:
         print(
@@ -1079,11 +1118,7 @@ def cmd_cell_run(args: argparse.Namespace) -> int:
 
 def cmd_value_view(args: argparse.Namespace) -> int:
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
-    registry_path = (
-        Path(args.registry).expanduser()
-        if args.registry
-        else default_registry_path(campaigns_root)
-    )
+    registry_path = Path(args.registry).expanduser() if args.registry else default_registry_path(campaigns_root)
     if not registry_path.is_file():
         print(
             f"FATAL: value-findings registry not found at {registry_path}; pass "
@@ -1096,11 +1131,10 @@ def cmd_value_view(args: argparse.Namespace) -> int:
     # Resolve the $/GPU-hour: --gpu-hr override wins, else perf-tune-report/configs/cost.yaml
     # (the fleet is GB300), else GPU_HR_DEFAULT -- shared with fleet_leaderboard's knob.
     from tools.perf_tune_report.fleet_leaderboard import resolve_gpu_hr
-    gpu_hr = resolve_gpu_hr("GB300", campaigns_root.parent / "configs",
-                            getattr(args, "gpu_hr", None))
+
+    gpu_hr = resolve_gpu_hr("GB300", campaigns_root.parent / "configs", getattr(args, "gpu_hr", None))
     if getattr(args, "format", "table") == "report":
-        md = render_report(view, title=args.title or "Inference perf wins -- value prop",
-                           gpu_hr=gpu_hr)
+        md = render_report(view, title=args.title or "Inference perf wins -- value prop", gpu_hr=gpu_hr)
     else:
         md = render_markdown(view, title=args.title or "Value ledger", gpu_hr=gpu_hr)
     out_path = Path(args.out).expanduser() if args.out else None
@@ -1133,11 +1167,7 @@ def cmd_portability_view(args: argparse.Namespace) -> int:
     from tools.perf_tune_report.portability_view import build_portability, render_markdown
 
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
-    registry_path = (
-        Path(args.registry).expanduser()
-        if args.registry
-        else default_registry_path(campaigns_root)
-    )
+    registry_path = Path(args.registry).expanduser() if args.registry else default_registry_path(campaigns_root)
     if not registry_path.is_file():
         print(
             f"FATAL: value-findings registry not found at {registry_path}; pass "
@@ -1174,13 +1204,12 @@ def cmd_champion_select(args: argparse.Namespace) -> int:
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
     campaign_dir = resolve_campaign_dir(args.campaign, campaigns_root)
     workloads_present = (
-        tuple(w.strip() for w in args.workloads_present.split(",") if w.strip())
-        if args.workloads_present
-        else None
+        tuple(w.strip() for w in args.workloads_present.split(",") if w.strip()) if args.workloads_present else None
     )
-    require_workloads = tuple(
-        w.strip() for w in (args.require_workloads or "").split(",") if w.strip()
-    ) or champion_select_lib.CANONICAL_WORKLOADS
+    require_workloads = (
+        tuple(w.strip() for w in (args.require_workloads or "").split(",") if w.strip())
+        or champion_select_lib.CANONICAL_WORKLOADS
+    )
     try:
         result = champion_select_lib.select(
             campaign_dir,
@@ -1207,9 +1236,7 @@ def cmd_champion_select(args: argparse.Namespace) -> int:
         json_path = campaign_dir / "champion_select.json"
         md_path = out_md or (campaign_dir / "CHAMPION.md")
     else:
-        json_path, md_path = champion_select_lib.write_outputs(
-            result, campaign_dir, out_md=out_md, title=args.title
-        )
+        json_path, md_path = champion_select_lib.write_outputs(result, campaign_dir, out_md=out_md, title=args.title)
     if not args.json:
         print(champion_select_lib.render_markdown(result, title=args.title))
     payload = {
@@ -1239,10 +1266,7 @@ def cmd_champion_select(args: argparse.Namespace) -> int:
 def cmd_capture_plan(args: argparse.Namespace) -> int:
     campaigns_root = resolve_campaigns_dir(args.campaigns_dir)
     target_campaign = resolve_campaign_dir(args.campaign, campaigns_root)
-    source_campaigns = [
-        resolve_campaign_dir(c, campaigns_root)
-        for c in (args.source_campaign or [])
-    ]
+    source_campaigns = [resolve_campaign_dir(c, campaigns_root) for c in (args.source_campaign or [])]
     if not source_campaigns:
         source_campaigns = [target_campaign]
     try:
@@ -1251,16 +1275,18 @@ def cmd_capture_plan(args: argparse.Namespace) -> int:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     payload = plan.to_dict()
-    payload.update({
-        "tool": "perf_tune_report_capture_plan",
-        "library": "perf_tune_report",
-        "verb": "capture_plan",
-        "safety": CONTRACT["capture_plan"]["safety"],
-        "campaign_dir": str(target_campaign),
-        "cell_count": len(plan.cells),
-        "reuse_candidate_count": len(plan.reuse_candidates),
-        "missing_group_count": len(plan.missing_groups),
-    })
+    payload.update(
+        {
+            "tool": "perf_tune_report_capture_plan",
+            "library": "perf_tune_report",
+            "verb": "capture_plan",
+            "safety": CONTRACT["capture_plan"]["safety"],
+            "campaign_dir": str(target_campaign),
+            "cell_count": len(plan.cells),
+            "reuse_candidate_count": len(plan.reuse_candidates),
+            "missing_group_count": len(plan.missing_groups),
+        }
+    )
     if args.out:
         out = Path(args.out).expanduser()
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -1278,16 +1304,18 @@ def cmd_materialize_capture_reuse(args: argparse.Namespace) -> int:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     payload = result.to_dict()
-    payload.update({
-        "tool": "perf_tune_report_materialize_capture_reuse",
-        "library": "perf_tune_report",
-        "verb": "materialize_capture_reuse",
-        "safety": CONTRACT["materialize_capture_reuse"]["safety"],
-        "plan": str(plan_path),
-        "copied_count": len(result.copied),
-        "skipped_count": len(result.skipped),
-        "dry_run": args.dry_run,
-    })
+    payload.update(
+        {
+            "tool": "perf_tune_report_materialize_capture_reuse",
+            "library": "perf_tune_report",
+            "verb": "materialize_capture_reuse",
+            "safety": CONTRACT["materialize_capture_reuse"]["safety"],
+            "plan": str(plan_path),
+            "copied_count": len(result.copied),
+            "skipped_count": len(result.skipped),
+            "dry_run": args.dry_run,
+        }
+    )
     emit(payload, as_json=args.json)
     return 0
 
@@ -1401,8 +1429,7 @@ def cmd_report_render(args: argparse.Namespace) -> int:
     # + report_status.json.
     for omission in status.omitted_pages:
         print(
-            f"WARNING: omitted {omission['page']} -- {omission['why']} "
-            f"How to fix: {omission['how_to_fix']}",
+            f"WARNING: omitted {omission['page']} -- {omission['why']} How to fix: {omission['how_to_fix']}",
             file=sys.stderr,
         )
 
@@ -1555,10 +1582,7 @@ def _ordered_unique_hw(summary: Any) -> list[str]:
 
 def cmd_publish_to_lake(args: argparse.Namespace) -> int:
     """Publish a campaign's atlas + provenance as Parquet to S3."""
-    if (
-        not args.dry_run
-        and getattr(args, "i_understand_this_publishes_externally", False) is not True
-    ):
+    if not args.dry_run and getattr(args, "i_understand_this_publishes_externally", False) is not True:
         print(
             "FATAL: publish_to_lake writes to external S3 storage. Pass "
             "--i-understand-this-publishes-externally in the current command.",
@@ -1683,22 +1707,34 @@ def cmd_publish_to_lake(args: argparse.Namespace) -> int:
                 "row_count": result.quality.row_count,
                 "skipped": result.quality.skipped,
             },
-            **({"champion_v1": {
-                "local_path": str(result.champion.local_path),
-                "s3_key": result.champion.s3_key,
-                "size_bytes": result.champion.size_bytes,
-                "sha256": result.champion.sha256,
-                "row_count": result.champion.row_count,
-                "skipped": result.champion.skipped,
-            }} if result.champion is not None else {}),
-            **({"roofline_v1": {
-                "local_path": str(result.roofline.local_path),
-                "s3_key": result.roofline.s3_key,
-                "size_bytes": result.roofline.size_bytes,
-                "sha256": result.roofline.sha256,
-                "row_count": result.roofline.row_count,
-                "skipped": result.roofline.skipped,
-            }} if result.roofline is not None else {}),
+            **(
+                {
+                    "champion_v1": {
+                        "local_path": str(result.champion.local_path),
+                        "s3_key": result.champion.s3_key,
+                        "size_bytes": result.champion.size_bytes,
+                        "sha256": result.champion.sha256,
+                        "row_count": result.champion.row_count,
+                        "skipped": result.champion.skipped,
+                    }
+                }
+                if result.champion is not None
+                else {}
+            ),
+            **(
+                {
+                    "roofline_v1": {
+                        "local_path": str(result.roofline.local_path),
+                        "s3_key": result.roofline.s3_key,
+                        "size_bytes": result.roofline.size_bytes,
+                        "sha256": result.roofline.sha256,
+                        "row_count": result.roofline.row_count,
+                        "skipped": result.roofline.skipped,
+                    }
+                }
+                if result.roofline is not None
+                else {}
+            ),
         },
     }
 
@@ -1708,9 +1744,7 @@ def cmd_publish_to_lake(args: argparse.Namespace) -> int:
     # a real publish; the bundle path comes from the campaign SOURCE.md's
     # evidence_bundle_path (written by campaign_init --evidence-bundle).
     if not result.dry_run:
-        bundle_note = _append_lake_provenance_to_bundle(
-            campaign_dir, parse_source_md, result
-        )
+        bundle_note = _append_lake_provenance_to_bundle(campaign_dir, parse_source_md, result)
         if bundle_note:
             payload["evidence_bundle_updated"] = bundle_note
 
@@ -1765,6 +1799,7 @@ def cmd_experiments_index(args: argparse.Namespace) -> int:
     if getattr(args, "include_s3", False):
         from tools.perf_tune_report.experiments_index import enumerate_published_campaign_ids
         from tools.perf_tune_report.lake_writer import resolve_s3_config
+
         try:
             cfg = resolve_s3_config(
                 endpoint=args.s3_endpoint,
@@ -1773,11 +1808,9 @@ def cmd_experiments_index(args: argparse.Namespace) -> int:
                 secret_key_file=args.s3_secret_key_file,
             )
             published = enumerate_published_campaign_ids(cfg, bucket=cfg.bucket)
-            print(f"== --include-s3: {len(published)} published campaign(s) in the lake ==",
-                  file=sys.stderr)
+            print(f"== --include-s3: {len(published)} published campaign(s) in the lake ==", file=sys.stderr)
         except SystemExit as exc:
-            print(f"WARNING: --include-s3 skipped (S3 creds unavailable): {exc}",
-                  file=sys.stderr)
+            print(f"WARNING: --include-s3 skipped (S3 creds unavailable): {exc}", file=sys.stderr)
             published = None
         except Exception as exc:  # noqa: BLE001 - best-effort; never fail the index
             print(f"WARNING: --include-s3 lake enumeration failed: {exc}", file=sys.stderr)
@@ -1823,6 +1856,7 @@ def cmd_experiment_inventory(args: argparse.Namespace) -> int:
     if getattr(args, "include_s3", False):
         from tools.perf_tune_report.experiments_index import enumerate_published_campaign_ids
         from tools.perf_tune_report.lake_writer import resolve_s3_config
+
         try:
             cfg = resolve_s3_config(
                 endpoint=args.s3_endpoint,
@@ -1831,11 +1865,9 @@ def cmd_experiment_inventory(args: argparse.Namespace) -> int:
                 secret_key_file=args.s3_secret_key_file,
             )
             published = enumerate_published_campaign_ids(cfg, bucket=cfg.bucket)
-            print(f"== --include-s3: {len(published)} published campaign(s) in the lake ==",
-                  file=sys.stderr)
+            print(f"== --include-s3: {len(published)} published campaign(s) in the lake ==", file=sys.stderr)
         except SystemExit as exc:
-            print(f"WARNING: --include-s3 skipped (S3 creds unavailable): {exc}",
-                  file=sys.stderr)
+            print(f"WARNING: --include-s3 skipped (S3 creds unavailable): {exc}", file=sys.stderr)
             published = None
         except Exception as exc:  # noqa: BLE001 - best-effort; never fail the inventory
             print(f"WARNING: --include-s3 lake enumeration failed: {exc}", file=sys.stderr)
@@ -1886,8 +1918,7 @@ def cmd_trend_view(args: argparse.Namespace) -> int:
             print(f"FATAL: campaigns dir does not exist: {campaigns_root}", file=sys.stderr)
             return 2
         rows = read_all_rows(campaigns_root, hardware_filter=args.hardware)
-    view = build_trends(rows, metric=args.metric, concurrency=args.concurrency,
-                        regression_pct=args.regression_pct)
+    view = build_trends(rows, metric=args.metric, concurrency=args.concurrency, regression_pct=args.regression_pct)
     md = render_markdown(view)
     out_path = Path(args.out).expanduser() if args.out else None
     if out_path is not None:
@@ -1924,11 +1955,16 @@ def cmd_import_model_eval(args: argparse.Namespace) -> int:
         return 2
     try:
         result = import_model_eval(
-            results, campaign_dir,
-            model=args.model, hardware=args.hardware, quant=args.quant,
-            tensor_parallel=args.tensor_parallel, cell_id=args.cell_id,
+            results,
+            campaign_dir,
+            model=args.model,
+            hardware=args.hardware,
+            quant=args.quant,
+            tensor_parallel=args.tensor_parallel,
+            cell_id=args.cell_id,
             parallel_strategy=args.parallel_strategy,
-            kv_cache_dtype=args.kv_cache_dtype, image=args.image,
+            kv_cache_dtype=args.kv_cache_dtype,
+            image=args.image,
         )
     except ValueError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
@@ -1969,17 +2005,23 @@ def cmd_import_workloads(args: argparse.Namespace) -> int:
             args.gpu_memory_utilization = _dd["gpu_memory_utilization"]
         if _dd.get("cudagraph_mode") == "eager":
             args.cudagraph_mode = "eager"
+    kv_cache_dtype = str(args.kv_cache_dtype or "unknown")
     try:
         result = import_workloads(
-            bench_dir, campaign_dir,
-            model=args.model, hardware=args.hardware,
-            tensor_parallel=args.tensor_parallel, quant=args.quant,
+            bench_dir,
+            campaign_dir,
+            model=args.model,
+            hardware=args.hardware,
+            tensor_parallel=args.tensor_parallel,
+            quant=args.quant,
             parallel_strategy=args.parallel_strategy,
             max_num_batched_tokens=args.max_num_batched_tokens,
-            kv_cache_dtype=args.kv_cache_dtype, image=args.image,
+            kv_cache_dtype=kv_cache_dtype,
+            image=args.image,
             cudagraph_mode=args.cudagraph_mode,
             gpu_memory_utilization=args.gpu_memory_utilization,
-            bench_backend=args.bench_backend, dry_run=args.dry_run,
+            bench_backend=args.bench_backend,
+            dry_run=args.dry_run,
         ).to_dict()
     except (FileNotFoundError, ValueError) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
@@ -2012,6 +2054,7 @@ def cmd_fleet_leaderboard(args: argparse.Namespace) -> int:
 
     # Resolve the $/GPU-hour: --gpu-hr override wins, else perf-tune-report/configs/cost.yaml.
     from tools.perf_tune_report.fleet_leaderboard import resolve_gpu_hr
+
     gpu_hr = resolve_gpu_hr(hw, campaigns_root.parent / "configs", args.gpu_hr)
 
     # Default output: the perf-report bundle (campaigns_root's parent), alongside configs.
@@ -2081,16 +2124,18 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
             helm_overrides = c.get("helm_overrides", {}) or {}
             if not isinstance(helm_overrides, dict):
                 raise TypeError(f"cell {cell_id}: helm_overrides must be a mapping")
-            cells.append(CellPlan(
-                id=cell_id,
-                backend=backend,
-                concurrencies=tuple(int(value) for value in c.get("concurrencies", [])),
-                helm_overrides=helm_overrides,
-                profile=c.get("profile", {}) or {},
-                notes=c.get("notes", ""),
-                runner_config=dict(c),
-                backend_config=backend_config,
-            ))
+            cells.append(
+                CellPlan(
+                    id=cell_id,
+                    backend=backend,
+                    concurrencies=tuple(int(value) for value in c.get("concurrencies", [])),
+                    helm_overrides=helm_overrides,
+                    profile=c.get("profile", {}) or {},
+                    notes=c.get("notes", ""),
+                    runner_config=dict(c),
+                    backend_config=backend_config,
+                )
+            )
         except (KeyError, TypeError, ValueError) as exc:
             print(f"FATAL: cell config invalid: {exc}", file=sys.stderr)
             return 2
@@ -2105,26 +2150,36 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
         endpoint_only_backends = ("aiperf", "aa")
         for cell in cells:
             endpoint_only = cell.backend in endpoint_only_backends
-            plan.append({
-                "cell_id": cell.id,
-                "backend": cell.backend,
-                "concurrencies": list(cell.concurrencies),
-                "steps": [
-                    "1. drain Slurm-on-K8s co-tenants" if campaign_cfg.get("drain_nodes") else "1. (no Slurm-on-K8s nodes; drain skipped)",
-                    f"2. (backend={cell.backend} targets existing endpoint; helm_upgrade skipped)" if endpoint_only else "2. helm upgrade with cell helm_overrides",
-                    f"3. (backend={cell.backend} targets existing endpoint; warmup skipped)" if endpoint_only else "3. warmup probe (5-prompt c=4)",
-                    f"4. cell_run backend={cell.backend}",
-                    "5. zymtrace anchored query" if cell.profile.get("zymtrace", "on") == "on" else "5. (zymtrace disabled)",
-                    "6. import_perf_bench (raw -> normalized.json)",
-                    "7. atlas_aggregate (campaign rollup)",
-                    "7b. dcgm_correlate (byte-grounding -> dcgm_correlation.json, pages 6/6b) if cells/<id>/dcgm-frozen.yaml present",
-                    "8. report_render (after-each-cell PDF refresh)",
-                    "9. baseline_record",
-                    "10. baseline_diff (returns verdict)",
-                    "FINALLY: Slurm-on-K8s resume (always, even on Ctrl-C)",
-                ],
-                "notes": cell.notes,
-            })
+            plan.append(
+                {
+                    "cell_id": cell.id,
+                    "backend": cell.backend,
+                    "concurrencies": list(cell.concurrencies),
+                    "steps": [
+                        "1. drain Slurm-on-K8s co-tenants"
+                        if campaign_cfg.get("drain_nodes")
+                        else "1. (no Slurm-on-K8s nodes; drain skipped)",
+                        f"2. (backend={cell.backend} targets existing endpoint; helm_upgrade skipped)"
+                        if endpoint_only
+                        else "2. helm upgrade with cell helm_overrides",
+                        f"3. (backend={cell.backend} targets existing endpoint; warmup skipped)"
+                        if endpoint_only
+                        else "3. warmup probe (5-prompt c=4)",
+                        f"4. cell_run backend={cell.backend}",
+                        "5. zymtrace anchored query"
+                        if cell.profile.get("zymtrace", "on") == "on"
+                        else "5. (zymtrace disabled)",
+                        "6. import_perf_bench (raw -> normalized.json)",
+                        "7. atlas_aggregate (campaign rollup)",
+                        "7b. dcgm_correlate (byte-grounding -> dcgm_correlation.json, pages 6/6b) if cells/<id>/dcgm-frozen.yaml present",
+                        "8. report_render (after-each-cell PDF refresh)",
+                        "9. baseline_record",
+                        "10. baseline_diff (returns verdict)",
+                        "FINALLY: Slurm-on-K8s resume (always, even on Ctrl-C)",
+                    ],
+                    "notes": cell.notes,
+                }
+            )
         payload = {
             "tool": "perf_tune_report_campaign_run",
             "library": "perf_tune_report",
@@ -2152,14 +2207,11 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
     step_fns = production_step_fns()
 
     target_namespace = campaign_cfg.get("target_namespace", "inference")
-    manages_deployment = any(
-        cell.backend not in ("aiperf", "aa") for cell in cells
-    )
+    manages_deployment = any(cell.backend not in ("aiperf", "aa") for cell in cells)
     target_release = campaign_cfg.get("target_release", "")
     if manages_deployment and not target_release:
         print(
-            "FATAL: campaign.target_release is required for non-dry-run "
-            "campaigns with deployment-managed cells.",
+            "FATAL: campaign.target_release is required for non-dry-run campaigns with deployment-managed cells.",
             file=sys.stderr,
         )
         return 2
@@ -2167,24 +2219,17 @@ def cmd_campaign_run(args: argparse.Namespace) -> int:
     chart_dir_str = campaign_cfg.get("chart_dir", "")
     if manages_deployment and not chart_dir_str:
         print(
-            "FATAL: campaign.chart_dir is required for non-dry-run "
-            "campaigns with deployment-managed cells.",
+            "FATAL: campaign.chart_dir is required for non-dry-run campaigns with deployment-managed cells.",
             file=sys.stderr,
         )
         return 2
-    chart_dir = (
-        Path(chart_dir_str).expanduser().resolve()
-        if chart_dir_str
-        else campaign_dir
-    )
+    chart_dir = Path(chart_dir_str).expanduser().resolve() if chart_dir_str else campaign_dir
 
     base_values_str = campaign_cfg.get("base_values", "")
     base_values = Path(base_values_str).expanduser().resolve() if base_values_str else Path()
 
     drain_nodes = tuple(campaign_cfg.get("drain_nodes", []) or ())
     comparator = campaign_cfg.get("comparator_baseline", "") or ""
-
-    from tools.perf_tune_report.orchestrator import run_campaign
 
     try:
         result = run_campaign(
@@ -2356,7 +2401,8 @@ def _run_manifest_descriptor_defaults(bundle: Path) -> dict[str, Any]:
             continue
         try:
             m = json.loads(p.read_text())
-        except Exception:
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            logger.debug("Skipping unreadable run manifest %s: %s", p, exc)
             continue
         if not isinstance(m, dict):
             continue
@@ -2455,6 +2501,9 @@ def cmd_import_perf_bench(args: argparse.Namespace) -> int:
     # importer="inference_drive_load" attribute; the bench-serve one does
     # not because it uses the legacy result shape.
     importer_name = getattr(result, "importer", "inference_perf_bench")
+    cell_dir = getattr(result, "cell_dir", None)
+    normalized_path = getattr(result, "normalized_path", None)
+    imported_bundle_path = getattr(result, "bundle_path", None)
 
     payload = {
         "tool": "perf_tune_report_import_perf_bench",
@@ -2466,13 +2515,9 @@ def cmd_import_perf_bench(args: argparse.Namespace) -> int:
         # lws_summary emits multiple cells -> LwsSummaryImportResult has no single
         # cell_id/cell_dir/normalized_path; guard so the multi-cell path doesn't crash.
         "cell_id": getattr(result, "cell_id", None),
-        "cell_dir": (str(result.cell_dir) if getattr(result, "cell_dir", None) else None),
-        "normalized_path": (
-            str(result.normalized_path)
-            if getattr(result, "normalized_path", None)
-            else None
-        ),
-        "bundle_path": (str(result.bundle_path) if getattr(result, "bundle_path", None) else None),
+        "cell_dir": str(cell_dir) if cell_dir else None,
+        "normalized_path": str(normalized_path) if normalized_path else None,
+        "bundle_path": str(imported_bundle_path) if imported_bundle_path else None,
         "row_count": result.row_count,
         "concurrencies": getattr(result, "concurrencies", None),
         "k_values": getattr(result, "k_values", None),
@@ -2499,11 +2544,26 @@ def cmd_import_variant_ab(args: argparse.Namespace) -> int:
 
     overrides: dict[str, Any] = {}
     for attr in (
-        "model", "hardware", "quant", "tensor_parallel", "parallel_strategy",
-        "mtp", "max_num_batched_tokens", "cache_mode", "notes",
-        "dataset", "cudagraph_mode", "enforce_eager", "gpu_memory_utilization",
-        "kv_cache_dtype", "image", "delivery", "overlay_mode", "patch_files",
-        "data_parallel", "pipeline_parallel",
+        "model",
+        "hardware",
+        "quant",
+        "tensor_parallel",
+        "parallel_strategy",
+        "mtp",
+        "max_num_batched_tokens",
+        "cache_mode",
+        "notes",
+        "dataset",
+        "cudagraph_mode",
+        "enforce_eager",
+        "gpu_memory_utilization",
+        "kv_cache_dtype",
+        "image",
+        "delivery",
+        "overlay_mode",
+        "patch_files",
+        "data_parallel",
+        "pipeline_parallel",
     ):
         val = getattr(args, attr, None)
         if val is not None:
@@ -2548,13 +2608,29 @@ def cmd_import_roofline_sweep(args: argparse.Namespace) -> int:
 
     overrides: dict[str, Any] = {}
     for attr in (
-        "cell_id", "model", "hardware", "quant", "kv_dtype", "tensor_parallel",
-        "parallel_strategy", "mtp", "max_num_batched_tokens", "cache_mode",
-        "model_config_path", "kv_cache_dtype",
+        "cell_id",
+        "model",
+        "hardware",
+        "quant",
+        "kv_dtype",
+        "tensor_parallel",
+        "parallel_strategy",
+        "mtp",
+        "max_num_batched_tokens",
+        "cache_mode",
+        "model_config_path",
+        "kv_cache_dtype",
         # full-context descriptors (so roofline cells can pass publish --strict)
-        "dataset", "cudagraph_mode", "enforce_eager", "gpu_memory_utilization",
-        "image", "delivery", "overlay_mode", "patch_files",
-        "data_parallel", "pipeline_parallel",
+        "dataset",
+        "cudagraph_mode",
+        "enforce_eager",
+        "gpu_memory_utilization",
+        "image",
+        "delivery",
+        "overlay_mode",
+        "patch_files",
+        "data_parallel",
+        "pipeline_parallel",
     ):
         val = getattr(args, attr, None)
         if val is not None:
@@ -2606,8 +2682,7 @@ def _resolve_ceilings_yaml(explicit: str | None, campaign_dir: Path) -> Path | N
     # Canonical bundle name first, then a name-agnostic bundle-root fallback
     # (<bundle>/configs/sol-ceilings.yaml) so a future submodule rename needs no
     # code edit; the campaign's own bundle root is reached before higher ancestors.
-    relcands = (Path("perf-tune-report") / "configs" / "sol-ceilings.yaml",
-                Path("configs") / "sol-ceilings.yaml")
+    relcands = (Path("perf-tune-report") / "configs" / "sol-ceilings.yaml", Path("configs") / "sol-ceilings.yaml")
     cur = campaign_dir.resolve()
     for parent in [cur, *cur.parents]:
         for relpath in relcands:
@@ -2681,9 +2756,7 @@ def cmd_dcgm_correlate(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        result = correlate_from_frozen(
-            frozen, ceilings, cell_dir=cell_dir, kernels_json_path=kernels_json_path
-        )
+        result = correlate_from_frozen(frozen, ceilings, cell_dir=cell_dir, kernels_json_path=kernels_json_path)
     except FrozenYamlMalformed as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
@@ -2746,9 +2819,7 @@ def cmd_import_nsys(args: argparse.Namespace) -> int:
         "cell_id": args.cell_id,
         "cell_dir": str(cell_dir),
         "bundle_path": str(bundle_path),
-        "kernels_json_path": (
-            str(result.kernels_json_path) if result.kernels_json_path else None
-        ),
+        "kernels_json_path": (str(result.kernels_json_path) if result.kernels_json_path else None),
         "top_kernel_count": result.top_kernel_count,
         "category_count": result.category_count,
         "skipped_reason": result.skipped_reason,
@@ -2792,9 +2863,7 @@ def cmd_import_ncu(args: argparse.Namespace) -> int:
         "cell_dir": str(cell_dir),
         "bundle_path": str(bundle_path),
         "hw_key": args.hw_key,
-        "ncu_kernels_json_path": (
-            str(result.ncu_kernels_json_path) if result.ncu_kernels_json_path else None
-        ),
+        "ncu_kernels_json_path": (str(result.ncu_kernels_json_path) if result.ncu_kernels_json_path else None),
         "kernel_count": result.kernel_count,
         "skipped_reason": result.skipped_reason,
         "dry_run": args.dry_run,
@@ -2868,9 +2937,7 @@ def cmd_report_smoke(args: argparse.Namespace) -> int:
             out_pdf,
             title=args.title or "glm5p1 benchmark report",
             variants_line=(
-                "Variants: GLM-5.1-FP8 (FP8, H100) | "
-                "GLM-5.1-NVFP4 (NVFP4, B200) | "
-                "GLM-5.1-NVFP4 (NVFP4, GB300)"
+                "Variants: GLM-5.1-FP8 (FP8, H100) | GLM-5.1-NVFP4 (NVFP4, B200) | GLM-5.1-NVFP4 (NVFP4, GB300)"
             ),
             data_source_line=(
                 "Data source: synthetic chat | each concurrency point targeted 600s "
@@ -2906,6 +2973,7 @@ def cmd_report_smoke(args: argparse.Namespace) -> int:
 # Parser plumbing
 # ----------------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="perftunereport",
@@ -2937,57 +3005,56 @@ def build_parser() -> argparse.ArgumentParser:
     ci.add_argument(
         "--evidence-bundle",
         default=None,
-        help="Path to the evidence bundle this campaign is derived from. Falls back "
-        "to config evidence_bundle_path:.",
+        help="Path to the evidence bundle this campaign is derived from. Falls back to config evidence_bundle_path:.",
     )
     ci.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     ci.add_argument("--json", action="store_true", help="Emit JSON envelope")
     ci.set_defaults(func=cmd_campaign_init)
 
     # experiments_index
-    ei = sub.add_parser("experiments_index",
-                        description=CONTRACT["experiments_index"]["description"])
-    ei.add_argument("--family", default=None,
-                    help="Only include experiments in this family (e.g. nvfp4-kv)")
-    ei.add_argument("--out", default=None,
-                    help="Output dir (default: the perf-report bundle, campaigns' parent)")
-    ei.add_argument("--include-s3", action="store_true",
-                    help="Also enumerate the lake's campaign_v1 prefix to mark each row's "
-                    "published_to_lake (best-effort; warns + continues if S3 creds absent)")
+    ei = sub.add_parser("experiments_index", description=CONTRACT["experiments_index"]["description"])
+    ei.add_argument("--family", default=None, help="Only include experiments in this family (e.g. nvfp4-kv)")
+    ei.add_argument("--out", default=None, help="Output dir (default: the perf-report bundle, campaigns' parent)")
+    ei.add_argument(
+        "--include-s3",
+        action="store_true",
+        help="Also enumerate the lake's campaign_v1 prefix to mark each row's "
+        "published_to_lake (best-effort; warns + continues if S3 creds absent)",
+    )
     ei.add_argument("--s3-endpoint", default=None, help="S3 endpoint (with --include-s3)")
     ei.add_argument("--s3-bucket", default=None, help="S3 bucket (with --include-s3)")
-    ei.add_argument("--s3-access-key-file", default=None,
-                    help="File with S3 access key (with --include-s3)")
-    ei.add_argument("--s3-secret-key-file", default=None,
-                    help="File with S3 secret key (with --include-s3)")
+    ei.add_argument("--s3-access-key-file", default=None, help="File with S3 access key (with --include-s3)")
+    ei.add_argument("--s3-secret-key-file", default=None, help="File with S3 secret key (with --include-s3)")
     ei.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     ei.add_argument("--json", action="store_true", help="Emit JSON envelope")
     ei.set_defaults(func=cmd_experiments_index)
 
     # experiment_inventory
-    einv = sub.add_parser("experiment_inventory",
-                          description=CONTRACT["experiment_inventory"]["description"])
-    einv.add_argument("--bundle-root", action="append", default=None,
-                      help="Evidence-bundle tree root to also walk for run-id-stamped bundles "
-                      "(repeatable; e.g. a *-deploy dir). Campaigns are always counted.")
-    einv.add_argument("--out", default=None,
-                      help="Output dir (default: the perf-report bundle, campaigns' parent)")
-    einv.add_argument("--include-s3", action="store_true",
-                      help="Also enumerate the lake's campaign_v1 prefix for the published count "
-                      "(best-effort; warns + continues if S3 creds absent)")
+    einv = sub.add_parser("experiment_inventory", description=CONTRACT["experiment_inventory"]["description"])
+    einv.add_argument(
+        "--bundle-root",
+        action="append",
+        default=None,
+        help="Evidence-bundle tree root to also walk for run-id-stamped bundles "
+        "(repeatable; e.g. a *-deploy dir). Campaigns are always counted.",
+    )
+    einv.add_argument("--out", default=None, help="Output dir (default: the perf-report bundle, campaigns' parent)")
+    einv.add_argument(
+        "--include-s3",
+        action="store_true",
+        help="Also enumerate the lake's campaign_v1 prefix for the published count "
+        "(best-effort; warns + continues if S3 creds absent)",
+    )
     einv.add_argument("--s3-endpoint", default=None, help="S3 endpoint (with --include-s3)")
     einv.add_argument("--s3-bucket", default=None, help="S3 bucket (with --include-s3)")
-    einv.add_argument("--s3-access-key-file", default=None,
-                      help="File with S3 access key (with --include-s3)")
-    einv.add_argument("--s3-secret-key-file", default=None,
-                      help="File with S3 secret key (with --include-s3)")
+    einv.add_argument("--s3-access-key-file", default=None, help="File with S3 access key (with --include-s3)")
+    einv.add_argument("--s3-secret-key-file", default=None, help="File with S3 secret key (with --include-s3)")
     einv.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     einv.add_argument("--json", action="store_true", help="Emit JSON envelope")
     einv.set_defaults(func=cmd_experiment_inventory)
 
     # import_model_eval
-    ime = sub.add_parser("import_model_eval",
-                         description=CONTRACT["import_model_eval"]["description"])
+    ime = sub.add_parser("import_model_eval", description=CONTRACT["import_model_eval"]["description"])
     ime.add_argument("--results", required=True, help="lm-eval-harness results.json path")
     ime.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
     ime.add_argument("--model", required=True, help="Model (matches the serving campaign's model)")
@@ -2995,8 +3062,7 @@ def build_parser() -> argparse.ArgumentParser:
     ime.add_argument("--quant", required=True, help="Quant (NVFP4 / FP8 / ...)")
     ime.add_argument("--tensor-parallel", type=int, default=1, dest="tensor_parallel")
     ime.add_argument("--cell-id", default="model-eval", dest="cell_id")
-    ime.add_argument("--parallel-strategy", default="TP", dest="parallel_strategy",
-                     choices=("TP", "EP"))
+    ime.add_argument("--parallel-strategy", default="TP", dest="parallel_strategy", choices=("TP", "EP"))
     ime.add_argument("--kv-cache-dtype", default="unknown", dest="kv_cache_dtype")
     ime.add_argument("--image", default="unknown", help="Serving image tag the eval ran against")
     ime.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
@@ -3004,28 +3070,37 @@ def build_parser() -> argparse.ArgumentParser:
     ime.set_defaults(func=cmd_import_model_eval)
 
     # import_workloads
-    iw = sub.add_parser("import_workloads",
-                        description=CONTRACT["import_workloads"]["description"])
-    iw.add_argument("--bench-dir", required=True, dest="bench_dir",
-                    help="Workload result dir (<tag>-c<c>.txt + bench-workloads.json)")
+    iw = sub.add_parser("import_workloads", description=CONTRACT["import_workloads"]["description"])
+    iw.add_argument(
+        "--bench-dir",
+        required=True,
+        dest="bench_dir",
+        help="Workload result dir (<tag>-c<c>.txt + bench-workloads.json)",
+    )
     iw.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
     iw.add_argument("--model", required=True, help="Served model (matches the campaign's model)")
     iw.add_argument("--hardware", required=True, help="Hardware token (GB300 / B200)")
     iw.add_argument("--tensor-parallel", required=True, type=int, dest="tensor_parallel")
     iw.add_argument("--quant", default="NVFP4", help="Quant (NVFP4 / FP8 / ...)")
-    iw.add_argument("--parallel-strategy", default="TP", dest="parallel_strategy",
-                    choices=("TP", "EP"))
-    iw.add_argument("--max-num-batched-tokens", type=int, default=0,
-                    dest="max_num_batched_tokens")
-    iw.add_argument("--kv-cache-dtype", default="unknown", dest="kv_cache_dtype",
-                    help="Serve kv-cache dtype (required-context: set for a publish --strict run)")
-    iw.add_argument("--image", default="unknown",
-                    help="Serving image tag (required-context: set for a publish --strict run)")
+    iw.add_argument("--parallel-strategy", default="TP", dest="parallel_strategy", choices=("TP", "EP"))
+    iw.add_argument("--max-num-batched-tokens", type=int, default=0, dest="max_num_batched_tokens")
+    iw.add_argument(
+        "--kv-cache-dtype",
+        default="unknown",
+        dest="kv_cache_dtype",
+        help="Serve kv-cache dtype (required-context: set for a publish --strict run)",
+    )
+    iw.add_argument(
+        "--image", default="unknown", help="Serving image tag (required-context: set for a publish --strict run)"
+    )
     iw.add_argument("--cudagraph-mode", default="full", dest="cudagraph_mode")
-    iw.add_argument("--gpu-memory-utilization", type=float, default=None,
-                    dest="gpu_memory_utilization")
-    iw.add_argument("--bench-backend", default="openai", dest="bench_backend",
-                    help="Benchmark client backend recorded on imported rows")
+    iw.add_argument("--gpu-memory-utilization", type=float, default=None, dest="gpu_memory_utilization")
+    iw.add_argument(
+        "--bench-backend",
+        default="openai",
+        dest="bench_backend",
+        help="Benchmark client backend recorded on imported rows",
+    )
     iw.add_argument("--dry-run", action="store_true", help="Parse + report, write nothing")
     iw.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     iw.add_argument("--json", action="store_true", help="Emit JSON envelope")
@@ -3033,32 +3108,47 @@ def build_parser() -> argparse.ArgumentParser:
 
     # trend_view
     tv = sub.add_parser("trend_view", description=CONTRACT["trend_view"]["description"])
-    tv.add_argument("--metric", default="output_tps_per_gpu",
-                    help="atlas metric to trend (output_tps_per_gpu | tpot_median_ms | ttft_avg_ms | ...)")
-    tv.add_argument("--concurrency", type=int, default=None,
-                    help="filter to one concurrency (else each c is its own trend line)")
-    tv.add_argument("--regression-pct", type=float, default=10.0, dest="regression_pct",
-                    help="abs %% move in the wrong direction that flags a regression (default 10)")
+    tv.add_argument(
+        "--metric",
+        default="output_tps_per_gpu",
+        help="atlas metric to trend (output_tps_per_gpu | tpot_median_ms | ttft_avg_ms | ...)",
+    )
+    tv.add_argument(
+        "--concurrency", type=int, default=None, help="filter to one concurrency (else each c is its own trend line)"
+    )
+    tv.add_argument(
+        "--regression-pct",
+        type=float,
+        default=10.0,
+        dest="regression_pct",
+        help="abs %% move in the wrong direction that flags a regression (default 10)",
+    )
     tv.add_argument("--hardware", default="GB300", help="hardware token filter (default GB300)")
     tv.add_argument("--out", default=None, help="write the trend markdown to this path")
     tv.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
-    tv.add_argument("--lake-dir", default=None,
-                    help="Read published atlas_v1 parquet from a pulled lake snapshot "
-                         "(joins campaign_v1 vllm_commit as the engine-version axis); "
-                         "local campaigns are the default")
+    tv.add_argument(
+        "--lake-dir",
+        default=None,
+        help="Read published atlas_v1 parquet from a pulled lake snapshot "
+        "(joins campaign_v1 vllm_commit as the engine-version axis); "
+        "local campaigns are the default",
+    )
     tv.add_argument("--json", action="store_true", help="Emit JSON envelope")
     tv.set_defaults(func=cmd_trend_view)
 
     # fleet_leaderboard
-    fl = sub.add_parser("fleet_leaderboard",
-                        description=CONTRACT["fleet_leaderboard"]["description"])
-    fl.add_argument("--hardware", default="GB300",
-                    help="Hardware token to filter atlas rows + name outputs (default: GB300)")
-    fl.add_argument("--gpu-hr", type=float, default=None,
-                    help="$/GPU-hour for the cost columns (overrides perf-tune-report/configs/cost.yaml; "
-                    "default: resolve from cost.yaml by hardware, else 8.60)")
-    fl.add_argument("--out", default=None,
-                    help="Output dir (default: the perf-report bundle, campaigns' parent)")
+    fl = sub.add_parser("fleet_leaderboard", description=CONTRACT["fleet_leaderboard"]["description"])
+    fl.add_argument(
+        "--hardware", default="GB300", help="Hardware token to filter atlas rows + name outputs (default: GB300)"
+    )
+    fl.add_argument(
+        "--gpu-hr",
+        type=float,
+        default=None,
+        help="$/GPU-hour for the cost columns (overrides perf-tune-report/configs/cost.yaml; "
+        "default: resolve from cost.yaml by hardware, else 8.60)",
+    )
+    fl.add_argument("--out", default=None, help="Output dir (default: the perf-report bundle, campaigns' parent)")
     fl.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     fl.add_argument("--json", action="store_true", help="Emit JSON envelope")
     fl.set_defaults(func=cmd_fleet_leaderboard)
@@ -3189,7 +3279,12 @@ def build_parser() -> argparse.ArgumentParser:
     cp = sub.add_parser("campaign_run", description=CONTRACT["campaign_run"]["description"])
     cp.add_argument("--config", required=True, help="Path to a campaign matrix YAML")
     cp.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
-    cp.add_argument("--continue-on-red", action="store_true", dest="continue_on_red", help="Continue past RED cell verdicts instead of fail-fast")
+    cp.add_argument(
+        "--continue-on-red",
+        action="store_true",
+        dest="continue_on_red",
+        help="Continue past RED cell verdicts instead of fail-fast",
+    )
     cp.add_argument("--dry-run", action="store_true", help="Print the 10-step plan JSON without submitting jobs")
     cp.add_argument(
         "--i-understand-this-mutates-cluster",
@@ -3256,16 +3351,64 @@ def build_parser() -> argparse.ArgumentParser:
     # Full-context descriptor overrides follow AGENTS.md "Benchmark methodology hygiene".
     # They are required via a flag or bundle metadata for a measured campaign
     # to pass publish/render --strict.
-    ip.add_argument("--dataset", dest="dataset", default=None, help="Workload dataset (random|sharegpt|sonnet|aa|code|...) -- full-context descriptor")
-    ip.add_argument("--cudagraph-mode", dest="cudagraph_mode", default=None, help="full|piecewise|none|eager -- full-context descriptor (the eager/cudagraph trap)")
-    ip.add_argument("--enforce-eager", dest="enforce_eager", type=lambda s: s.lower() in ("true", "1", "yes"), default=None, help="true|false -- sets cudagraph_mode=eager when no explicit --cudagraph-mode")
-    ip.add_argument("--gpu-memory-utilization", dest="gpu_memory_utilization", type=float, default=None, help="gmu the number was measured at -- full-context descriptor")
-    ip.add_argument("--kv-cache-dtype", dest="kv_cache_dtype", default=None, help="fp8_e4m3|bf16|nvfp4|... -- full-context descriptor")
-    ip.add_argument("--image", dest="image", default=None, help="serving image tag / vllm commit -- full-context descriptor")
-    ip.add_argument("--delivery", dest="delivery", default=None, choices=("image", "overlay", "patchedVllm", "infr-patch"), help="how code reached the cluster (delivery ladder) -- full-context descriptor")
-    ip.add_argument("--overlay-mode", dest="overlay_mode", default=None, choices=("subpath", "patchset-initcontainer", "pythonpath-sitecustomize"), help="overlay sub-tier when --delivery=overlay")
-    ip.add_argument("--patch-files", dest="patch_files", default=None, help="comma-separated patch files applied (e.g. infr 0006..0026) -- full-context descriptor")
-    ip.add_argument("--data-parallel", dest="data_parallel", type=int, default=None, help="DP replica count (default 1)")
+    ip.add_argument(
+        "--dataset",
+        dest="dataset",
+        default=None,
+        help="Workload dataset (random|sharegpt|sonnet|aa|code|...) -- full-context descriptor",
+    )
+    ip.add_argument(
+        "--cudagraph-mode",
+        dest="cudagraph_mode",
+        default=None,
+        help="full|piecewise|none|eager -- full-context descriptor (the eager/cudagraph trap)",
+    )
+    ip.add_argument(
+        "--enforce-eager",
+        dest="enforce_eager",
+        type=lambda s: s.lower() in ("true", "1", "yes"),
+        default=None,
+        help="true|false -- sets cudagraph_mode=eager when no explicit --cudagraph-mode",
+    )
+    ip.add_argument(
+        "--gpu-memory-utilization",
+        dest="gpu_memory_utilization",
+        type=float,
+        default=None,
+        help="gmu the number was measured at -- full-context descriptor",
+    )
+    ip.add_argument(
+        "--kv-cache-dtype",
+        dest="kv_cache_dtype",
+        default=None,
+        help="fp8_e4m3|bf16|nvfp4|... -- full-context descriptor",
+    )
+    ip.add_argument(
+        "--image", dest="image", default=None, help="serving image tag / vllm commit -- full-context descriptor"
+    )
+    ip.add_argument(
+        "--delivery",
+        dest="delivery",
+        default=None,
+        choices=("image", "overlay", "patchedVllm", "infr-patch"),
+        help="how code reached the cluster (delivery ladder) -- full-context descriptor",
+    )
+    ip.add_argument(
+        "--overlay-mode",
+        dest="overlay_mode",
+        default=None,
+        choices=("subpath", "patchset-initcontainer", "pythonpath-sitecustomize"),
+        help="overlay sub-tier when --delivery=overlay",
+    )
+    ip.add_argument(
+        "--patch-files",
+        dest="patch_files",
+        default=None,
+        help="comma-separated patch files applied (e.g. infr 0006..0026) -- full-context descriptor",
+    )
+    ip.add_argument(
+        "--data-parallel", dest="data_parallel", type=int, default=None, help="DP replica count (default 1)"
+    )
     ip.add_argument("--pipeline-parallel", dest="pipeline_parallel", type=int, default=None, help="PP size (default 1)")
     ip.add_argument(
         "--concurrency",
@@ -3314,25 +3457,90 @@ def build_parser() -> argparse.ArgumentParser:
     irs.add_argument("--model", default=None, help="Model name (default: from manifest / zai-org/GLM-5.1)")
     irs.add_argument("--hardware", default=None, help="e.g. B200, GB300, H100 (default: GB300)")
     irs.add_argument("--quant", default=None, help="NVFP4 | FP8 | BF16 (default: NVFP4)")
-    irs.add_argument("--kv-dtype", default=None, dest="kv_dtype", help="KV cache dtype for byte-grounded HBM utilization (default: fp8)")
-    irs.add_argument("--kv-cache-dtype", default=None, dest="kv_cache_dtype", help="Alias for --kv-dtype; matches atlas full-context naming")
-    irs.add_argument("--model-config", default=None, dest="model_config_path", help="Path to the model config.json (for analytical roofline math when the family is not in the registry)")
+    irs.add_argument(
+        "--kv-dtype",
+        default=None,
+        dest="kv_dtype",
+        help="KV cache dtype for byte-grounded HBM utilization (default: fp8)",
+    )
+    irs.add_argument(
+        "--kv-cache-dtype",
+        default=None,
+        dest="kv_cache_dtype",
+        help="Alias for --kv-dtype; matches atlas full-context naming",
+    )
+    irs.add_argument(
+        "--model-config",
+        default=None,
+        dest="model_config_path",
+        help="Path to the model config.json (for analytical roofline math when the family is not in the registry)",
+    )
     irs.add_argument("--tensor-parallel", type=int, default=None, dest="tensor_parallel", help="TP size (default: 4)")
-    irs.add_argument("--parallel-strategy", default=None, dest="parallel_strategy", choices=("TP", "EP"), help="TP or EP (default: TP)")
-    irs.add_argument("--mtp", type=lambda s: s.lower() in ("true", "1", "yes"), default=None, help="true|false (default: false)")
-    irs.add_argument("--max-num-batched-tokens", type=int, default=None, dest="max_num_batched_tokens", help="default 12288")
-    irs.add_argument("--cache-mode", dest="cache_mode", default=None, choices=("warm", "cold", "unknown"), help="methodology label")
+    irs.add_argument(
+        "--parallel-strategy",
+        default=None,
+        dest="parallel_strategy",
+        choices=("TP", "EP"),
+        help="TP or EP (default: TP)",
+    )
+    irs.add_argument(
+        "--mtp", type=lambda s: s.lower() in ("true", "1", "yes"), default=None, help="true|false (default: false)"
+    )
+    irs.add_argument(
+        "--max-num-batched-tokens", type=int, default=None, dest="max_num_batched_tokens", help="default 12288"
+    )
+    irs.add_argument(
+        "--cache-mode", dest="cache_mode", default=None, choices=("warm", "cold", "unknown"), help="methodology label"
+    )
     # full-context descriptors (2026-06-07) so roofline cells pass publish_to_lake --strict
     irs.add_argument("--dataset", default=None, help="full-context: workload dataset (default random)")
-    irs.add_argument("--cudagraph-mode", dest="cudagraph_mode", default=None, help="full-context: full|piecewise|none|eager (the eager/cudagraph trap)")
-    irs.add_argument("--enforce-eager", dest="enforce_eager", type=lambda s: s.lower() in ("true", "1", "yes"), default=None, help="full-context: sets cudagraph_mode=eager when no explicit --cudagraph-mode")
-    irs.add_argument("--gpu-memory-utilization", dest="gpu_memory_utilization", type=float, default=None, help="full-context: gmu the sweep ran at")
+    irs.add_argument(
+        "--cudagraph-mode",
+        dest="cudagraph_mode",
+        default=None,
+        help="full-context: full|piecewise|none|eager (the eager/cudagraph trap)",
+    )
+    irs.add_argument(
+        "--enforce-eager",
+        dest="enforce_eager",
+        type=lambda s: s.lower() in ("true", "1", "yes"),
+        default=None,
+        help="full-context: sets cudagraph_mode=eager when no explicit --cudagraph-mode",
+    )
+    irs.add_argument(
+        "--gpu-memory-utilization",
+        dest="gpu_memory_utilization",
+        type=float,
+        default=None,
+        help="full-context: gmu the sweep ran at",
+    )
     irs.add_argument("--image", default=None, help="full-context: serving image tag / vllm commit the sweep ran on")
-    irs.add_argument("--delivery", dest="delivery", default=None, choices=("image", "overlay", "patchedVllm", "infr-patch"), help="how code reached the cluster (delivery ladder) -- full-context descriptor")
-    irs.add_argument("--overlay-mode", dest="overlay_mode", default=None, choices=("subpath", "patchset-initcontainer", "pythonpath-sitecustomize"), help="overlay sub-tier when --delivery=overlay")
-    irs.add_argument("--patch-files", dest="patch_files", default=None, help="comma-separated patch files applied -- full-context descriptor")
-    irs.add_argument("--data-parallel", dest="data_parallel", type=int, default=None, help="full-context: DP replica count")
-    irs.add_argument("--pipeline-parallel", dest="pipeline_parallel", type=int, default=None, help="full-context: PP size")
+    irs.add_argument(
+        "--delivery",
+        dest="delivery",
+        default=None,
+        choices=("image", "overlay", "patchedVllm", "infr-patch"),
+        help="how code reached the cluster (delivery ladder) -- full-context descriptor",
+    )
+    irs.add_argument(
+        "--overlay-mode",
+        dest="overlay_mode",
+        default=None,
+        choices=("subpath", "patchset-initcontainer", "pythonpath-sitecustomize"),
+        help="overlay sub-tier when --delivery=overlay",
+    )
+    irs.add_argument(
+        "--patch-files",
+        dest="patch_files",
+        default=None,
+        help="comma-separated patch files applied -- full-context descriptor",
+    )
+    irs.add_argument(
+        "--data-parallel", dest="data_parallel", type=int, default=None, help="full-context: DP replica count"
+    )
+    irs.add_argument(
+        "--pipeline-parallel", dest="pipeline_parallel", type=int, default=None, help="full-context: PP size"
+    )
     irs.add_argument("--dry-run", action="store_true", help="Parse + validate; do NOT write files")
     irs.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     irs.add_argument("--json", action="store_true", help="Emit JSON envelope")
@@ -3345,25 +3553,104 @@ def build_parser() -> argparse.ArgumentParser:
     iva.add_argument("--model", required=True, help="Served model id (arm result.json carries no model)")
     iva.add_argument("--hardware", default=None, help="e.g. GB300, B200 (default: B200)")
     iva.add_argument("--quant", default=None, help="NVFP4 | FP8 | BF16 (default: NVFP4)")
-    iva.add_argument("--tensor-parallel", type=int, default=None, dest="tensor_parallel", help="TP size (default: arm result.json tp, else 8)")
-    iva.add_argument("--parallel-strategy", default=None, dest="parallel_strategy", choices=("TP", "EP"), help="TP or EP (default: TP)")
-    iva.add_argument("--mtp", type=lambda s: s.lower() in ("true", "1", "yes"), default=None, help="true|false (default: inferred from arm name)")
-    iva.add_argument("--max-num-batched-tokens", type=int, default=None, dest="max_num_batched_tokens", help="default 4096")
-    iva.add_argument("--cache-mode", dest="cache_mode", default=None, choices=("warm", "cold", "unknown"), help="methodology label (default: arm result.json warm flag)")
+    iva.add_argument(
+        "--tensor-parallel",
+        type=int,
+        default=None,
+        dest="tensor_parallel",
+        help="TP size (default: arm result.json tp, else 8)",
+    )
+    iva.add_argument(
+        "--parallel-strategy",
+        default=None,
+        dest="parallel_strategy",
+        choices=("TP", "EP"),
+        help="TP or EP (default: TP)",
+    )
+    iva.add_argument(
+        "--mtp",
+        type=lambda s: s.lower() in ("true", "1", "yes"),
+        default=None,
+        help="true|false (default: inferred from arm name)",
+    )
+    iva.add_argument(
+        "--max-num-batched-tokens", type=int, default=None, dest="max_num_batched_tokens", help="default 4096"
+    )
+    iva.add_argument(
+        "--cache-mode",
+        dest="cache_mode",
+        default=None,
+        choices=("warm", "cold", "unknown"),
+        help="methodology label (default: arm result.json warm flag)",
+    )
     iva.add_argument("--notes", default=None, help="Free-form notes recorded on each cell")
-    iva.add_argument("--dataset", dest="dataset", default=None, help="Workload dataset (random|sharegpt|sonnet|aa|code|...) -- full-context descriptor")
-    iva.add_argument("--cudagraph-mode", dest="cudagraph_mode", default=None, help="full|piecewise|none|eager -- full-context descriptor")
-    iva.add_argument("--enforce-eager", dest="enforce_eager", type=lambda s: s.lower() in ("true", "1", "yes"), default=None, help="true|false -- sets cudagraph_mode=eager when no explicit --cudagraph-mode")
-    iva.add_argument("--gpu-memory-utilization", dest="gpu_memory_utilization", type=float, default=None, help="gmu the number was measured at -- full-context descriptor")
-    iva.add_argument("--kv-cache-dtype", dest="kv_cache_dtype", default=None, help="fp8_e4m3|bf16|nvfp4|... -- full-context descriptor")
-    iva.add_argument("--image", dest="image", default=None, help="serving image tag / vllm commit -- full-context descriptor")
-    iva.add_argument("--delivery", dest="delivery", default=None, choices=("image", "overlay", "patchedVllm", "infr-patch"), help="how code reached the cluster (delivery ladder) -- full-context descriptor")
-    iva.add_argument("--overlay-mode", dest="overlay_mode", default=None, choices=("subpath", "patchset-initcontainer", "pythonpath-sitecustomize"), help="overlay sub-tier when --delivery=overlay")
-    iva.add_argument("--patch-files", dest="patch_files", default=None, help="comma-separated patch files applied -- full-context descriptor")
-    iva.add_argument("--data-parallel", dest="data_parallel", type=int, default=None, help="DP replica count (default 1)")
-    iva.add_argument("--pipeline-parallel", dest="pipeline_parallel", type=int, default=None, help="PP size (default 1)")
-    iva.add_argument("--require-plot-ready", action="store_true", dest="require_plot_ready",
-                     help="Hard-fail at import if any arm lacks Median TTFT / Request throughput (strict-publish fields)")
+    iva.add_argument(
+        "--dataset",
+        dest="dataset",
+        default=None,
+        help="Workload dataset (random|sharegpt|sonnet|aa|code|...) -- full-context descriptor",
+    )
+    iva.add_argument(
+        "--cudagraph-mode",
+        dest="cudagraph_mode",
+        default=None,
+        help="full|piecewise|none|eager -- full-context descriptor",
+    )
+    iva.add_argument(
+        "--enforce-eager",
+        dest="enforce_eager",
+        type=lambda s: s.lower() in ("true", "1", "yes"),
+        default=None,
+        help="true|false -- sets cudagraph_mode=eager when no explicit --cudagraph-mode",
+    )
+    iva.add_argument(
+        "--gpu-memory-utilization",
+        dest="gpu_memory_utilization",
+        type=float,
+        default=None,
+        help="gmu the number was measured at -- full-context descriptor",
+    )
+    iva.add_argument(
+        "--kv-cache-dtype",
+        dest="kv_cache_dtype",
+        default=None,
+        help="fp8_e4m3|bf16|nvfp4|... -- full-context descriptor",
+    )
+    iva.add_argument(
+        "--image", dest="image", default=None, help="serving image tag / vllm commit -- full-context descriptor"
+    )
+    iva.add_argument(
+        "--delivery",
+        dest="delivery",
+        default=None,
+        choices=("image", "overlay", "patchedVllm", "infr-patch"),
+        help="how code reached the cluster (delivery ladder) -- full-context descriptor",
+    )
+    iva.add_argument(
+        "--overlay-mode",
+        dest="overlay_mode",
+        default=None,
+        choices=("subpath", "patchset-initcontainer", "pythonpath-sitecustomize"),
+        help="overlay sub-tier when --delivery=overlay",
+    )
+    iva.add_argument(
+        "--patch-files",
+        dest="patch_files",
+        default=None,
+        help="comma-separated patch files applied -- full-context descriptor",
+    )
+    iva.add_argument(
+        "--data-parallel", dest="data_parallel", type=int, default=None, help="DP replica count (default 1)"
+    )
+    iva.add_argument(
+        "--pipeline-parallel", dest="pipeline_parallel", type=int, default=None, help="PP size (default 1)"
+    )
+    iva.add_argument(
+        "--require-plot-ready",
+        action="store_true",
+        dest="require_plot_ready",
+        help="Hard-fail at import if any arm lacks Median TTFT / Request throughput (strict-publish fields)",
+    )
     iva.add_argument("--dry-run", action="store_true", help="Parse + validate; do NOT write files")
     iva.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     iva.add_argument("--json", action="store_true", help="Emit JSON envelope")
@@ -3482,12 +3769,16 @@ def build_parser() -> argparse.ArgumentParser:
         "kernel_reproducer_scaffold",
         description=CONTRACT["kernel_reproducer_scaffold"]["description"],
     )
-    krs.add_argument("--kernel-name", required=True, dest="kernel_name",
-                     help="Kernel task-impl template name, e.g. linear_sm100_mpk_task_impl")
-    krs.add_argument("--header", required=True,
-                     help="Kernel header to #include, e.g. tasks/blackwell/linear_sm100_mpk.cuh")
-    krs.add_argument("--output-dir", required=True, dest="output_dir",
-                     help="Directory to write the .cu + build script")
+    krs.add_argument(
+        "--kernel-name",
+        required=True,
+        dest="kernel_name",
+        help="Kernel task-impl template name, e.g. linear_sm100_mpk_task_impl",
+    )
+    krs.add_argument(
+        "--header", required=True, help="Kernel header to #include, e.g. tasks/blackwell/linear_sm100_mpk.cuh"
+    )
+    krs.add_argument("--output-dir", required=True, dest="output_dir", help="Directory to write the .cu + build script")
     krs.add_argument("--mma-m", type=int, default=128, dest="mma_m")
     krs.add_argument("--mma-n", type=int, default=16, dest="mma_n")
     krs.add_argument("--batch", type=int, default=8, help="BATCH_SIZE")
@@ -3666,14 +3957,15 @@ def build_parser() -> argparse.ArgumentParser:
             "dcgm_grounded=false."
         ),
     )
-    pl.add_argument("--dry-run", dest="dry_run", action="store_true", help="Build + write parquet locally; skip S3 upload.")
+    pl.add_argument(
+        "--dry-run", dest="dry_run", action="store_true", help="Build + write parquet locally; skip S3 upload."
+    )
     pl.add_argument(
         "--i-understand-this-publishes-externally",
         dest="i_understand_this_publishes_externally",
         action="store_true",
         help=(
-            "Confirm current-turn approval to upload campaign data to external "
-            "S3 storage. Not required with --dry-run."
+            "Confirm current-turn approval to upload campaign data to external S3 storage. Not required with --dry-run."
         ),
     )
     pl.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
@@ -3681,23 +3973,36 @@ def build_parser() -> argparse.ArgumentParser:
     pl.set_defaults(func=cmd_publish_to_lake)
 
     vv = sub.add_parser("value_view", description=CONTRACT["value_view"]["description"])
-    vv.add_argument("--registry", default=None,
-                    help="Path to value-findings.yaml (default: <campaigns>/../configs/value-findings.yaml)")
+    vv.add_argument(
+        "--registry",
+        default=None,
+        help="Path to value-findings.yaml (default: <campaigns>/../configs/value-findings.yaml)",
+    )
     vv.add_argument("--out", default=None, help="Write the rendered markdown ledger to this path")
-    vv.add_argument("--format", choices=["table", "report"], default="table",
-                    help="table = wide audit table (default); report = compact copy-paste summary for a report/Slack")
+    vv.add_argument(
+        "--format",
+        choices=["table", "report"],
+        default="table",
+        help="table = wide audit table (default); report = compact copy-paste summary for a report/Slack",
+    )
     vv.add_argument("--title", default=None, help="Ledger title")
-    vv.add_argument("--gpu-hr", type=float, default=None,
-                    help="$/GPU-hour for the GRIND FRONTIER $/1M-token economics "
-                         "(override; else perf-tune-report/configs/cost.yaml, else 8.60 GB300)")
+    vv.add_argument(
+        "--gpu-hr",
+        type=float,
+        default=None,
+        help="$/GPU-hour for the GRIND FRONTIER $/1M-token economics "
+        "(override; else perf-tune-report/configs/cost.yaml, else 8.60 GB300)",
+    )
     vv.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
     vv.add_argument("--json", action="store_true", help="Emit JSON envelope")
     vv.set_defaults(func=cmd_value_view)
 
-    pv = sub.add_parser("portability_view",
-                        description=CONTRACT["portability_view"]["description"])
-    pv.add_argument("--registry", default=None,
-                    help="Path to value-findings.yaml (default: <campaigns>/../configs/value-findings.yaml)")
+    pv = sub.add_parser("portability_view", description=CONTRACT["portability_view"]["description"])
+    pv.add_argument(
+        "--registry",
+        default=None,
+        help="Path to value-findings.yaml (default: <campaigns>/../configs/value-findings.yaml)",
+    )
     pv.add_argument("--out", default=None, help="Write the rendered matrix markdown to this path")
     pv.add_argument("--title", default=None, help="Matrix title")
     pv.add_argument("--campaigns-dir", default=None, help="Override the campaigns root")
@@ -3707,31 +4012,79 @@ def build_parser() -> argparse.ArgumentParser:
     # champion_select: baseline vs top-X cross-engine champion selection
     cs = sub.add_parser("champion_select", description=CONTRACT["champion_select"]["description"])
     cs.add_argument("--campaign", required=True, help="Campaign dir path OR slug")
-    cs.add_argument("--focus", default=None, choices=("throughput", "latency", "mixed"),
-                    help="Champion metric focus (default: campaign config.focus, else throughput)")
-    cs.add_argument("--focus-c", type=int, default=None, dest="focus_c",
-                    help="Concurrency at which the champion is selected (default: 1 latency / 32 throughput)")
+    cs.add_argument(
+        "--focus",
+        default=None,
+        choices=("throughput", "latency", "mixed"),
+        help="Champion metric focus (default: campaign config.focus, else throughput)",
+    )
+    cs.add_argument(
+        "--focus-c",
+        type=int,
+        default=None,
+        dest="focus_c",
+        help="Concurrency at which the champion is selected (default: 1 latency / 32 throughput)",
+    )
     cs.add_argument("--top", type=int, default=3, help="Number of top variants to keep (default 3)")
-    cs.add_argument("--baseline", default=None, help="Baseline cell_id (default: a *-base/*-baseline arm, vLLM-preferred)")
-    cs.add_argument("--metric", default=None, choices=("tok_s_gpu", "tpot"),
-                    help="Override the ranking metric (default: derived from --focus)")
-    cs.add_argument("--slo-rel", type=float, default=1.10, dest="slo_rel",
-                    help="TPOT SLO = baseline TPOT x this (throughput focus; default 1.10)")
-    cs.add_argument("--slo-abs-ms", type=float, default=None, dest="slo_abs_ms",
-                    help="Absolute TPOT SLO ceiling in ms (overrides --slo-rel)")
-    cs.add_argument("--trials", type=int, default=None,
-                    help="Trials/arm of the A/B (VERDICT variance gate needs >=3 + --same-node)")
-    cs.add_argument("--same-node", action="store_true", dest="same_node",
-                    help="Assert the A/B arms ran same-node (VERDICT variance gate)")
-    cs.add_argument("--require-workloads", default=None, dest="require_workloads",
-                    help="Comma list the VERDICT multi-workload gate requires (default: aa,sonnet,sharegpt,random,code)")
-    cs.add_argument("--workloads-present", default=None, dest="workloads_present",
-                    help="Comma list of workloads actually benched (multi-workload gate; omit => unknown)")
-    cs.add_argument("--accuracy-gate", default="unknown", dest="accuracy_gate",
-                    choices=("pass", "fail", "unknown"), help="Accuracy-eval gate result (VERDICT gate)")
-    cs.add_argument("--accuracy-floor", type=float, default=None, dest="accuracy_floor",
-                    help="Derive the accuracy gate from the campaign's local eval_acc cells "
-                    "(import_model_eval): pass iff the worst measured metric >= this floor")
+    cs.add_argument(
+        "--baseline", default=None, help="Baseline cell_id (default: a *-base/*-baseline arm, vLLM-preferred)"
+    )
+    cs.add_argument(
+        "--metric",
+        default=None,
+        choices=("tok_s_gpu", "tpot"),
+        help="Override the ranking metric (default: derived from --focus)",
+    )
+    cs.add_argument(
+        "--slo-rel",
+        type=float,
+        default=1.10,
+        dest="slo_rel",
+        help="TPOT SLO = baseline TPOT x this (throughput focus; default 1.10)",
+    )
+    cs.add_argument(
+        "--slo-abs-ms",
+        type=float,
+        default=None,
+        dest="slo_abs_ms",
+        help="Absolute TPOT SLO ceiling in ms (overrides --slo-rel)",
+    )
+    cs.add_argument(
+        "--trials", type=int, default=None, help="Trials/arm of the A/B (VERDICT variance gate needs >=3 + --same-node)"
+    )
+    cs.add_argument(
+        "--same-node",
+        action="store_true",
+        dest="same_node",
+        help="Assert the A/B arms ran same-node (VERDICT variance gate)",
+    )
+    cs.add_argument(
+        "--require-workloads",
+        default=None,
+        dest="require_workloads",
+        help="Comma list the VERDICT multi-workload gate requires (default: aa,sonnet,sharegpt,random,code)",
+    )
+    cs.add_argument(
+        "--workloads-present",
+        default=None,
+        dest="workloads_present",
+        help="Comma list of workloads actually benched (multi-workload gate; omit => unknown)",
+    )
+    cs.add_argument(
+        "--accuracy-gate",
+        default="unknown",
+        dest="accuracy_gate",
+        choices=("pass", "fail", "unknown"),
+        help="Accuracy-eval gate result (VERDICT gate)",
+    )
+    cs.add_argument(
+        "--accuracy-floor",
+        type=float,
+        default=None,
+        dest="accuracy_floor",
+        help="Derive the accuracy gate from the campaign's local eval_acc cells "
+        "(import_model_eval): pass iff the worst measured metric >= this floor",
+    )
     cs.add_argument("--out", default=None, help="CHAMPION.md output path (default: <campaign>/CHAMPION.md)")
     cs.add_argument("--title", default=None, help="Report title")
     cs.add_argument("--dry-run", action="store_true", help="Compute + print; do NOT write files")
@@ -3775,9 +4128,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # Optional deps that only land with `install.sh --full` (the perf_tune_report +
 # leaderboard extras). A bare `claude plugin install` install does NOT pull
 # these, so report_render / report_smoke / publish_to_lake fail without them.
-_RENDERER_OPTIONAL_DEPS = frozenset(
-    {"matplotlib", "pandas", "numpy", "pyarrow", "boto3", "tiktoken", "openpyxl"}
-)
+_RENDERER_OPTIONAL_DEPS = frozenset({"matplotlib", "pandas", "numpy", "pyarrow", "boto3", "tiktoken", "openpyxl"})
 
 
 def _renderer_dep_hint(missing: str) -> str:

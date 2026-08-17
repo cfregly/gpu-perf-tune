@@ -2,7 +2,6 @@
 
 Cases are anchored on the GB300 MiniMax-M2.7-NVFP4 leaderboard cells and the 3M-TPM thread's
 own arithmetic (18 pods x 2916 tok/s/pod ~= 50k tok/s = 3M TPM)."""
-import math
 
 import pytest
 
@@ -15,8 +14,14 @@ TPM_3M = 3_000_000  # = 50,000 output tok/s
 
 def test_thread_18_pods_crosscheck():
     # The thread: per-pod 2916 tok/s at c=128 (tok/s/user 22.78), 8-GPU pod, 100% util -> 18 pods.
-    r = resolve(tpm=TPM_3M, sla_list=[2916 / 128], anchors=[Anchor(128, 2916 / 128)],
-                gpus_per_pod=8, util=1.0, model="thread-crosscheck")
+    r = resolve(
+        tpm=TPM_3M,
+        sla_list=[2916 / 128],
+        anchors=[Anchor(128, 2916 / 128)],
+        gpus_per_pod=8,
+        util=1.0,
+        model="thread-crosscheck",
+    )
     row = r.rows[0]
     assert row.replicas == 18
     assert row.gpus == 144

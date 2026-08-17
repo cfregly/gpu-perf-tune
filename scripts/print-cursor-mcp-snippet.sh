@@ -16,6 +16,8 @@ SERVER_ROOT="${REPO_ROOT}/plugins/profile-and-optimize/server"
 VENV_PY="${SERVER_ROOT}/.venv/bin/python"
 
 if [[ ! -x "${VENV_PY}" ]]; then
+  # The backticks are literal command formatting in the warning.
+  # shellcheck disable=SC2016
   printf '[warn] %s not found; run `make bootstrap` (or `bash %s/install.sh`) first.\n' \
     "${VENV_PY}" "${SERVER_ROOT}" >&2
 fi

@@ -34,6 +34,7 @@ Exit 0 clean, 1 on any finding, 2 on setup error. Run from the repo root:
 
     python3 scripts/check_docs.py
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -57,15 +58,27 @@ PLACEHOLDER_RE = re.compile(
 )
 STALE_PHRASES = ("once this repo has a remote", "coming soon")
 MARKER_RE = re.compile(r"\b(TODO|FIXME|TBD)\b")
-DASH_RE = re.compile("[–—]")  # en dash (U+2013), em dash (U+2014)
+DASH_RE = re.compile(r"[\u2013\u2014]")  # U+2013 and U+2014
 VALUE_BAR = "adversarially-confirmed to add value"
 VALUE_BAR_DOCS = ("AGENTS.md", "CLAUDE.md", "README.md")
-SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__",
-             ".pytest_cache", ".mypy_cache", "dist", "build", "site-packages"}
+SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    "dist",
+    "build",
+    "site-packages",
+}
 # Spans where a semicolon is legitimate (code, inline code, links, entities).
 # Blanked before the prose-semicolon scan, newlines kept so line numbers hold.
-CODE_SPAN = re.compile(r"```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`|"
-                       r"\]\([^)]*\)|https?://[^\s)]+|&[#a-zA-Z0-9]+;")
+CODE_SPAN = re.compile(
+    r"```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`|"
+    r"\]\([^)]*\)|https?://[^\s)]+|&[#a-zA-Z0-9]+;"
+)
 
 
 def _line(text: str, idx: int) -> int:
@@ -92,8 +105,7 @@ def check_doc(path: Path, cfg: dict) -> list[str]:
 
     for old in cfg.get("old_names", []):
         for m in re.finditer(re.escape(old) + r"\b", text):
-            out.append(f"{rel}:{_line(text, m.start())}: stale repo name "
-                       f"'{old}' (renamed to '{cfg['repo']}')")
+            out.append(f"{rel}:{_line(text, m.start())}: stale repo name '{old}' (renamed to '{cfg['repo']}')")
 
     for m in PLACEHOLDER_RE.finditer(text):
         if m.group(0).lower() in allow:
@@ -195,8 +207,7 @@ def check_rule_count(cfg: dict) -> list[str]:
     if not mod:
         return []
     prefix = cfg["rule_prefix"]
-    ids = sorted(set(re.findall(rf"\b{prefix}\d+\b",
-                                (ROOT / mod).read_text(encoding="utf-8"))))
+    ids = sorted(set(re.findall(rf"\b{prefix}\d+\b", (ROOT / mod).read_text(encoding="utf-8"))))
     n = len(ids)
     readme = (ROOT / cfg.get("docs", ["README.md"])[0]).read_text(encoding="utf-8")
     out: list[str] = []
@@ -224,7 +235,8 @@ def _score_cmd_re(modules: list[str]) -> re.Pattern:
     alt = "|".join(re.escape(m) for m in modules)
     return re.compile(
         r"(?P<full>python3? +(?:-m +)?(?:" + alt + r")\b[^\n#]*?)"
-        r" *#[^\n]*?(?P<score>\d+) */ *(?P<denom>100|10)\b")
+        r" *#[^\n]*?(?P<score>\d+) */ *(?P<denom>100|10)\b"
+    )
 
 
 def check_score_claims(cfg: dict) -> list[str]:
@@ -249,24 +261,26 @@ def check_score_claims(cfg: dict) -> list[str]:
             argv = shlex.split(full)
             if not argv:
                 continue
-            argv = [sys.executable] + argv[1:]
+            argv = [sys.executable, *argv[1:]]
             try:
-                proc = subprocess.run(argv, cwd=ROOT, capture_output=True,
-                                      text=True, timeout=300)
+                proc = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=300)
             except Exception as exc:  # noqa: BLE001
-                out.append(f"{d}:{_line(text, m.start())}: '{full}' did not run "
-                           f"({type(exc).__name__})")
+                out.append(f"{d}:{_line(text, m.start())}: '{full}' did not run ({type(exc).__name__})")
                 continue
             sm = re.search(rf"(\d+) */ *{denom}\b", proc.stdout)
             if not sm:
                 err = (proc.stderr.strip().splitlines()[-1:] or [""])[0]
-                out.append(f"{d}:{_line(text, m.start())}: '{full}' documents "
-                           f"{claimed}/{denom} but printed no score ({err[:80]})")
+                out.append(
+                    f"{d}:{_line(text, m.start())}: '{full}' documents "
+                    f"{claimed}/{denom} but printed no score ({err[:80]})"
+                )
                 continue
             actual = int(sm.group(1))
             if actual != claimed:
-                out.append(f"{d}:{_line(text, m.start())}: '{full}' documents "
-                           f"{claimed}/{denom} but the command scores {actual}/{denom}")
+                out.append(
+                    f"{d}:{_line(text, m.start())}: '{full}' documents "
+                    f"{claimed}/{denom} but the command scores {actual}/{denom}"
+                )
     return out
 
 

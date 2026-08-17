@@ -41,12 +41,10 @@ without executing.
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
-
 
 _DCGM_CORRELATION_OUTPUT = "dcgm_correlation.json"
 
@@ -79,6 +77,7 @@ class PrometheusClient(Protocol):
 
     def query_instant(self, promql: str, ts: datetime) -> list[TimeSeries]:
         """One-shot point query (used for label/cardinality probes)."""
+        ...
 
     def query_range(
         self,
@@ -88,6 +87,7 @@ class PrometheusClient(Protocol):
         step_s: float,
     ) -> list[TimeSeries]:
         """Range query returning one TimeSeries per result label combo."""
+        ...
 
 
 @dataclass
@@ -112,11 +112,11 @@ class DcgmCorrelateInputs:
 class DcgmQuery:
     """One pre-built PromQL query for one peak's DCGM proxy."""
 
-    peak_key: str          # e.g. "hbm3e_tbps"
-    metric: str            # e.g. "DCGM_FI_PROF_DRAM_ACTIVE"
-    promql: str            # the actual query string
-    unit: str              # "ratio" | "bytes_per_scrape" | "bytes"
-    is_fallback: bool      # True if this is the DCGM_FI_DEV_* fallback
+    peak_key: str  # e.g. "hbm3e_tbps"
+    metric: str  # e.g. "DCGM_FI_PROF_DRAM_ACTIVE"
+    promql: str  # the actual query string
+    unit: str  # "ratio" | "bytes_per_scrape" | "bytes"
+    is_fallback: bool  # True if this is the DCGM_FI_DEV_* fallback
     metrics_combined: list[str] = field(default_factory=list)  # for TX+RX-style
 
 
@@ -133,8 +133,8 @@ class ResourceResult:
     measured_tflops_avg: float | None
     peak_per_gpu: float
     peak_per_gpu_units: str
-    peak_aggregate: float    # peak_per_gpu * n_gpus (in same units as peak)
-    sol_pct: float | None    # 0..100; None if measurement unavailable
+    peak_aggregate: float  # peak_per_gpu * n_gpus (in same units as peak)
+    sol_pct: float | None  # 0..100; None if measurement unavailable
     notes: list[str] = field(default_factory=list)
 
 
@@ -178,7 +178,7 @@ class DcgmCorrelationResult:
     sweep_end_utc: str
     duration_s: float
     n_gpus: int
-    dcgm_group_level: str        # "prof" | "counter" | "absent"
+    dcgm_group_level: str  # "prof" | "counter" | "absent"
     scrape_interval_s: float | None
     short_sweep_warning: bool
     resources: list[ResourceResult]
@@ -265,34 +265,40 @@ def build_queries(
         if use_prof and "dcgm_metrics_bytes" in entry:
             # Paired byte counters (TX + RX). Sum them.
             metrics = entry["dcgm_metrics_bytes"]
-            sum_terms = " + ".join(f'rate({m}{label_filter}[1m])' for m in metrics)
-            queries.append(DcgmQuery(
-                peak_key=peak_key,
-                metric=f"sum({','.join(metrics)})",
-                promql=f"sum by (gpu) ({sum_terms})",
-                unit="bytes_per_s",  # rate(counter_bytes[1m]) yields bytes/s
-                is_fallback=False,
-                metrics_combined=metrics,
-            ))
+            sum_terms = " + ".join(f"rate({m}{label_filter}[1m])" for m in metrics)
+            queries.append(
+                DcgmQuery(
+                    peak_key=peak_key,
+                    metric=f"sum({','.join(metrics)})",
+                    promql=f"sum by (gpu) ({sum_terms})",
+                    unit="bytes_per_s",  # rate(counter_bytes[1m]) yields bytes/s
+                    is_fallback=False,
+                    metrics_combined=metrics,
+                )
+            )
         elif use_prof and "dcgm_metric" in entry:
             metric = entry["dcgm_metric"]
             unit = entry.get("dcgm_unit", "ratio")
-            queries.append(DcgmQuery(
-                peak_key=peak_key,
-                metric=metric,
-                promql=f"avg by (gpu) ({metric}{label_filter})",
-                unit=unit,
-                is_fallback=False,
-            ))
+            queries.append(
+                DcgmQuery(
+                    peak_key=peak_key,
+                    metric=metric,
+                    promql=f"avg by (gpu) ({metric}{label_filter})",
+                    unit=unit,
+                    is_fallback=False,
+                )
+            )
         elif not use_prof and "dcgm_fallback_metric" in entry:
             metric = entry["dcgm_fallback_metric"]
-            queries.append(DcgmQuery(
-                peak_key=peak_key,
-                metric=metric,
-                promql=f"avg by (gpu) ({metric}{label_filter})",
-                unit="counter",
-                is_fallback=True,
-            ))
+            queries.append(
+                DcgmQuery(
+                    peak_key=peak_key,
+                    metric=metric,
+                    promql=f"avg by (gpu) ({metric}{label_filter})",
+                    unit="counter",
+                    is_fallback=True,
+                )
+            )
 
     return queries
 
@@ -567,9 +573,7 @@ def cross_attribute_zymtrace(
     duration_s = result.duration_s
     # Aggregate FLOPS across the sweep across all GPUs.
     compute_total_flops = (
-        (compute_avg_tflops_per_gpu * 1e12 * duration_s * n_gpus)
-        if compute_avg_tflops_per_gpu is not None
-        else None
+        (compute_avg_tflops_per_gpu * 1e12 * duration_s * n_gpus) if compute_avg_tflops_per_gpu is not None else None
     )
 
     out: list[PerCategoryAttribution] = []
@@ -584,7 +588,6 @@ def cross_attribute_zymtrace(
         ceiling_metric_key = cat_info.get("metric")
         ceiling_entry = hw_data.get(ceiling_metric_key) if ceiling_metric_key else None
         ceiling_value = ceiling_entry.get("value") if isinstance(ceiling_entry, dict) else None
-        ceiling_units = ceiling_entry.get("units") if isinstance(ceiling_entry, dict) else None
 
         # Pick the workload byte/FLOP source per category bound.
         if bound == "bandwidth":
@@ -628,18 +631,20 @@ def cross_attribute_zymtrace(
             peak_tflops = ceiling_value * 1000.0
             sol_pct_compute = (effective_tflops / peak_tflops) * 100.0 if peak_tflops > 0 else None
 
-        out.append(PerCategoryAttribution(
-            category=category,
-            time_share_pct=time_share_pct,
-            attributed_bytes_total=attributed_bytes,
-            attributed_flops_total=attributed_flops,
-            effective_bw_during_category_window=effective_bw,
-            effective_tflops_during_category_window=effective_tflops,
-            sol_pct_bw=sol_pct_bw,
-            sol_pct_compute=sol_pct_compute,
-            bound=bound,
-            ceiling_metric=ceiling_metric_key,
-        ))
+        out.append(
+            PerCategoryAttribution(
+                category=category,
+                time_share_pct=time_share_pct,
+                attributed_bytes_total=attributed_bytes,
+                attributed_flops_total=attributed_flops,
+                effective_bw_during_category_window=effective_bw,
+                effective_tflops_during_category_window=effective_tflops,
+                sol_pct_bw=sol_pct_bw,
+                sol_pct_compute=sol_pct_compute,
+                bound=bound,
+                ceiling_metric=ceiling_metric_key,
+            )
+        )
     return out
 
 
@@ -680,9 +685,7 @@ def _query_mean_power_watts_per_gpu(
     label_filter = _build_label_filter(inputs)
     promql = f"avg by (gpu) ({_POWER_METRIC}{label_filter})"
     try:
-        series = client.query_range(
-            promql, inputs.sweep_start, inputs.sweep_end, step_s=step_s
-        )
+        series = client.query_range(promql, inputs.sweep_start, inputs.sweep_end, step_s=step_s)
     except Exception:  # noqa: BLE001 - power is best-effort; never break correlate
         return None, promql
     vals = [v for s in (series or []) for (_ts, v) in s.samples if v is not None and v > 0]
@@ -735,13 +738,15 @@ def correlate(
     node_set: set[str] = set()
 
     for q in queries:
-        query_records.append({
-            "peak_key": q.peak_key,
-            "metric": q.metric,
-            "promql": q.promql,
-            "unit": q.unit,
-            "is_fallback": q.is_fallback,
-        })
+        query_records.append(
+            {
+                "peak_key": q.peak_key,
+                "metric": q.metric,
+                "promql": q.promql,
+                "unit": q.unit,
+                "is_fallback": q.is_fallback,
+            }
+        )
         if dry_run:
             continue
         series = client.query_range(
@@ -788,8 +793,7 @@ def correlate(
                 peak_aggregate=peak_value,
                 sol_pct=None,
                 notes=[
-                    f"counter-fallback metric {q.metric}: byte-rate "
-                    "derivation not implemented; refer to raw payload"
+                    f"counter-fallback metric {q.metric}: byte-rate derivation not implemented; refer to raw payload"
                 ],
             )
 
@@ -810,13 +814,15 @@ def correlate(
         power_watts_per_gpu, power_promql = _query_mean_power_watts_per_gpu(
             client, inputs, step_s=float(expected_scrape_s or 15)
         )
-        query_records.append({
-            "peak_key": "power_watts_per_gpu",
-            "metric": _POWER_METRIC,
-            "promql": power_promql,
-            "unit": "watts",
-            "is_fallback": False,
-        })
+        query_records.append(
+            {
+                "peak_key": "power_watts_per_gpu",
+                "metric": _POWER_METRIC,
+                "promql": power_promql,
+                "unit": "watts",
+                "is_fallback": False,
+            }
+        )
 
     result = DcgmCorrelationResult(
         schema_version=1,
@@ -849,12 +855,10 @@ def correlate(
             except json.JSONDecodeError:
                 kernels_payload = None
             if kernels_payload is not None:
-                result.per_category_attribution = cross_attribute_zymtrace(
-                    result, kernels_payload, ceilings
-                )
+                result.per_category_attribution = cross_attribute_zymtrace(result, kernels_payload, ceilings)
                 result.kernels_json_path = str(kernels_json_path)
                 if "zymtrace" not in result.captured_sources:
-                    result.captured_sources = list(result.captured_sources) + ["zymtrace"]
+                    result.captured_sources = [*list(result.captured_sources), "zymtrace"]
 
     return result
 
@@ -1012,8 +1016,7 @@ def _resource_from_frozen(
             notes=notes,
         )
     raise ValueError(
-        f"_resource_from_frozen: unsupported unit {unit!r} on peak_key={peak_key} "
-        f"(expected 'ratio' or 'bytes_per_s')"
+        f"_resource_from_frozen: unsupported unit {unit!r} on peak_key={peak_key} (expected 'ratio' or 'bytes_per_s')"
     )
 
 
@@ -1061,9 +1064,7 @@ def correlate_from_frozen(
 
     for required in ("hw_key", "n_gpus", "sweep_start_utc", "sweep_end_utc", "resources"):
         if required not in data:
-            raise FrozenYamlMalformed(
-                frozen_yaml, reason=f"missing required key '{required}'"
-            )
+            raise FrozenYamlMalformed(frozen_yaml, reason=f"missing required key '{required}'")
 
     hw_key = data["hw_key"]
     if hw_key not in ceilings:
@@ -1073,33 +1074,23 @@ def correlate_from_frozen(
         )
     hw_data = ceilings[hw_key]
 
-    sweep_start = datetime.fromisoformat(
-        str(data["sweep_start_utc"]).replace("Z", "+00:00")
-    ).astimezone(timezone.utc)
-    sweep_end = datetime.fromisoformat(
-        str(data["sweep_end_utc"]).replace("Z", "+00:00")
-    ).astimezone(timezone.utc)
+    sweep_start = datetime.fromisoformat(str(data["sweep_start_utc"]).replace("Z", "+00:00")).astimezone(UTC)
+    sweep_end = datetime.fromisoformat(str(data["sweep_end_utc"]).replace("Z", "+00:00")).astimezone(UTC)
     duration_s = (sweep_end - sweep_start).total_seconds()
     if duration_s <= 0:
-        raise FrozenYamlMalformed(
-            frozen_yaml, reason=f"non-positive duration_s={duration_s}"
-        )
+        raise FrozenYamlMalformed(frozen_yaml, reason=f"non-positive duration_s={duration_s}")
 
     n_gpus = int(data["n_gpus"])
 
     resources_in = data["resources"]
     if not isinstance(resources_in, list) or not resources_in:
-        raise FrozenYamlMalformed(
-            frozen_yaml, reason="resources must be a non-empty list"
-        )
+        raise FrozenYamlMalformed(frozen_yaml, reason="resources must be a non-empty list")
 
     resources: list[ResourceResult] = []
     queries: list[dict[str, Any]] = []
     for entry in resources_in:
         if not isinstance(entry, dict):
-            raise FrozenYamlMalformed(
-                frozen_yaml, reason=f"resource entry not a mapping: {entry!r}"
-            )
+            raise FrozenYamlMalformed(frozen_yaml, reason=f"resource entry not a mapping: {entry!r}")
         for required in ("peak_key", "metric", "unit", "measured_avg"):
             if required not in entry:
                 raise FrozenYamlMalformed(
@@ -1107,39 +1098,31 @@ def correlate_from_frozen(
                     reason=f"resource entry missing '{required}': {entry!r}",
                 )
         resources.append(_resource_from_frozen(entry, n_gpus, duration_s, hw_data))
-        queries.append({
-            "peak_key": entry["peak_key"],
-            "metric": entry["metric"],
-            "promql": str(entry.get("promql", "")),
-            "unit": entry["unit"],
-            "is_fallback": False,
-        })
+        queries.append(
+            {
+                "peak_key": entry["peak_key"],
+                "metric": entry["metric"],
+                "promql": str(entry.get("promql", "")),
+                "unit": entry["unit"],
+                "is_fallback": False,
+            }
+        )
 
     # Optional mean per-GPU power (watts) from the frozen YAML -> tokens-per-watt.
     power_in = data.get("power_watts_per_gpu")
-    power_watts_per_gpu = (
-        float(power_in) if isinstance(power_in, (int, float)) and power_in > 0 else None
-    )
+    power_watts_per_gpu = float(power_in) if isinstance(power_in, (int, float)) and power_in > 0 else None
 
     # Optional re-query provenance: node(s) + pod scope.
     nodes_in = data.get("nodes")
-    nodes = (
-        [str(n).strip() for n in nodes_in if str(n).strip()]
-        if isinstance(nodes_in, list)
-        else []
-    )
+    nodes = [str(n).strip() for n in nodes_in if str(n).strip()] if isinstance(nodes_in, list) else []
     namespace_in = data.get("namespace")
     namespace = str(namespace_in) if isinstance(namespace_in, str) and namespace_in.strip() else None
     selector_in = data.get("pod_label_selector")
-    pod_label_selector = (
-        str(selector_in) if isinstance(selector_in, str) and selector_in.strip() else None
-    )
+    pod_label_selector = str(selector_in) if isinstance(selector_in, str) and selector_in.strip() else None
 
     result = DcgmCorrelationResult(
         schema_version=1,
-        captured_sources=["dcgm"] + (
-            ["zymtrace"] if (cell_dir or kernels_json_path) else []
-        ),
+        captured_sources=["dcgm"] + (["zymtrace"] if (cell_dir or kernels_json_path) else []),
         hw_key=hw_key,
         sweep_start_utc=sweep_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
         sweep_end_utc=sweep_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -1165,9 +1148,7 @@ def correlate_from_frozen(
 
     if kernels_json_path is not None and kernels_json_path.is_file():
         kernels_payload = json.loads(kernels_json_path.read_text())
-        result.per_category_attribution = cross_attribute_zymtrace(
-            result, kernels_payload, ceilings
-        )
+        result.per_category_attribution = cross_attribute_zymtrace(result, kernels_payload, ceilings)
         result.kernels_json_path = str(kernels_json_path)
 
     return result
@@ -1196,10 +1177,10 @@ def read_sweep_window_from_bundle(bundle_path: Path) -> tuple[datetime, datetime
     duration_s = float(ipb["bench"]["duration_effective_s"])
     # Parse ISO-8601; tolerate trailing Z.
     cs = captured_at.replace("Z", "+00:00")
-    start = datetime.fromisoformat(cs).astimezone(timezone.utc)
+    start = datetime.fromisoformat(cs).astimezone(UTC)
     # Production captured_at may be either start or end; the rest of the
     # codebase uses it as a timestamp at capture write-time = effectively
     # end-of-sweep. Convention here: treat captured_at as start; user
     # who knows otherwise can pass explicit start/end to DcgmCorrelateInputs.
-    end = datetime.fromtimestamp(start.timestamp() + duration_s, tz=timezone.utc)
+    end = datetime.fromtimestamp(start.timestamp() + duration_s, tz=UTC)
     return start, end

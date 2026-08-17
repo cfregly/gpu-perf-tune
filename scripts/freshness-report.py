@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -42,7 +42,7 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
         if m:
             fm[m.group(1)] = m.group(2)
             continue
-        metadata_match = re.match(r'^\s{2}(last-validated)\s*:\s*(.+?)\s*$', line)
+        metadata_match = re.match(r"^\s{2}(last-validated)\s*:\s*(.+?)\s*$", line)
         if metadata_match:
             fm[metadata_match.group(1)] = metadata_match.group(2)
     return fm
@@ -54,7 +54,7 @@ def main() -> int:
     parser.add_argument("--red-days", type=int, default=180)
     args = parser.parse_args()
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     rows: list[tuple[int, str, str, bool]] = []  # (days, skill, date_str, is_adapted)
     for skill_md in sorted(SKILLS_DIR.glob("*/SKILL.md")):
         text = skill_md.read_text()
@@ -100,7 +100,7 @@ def main() -> int:
     print(f"## Summary: {green_count} GREEN / {yellow_count} YELLOW / {red_count} RED / total {len(rows)}")
     print()
     print(f"Thresholds: YELLOW > {args.yellow_days}d, RED > {args.red_days}d.")
-    print(f"Adapted skills get RED -> WARN (refresh from upstream).")
+    print("Adapted skills get RED -> WARN (refresh from upstream).")
 
     if red_count > 0:
         return 2

@@ -200,9 +200,7 @@ def _dynamic_ack(
         raise TypeError(f"invalid dynamic acknowledgement declaration for {verb} {argv[0]}")
     for arg in argv[1:]:
         if _is_option_abbreviation(arg, required_with):
-            raise ValueError(
-                f"abbreviated option {arg!r} is not allowed; use {required_with!r}"
-            )
+            raise ValueError(f"abbreviated option {arg!r} is not allowed; use {required_with!r}")
     return ack_flag, required_with in argv, str(safety) if safety else None
 
 
@@ -220,9 +218,7 @@ def run_surface_tool(name: str, params: dict[str, Any] | None = None) -> dict[st
     )
     effective_ack_flag = ack_flag or dynamic_ack_flag
     ack_exempt_when = module.CONTRACT[spec.verb].get("ack_exempt_when", ())
-    if not isinstance(ack_exempt_when, (tuple, list)) or not all(
-        isinstance(flag, str) for flag in ack_exempt_when
-    ):
+    if not isinstance(ack_exempt_when, (tuple, list)) or not all(isinstance(flag, str) for flag in ack_exempt_when):
         raise TypeError(f"invalid acknowledgement exemption for {spec.library} {spec.verb}")
     static_ack_required = bool(ack_flag) and not any(flag in argv for flag in ack_exempt_when)
     ack_required = static_ack_required or dynamic_ack_required
@@ -231,15 +227,12 @@ def run_surface_tool(name: str, params: dict[str, Any] | None = None) -> dict[st
         (
             arg
             for arg in argv
-            if effective_ack_flag
-            and (arg == effective_ack_flag or _is_option_abbreviation(arg, effective_ack_flag))
+            if effective_ack_flag and (arg == effective_ack_flag or _is_option_abbreviation(arg, effective_ack_flag))
         ),
         None,
     )
     if effective_ack_flag and raw_ack:
-        raise ValueError(
-            f"pass {ack_field}=true instead of including {raw_ack!r} in params.args"
-        )
+        raise ValueError(f"pass {ack_field}=true instead of including {raw_ack!r} in params.args")
     if ack_required and ack_field and params.get(ack_field) is not True:
         raise PermissionError(f"{spec.name} requires {ack_field}=true")
     if ack_required and effective_ack_flag and ack_field:

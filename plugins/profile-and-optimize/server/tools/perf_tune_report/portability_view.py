@@ -11,6 +11,7 @@ fields, plus a per-model "try-next" candidate list (the actionable deploy/test q
 model). Dependency-light: reads only the small registry dict (no pyarrow / matplotlib), so
 it runs in a minimal install. Added in profile-and-optimize (perf_tune_report portability_view verb).
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,7 +27,7 @@ def collect_models(registry: dict) -> list[str]:
     models: set[str] = set()
     for f in registry.get("findings", []):
         for k in _MODEL_KEYS:
-            for m in (f.get(k) or []):
+            for m in f.get(k) or []:
                 if isinstance(m, str) and m.strip():
                     models.add(m.strip())
     return sorted(models)
@@ -52,14 +53,16 @@ def build_portability(registry: dict) -> dict[str, Any]:
     for f in registry.get("findings", []):
         if not any(f.get(k) for k in _MODEL_KEYS):
             continue  # a finding that names no model has nothing to place on the matrix
-        rows.append({
-            "id": f.get("id", ""),
-            "title": f.get("title", ""),
-            "applies_to": str(f.get("applies_to", "") or ""),
-            "lifecycle": f.get("lifecycle", "?"),
-            "next_value": str(f.get("next_value", "med") or "med").lower(),
-            "states": {m: cell_state(f, m) for m in models},
-        })
+        rows.append(
+            {
+                "id": f.get("id", ""),
+                "title": f.get("title", ""),
+                "applies_to": str(f.get("applies_to", "") or ""),
+                "lifecycle": f.get("lifecycle", "?"),
+                "next_value": str(f.get("next_value", "med") or "med").lower(),
+                "states": {m: cell_state(f, m) for m in models},
+            }
+        )
     candidates: dict[str, list[str]] = {m: [] for m in models}
     for r in rows:
         for m in models:

@@ -22,6 +22,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_VERSION="$(<"${REPO_ROOT}/VERSION")"
 
 SERVER=""
 # Default expected tool count is read at runtime from
@@ -118,7 +119,7 @@ log "[1/4] expected tools: ${EXPECTED_TOOLS} (from mcp_surface.py canonical-coun
 # Run the round-trip via an embedded Python program. Sending raw JSON-RPC over
 # stdio works regardless of which MCP client we're invoking; the FastMCP server
 # implements the MCP wire protocol.
-SMOKE_OUTPUT="$(PROFILE_AND_OPTIMIZE_REPO_ROOT="${SERVER}" "${VENV_PY}" - <<'PYEOF'
+SMOKE_OUTPUT="$(PROFILE_AND_OPTIMIZE_REPO_ROOT="${SERVER}" PROJECT_VERSION="${PROJECT_VERSION}" "${VENV_PY}" - <<'PYEOF'
 import json
 import os
 import subprocess
@@ -163,7 +164,7 @@ try:
     init_resp = send_request("initialize", {
         "protocolVersion": "2024-11-05",
         "capabilities": {},
-        "clientInfo": {"name": "profile-and-optimize-smoke", "version": "0.2.1"},
+        "clientInfo": {"name": "profile-and-optimize-smoke", "version": os.environ["PROJECT_VERSION"]},
     }, req_id=1)
     if "error" in init_resp:
         result["errors"].append({"step": "initialize", "error": init_resp["error"]})

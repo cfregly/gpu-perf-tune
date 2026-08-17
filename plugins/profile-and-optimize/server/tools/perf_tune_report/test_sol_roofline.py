@@ -217,9 +217,16 @@ def test_load_ceilings_top_level_not_mapping_raises(tmp_path):
 
 def _row(hardware: str) -> AtlasCell:
     return AtlasCell(
-        cell_id="c", model="m", hardware=hardware, quant="NVFP4",
-        tensor_parallel=8, parallel_strategy="TP", mtp=False,
-        max_num_batched_tokens=1024, concurrency=1, status=STATUS_FULL,
+        cell_id="c",
+        model="m",
+        hardware=hardware,
+        quant="NVFP4",
+        tensor_parallel=8,
+        parallel_strategy="TP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrency=1,
+        status=STATUS_FULL,
     )
 
 
@@ -432,6 +439,7 @@ def test_render_page_raises_when_cell_kernels_empty(tmp_path):
     fig = plt.figure(figsize=(8, 11))
     try:
         from collections import OrderedDict
+
         with pytest.raises(ValueError, match="cell_kernels is empty"):
             sol_roofline.render_page(
                 fig,

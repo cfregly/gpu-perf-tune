@@ -25,13 +25,33 @@ def _registry() -> dict:
     return {
         "baseline_context": "x",
         "findings": [
-            {"id": "a", "title": "A", "lifecycle": "done", "applies_to": "all",
-             "validated_on": ["GLM-5.1"], "candidate_on": ["Kimi-K2.6", "DSv3.2"],
-             "refuted_on": []},
-            {"id": "b", "title": "B", "lifecycle": "closed_negative", "applies_to": "moe",
-             "validated_on": [], "candidate_on": [], "refuted_on": ["GLM-5.1"]},
-            {"id": "c", "title": "C", "lifecycle": "not_done", "applies_to": "various",
-             "validated_on": [], "candidate_on": [], "refuted_on": []},  # names no model
+            {
+                "id": "a",
+                "title": "A",
+                "lifecycle": "done",
+                "applies_to": "all",
+                "validated_on": ["GLM-5.1"],
+                "candidate_on": ["Kimi-K2.6", "DSv3.2"],
+                "refuted_on": [],
+            },
+            {
+                "id": "b",
+                "title": "B",
+                "lifecycle": "closed_negative",
+                "applies_to": "moe",
+                "validated_on": [],
+                "candidate_on": [],
+                "refuted_on": ["GLM-5.1"],
+            },
+            {
+                "id": "c",
+                "title": "C",
+                "lifecycle": "not_done",
+                "applies_to": "various",
+                "validated_on": [],
+                "candidate_on": [],
+                "refuted_on": [],
+            },  # names no model
         ],
     }
 
@@ -78,8 +98,9 @@ def test_cli_portability_view(tmp_path, capsys):
     campaigns = tmp_path / "campaigns"
     campaigns.mkdir()
     out = tmp_path / "PORTABILITY-MATRIX.md"
-    rc = main(["portability_view", "--registry", str(reg),
-               "--campaigns-dir", str(campaigns), "--out", str(out), "--json"])
+    rc = main(
+        ["portability_view", "--registry", str(reg), "--campaigns-dir", str(campaigns), "--out", str(out), "--json"]
+    )
     assert rc == 0
     env = json.loads(capsys.readouterr().out)
     assert env["lever_count"] == 2

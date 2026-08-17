@@ -36,9 +36,10 @@ import json
 import os
 import textwrap
 from collections import OrderedDict
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from tools.perf_tune_report.coverage import summarize
 from tools.perf_tune_report.helpers import resolve_operator_path
@@ -56,7 +57,6 @@ from tools.perf_tune_report.renderer import (
 )
 from tools.perf_tune_report.renderer.render_status import OMISSION_REASONS, OmissionReason, RenderStatus
 from tools.perf_tune_report.schema import AtlasCell, read_jsonl
-
 
 _NCU_REQUIRED_FIELDS = (
     "schema_version",
@@ -98,14 +98,14 @@ class DcgmCorrelationJsonMalformed(Exception):
 
 def discover_ncu_payloads(
     campaign_dir: Path,
-) -> "OrderedDict[str, dict[str, Any]]":
+) -> OrderedDict[str, dict[str, Any]]:
     """Walk ``<campaign_dir>/cells/*/ncu_kernels.json``, parse + validate.
 
     Same pattern as ``discover_kernels_payloads`` for the zymtrace
     kernels.json. Empty dict means no campaign cell has ncu coverage;
     the renderer skips page 5 silently.
     """
-    out: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    out: OrderedDict[str, dict[str, Any]] = OrderedDict()
     cells_dir = campaign_dir / "cells"
     if not cells_dir.is_dir():
         return out
@@ -119,22 +119,20 @@ def discover_ncu_payloads(
             raise NcuKernelsJsonMalformed(path, f"not valid JSON: {e}") from e
         missing = [f for f in _NCU_REQUIRED_FIELDS if f not in payload]
         if missing:
-            raise NcuKernelsJsonMalformed(
-                path, f"missing required fields: {missing}"
-            )
+            raise NcuKernelsJsonMalformed(path, f"missing required fields: {missing}")
         out[cell_dir.name] = payload
     return out
 
 
 def discover_dcgm_payloads(
     campaign_dir: Path,
-) -> "OrderedDict[str, dict[str, Any]]":
+) -> OrderedDict[str, dict[str, Any]]:
     """Walk ``<campaign_dir>/cells/*/dcgm_correlation.json``, parse + validate.
 
     Empty dict means no campaign cell has DCGM coverage; the renderer
     skips page 6 silently.
     """
-    out: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    out: OrderedDict[str, dict[str, Any]] = OrderedDict()
     cells_dir = campaign_dir / "cells"
     if not cells_dir.is_dir():
         return out
@@ -148,20 +146,18 @@ def discover_dcgm_payloads(
             raise DcgmCorrelationJsonMalformed(path, f"not valid JSON: {e}") from e
         missing = [f for f in _DCGM_REQUIRED_FIELDS if f not in payload]
         if missing:
-            raise DcgmCorrelationJsonMalformed(
-                path, f"missing required fields: {missing}"
-            )
+            raise DcgmCorrelationJsonMalformed(path, f"missing required fields: {missing}")
         out[cell_dir.name] = payload
     return out
 
 
 def discover_roofline_payloads(
     campaign_dir: Path,
-) -> "OrderedDict[str, dict[str, Any]]":
+) -> OrderedDict[str, dict[str, Any]]:
     """Walk ``<campaign_dir>/cells/*/roofline_sweep.json`` (written by the
     roofline_sweep importer). Empty dict -> the prefill/decode roofline page
     is skipped silently. Malformed JSON raises (no silent degradation)."""
-    out: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    out: OrderedDict[str, dict[str, Any]] = OrderedDict()
     cells_dir = campaign_dir / "cells"
     if not cells_dir.is_dir():
         return out
@@ -172,9 +168,7 @@ def discover_roofline_payloads(
         try:
             payload = json.loads(path.read_text())
         except json.JSONDecodeError as e:
-            raise prefill_decode_roofline.RooflineSweepJsonMalformed(
-                cell_dir.name, f"not valid JSON: {e}"
-            ) from e
+            raise prefill_decode_roofline.RooflineSweepJsonMalformed(cell_dir.name, f"not valid JSON: {e}") from e
         out[cell_dir.name] = payload
     return out
 
@@ -219,7 +213,7 @@ class KernelsJsonMalformed(Exception):
 
 def discover_kernels_payloads(
     campaign_dir: Path,
-) -> "OrderedDict[str, dict[str, Any]]":
+) -> OrderedDict[str, dict[str, Any]]:
     """Walk ``<campaign_dir>/cells/*/kernels.json``, parse + validate each.
 
     Returns an ``OrderedDict`` keyed by cell_id (= cell directory name),
@@ -229,7 +223,7 @@ def discover_kernels_payloads(
     Raises ``KernelsJsonMalformed`` if any ``kernels.json`` file exists
     but is unparseable or missing required fields.
     """
-    out: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    out: OrderedDict[str, dict[str, Any]] = OrderedDict()
     cells_dir = campaign_dir / "cells"
     if not cells_dir.is_dir():
         return out
@@ -243,9 +237,7 @@ def discover_kernels_payloads(
             raise KernelsJsonMalformed(kernels_path, f"not valid JSON: {e}") from e
         missing = [f for f in _KERNELS_REQUIRED_FIELDS if f not in payload]
         if missing:
-            raise KernelsJsonMalformed(
-                kernels_path, f"missing required fields: {missing}"
-            )
+            raise KernelsJsonMalformed(kernels_path, f"missing required fields: {missing}")
         out[cell_dir.name] = payload
     return out
 
@@ -259,15 +251,15 @@ def _is_roofline_shard(name: str) -> bool:
 
 def compute_per_arm_coverage(
     campaign_dir: Path,
-    rows: "Sequence[AtlasCell]",
-    cell_kernels: "dict[str, Any]",
-    cell_dcgm: "dict[str, Any]",
-    cell_roofline: "dict[str, Any]",
+    rows: Sequence[AtlasCell],
+    cell_kernels: dict[str, Any],
+    cell_dcgm: dict[str, Any],
+    cell_roofline: dict[str, Any],
     *,
     page4: bool,
     page6: bool,
     page7: bool,
-) -> "tuple[int, int, list[str]]":
+) -> tuple[int, int, list[str]]:
     """Per-arm Speed-of-Light coverage rollup -- the source of truth the
     publish gate, teardown hook, and sol-coverage audit all key on.
 
@@ -287,19 +279,17 @@ def compute_per_arm_coverage(
     definition without reimplementing coverage logic.
     """
     cells_dir = campaign_dir / "cells"
-    cell_dirs = (
-        {p.name for p in cells_dir.iterdir() if p.is_dir()}
-        if cells_dir.is_dir()
-        else set()
-    )
+    cell_dirs = {p.name for p in cells_dir.iterdir() if p.is_dir()} if cells_dir.is_dir() else set()
     atlas_arm_dirs: dict[str, str] = {}
     for r in rows:
         cell_id = getattr(r, "cell_id", None)
         if not cell_id or _is_roofline_shard(cell_id):
             continue
         arm = (getattr(r, "extra", {}) or {}).get("arm")
-        if isinstance(arm, str) and arm and (
-            arm in cell_dirs or f"{arm}-decode" in cell_dirs or f"{arm}-prefill" in cell_dirs
+        if (
+            isinstance(arm, str)
+            and arm
+            and (arm in cell_dirs or f"{arm}-decode" in cell_dirs or f"{arm}-prefill" in cell_dirs)
         ):
             atlas_arm_dirs.setdefault(cell_id, arm)
         else:
@@ -338,7 +328,7 @@ _SOL_CEILINGS_RELPATH = Path("perf-tune-report") / "configs" / "sol-ceilings.yam
 _SOURCE_REGISTRY_RELPATH = Path("perf-tune-report") / "configs" / "source-registry.yaml"
 
 
-def discover_provenance(campaign_dir: Path) -> "dict[str, Any] | None":
+def discover_provenance(campaign_dir: Path) -> dict[str, Any] | None:
     """Read the campaign's ``provenance.json`` (the experiment_provenance_v1
     block copied in by ``campaign_init``). None when absent (older campaigns)."""
     p = campaign_dir / "provenance.json"
@@ -350,7 +340,7 @@ def discover_provenance(campaign_dir: Path) -> "dict[str, Any] | None":
         return None
 
 
-def discover_source_registry(campaign_dir: Path) -> "dict[str, Any] | None":
+def discover_source_registry(campaign_dir: Path) -> dict[str, Any] | None:
     """Walk up for ``perf-tune-report/configs/source-registry.yaml`` (branch ->
     purpose). None when not found (the source page then omits purposes)."""
     cur = campaign_dir.resolve()
@@ -359,6 +349,7 @@ def discover_source_registry(campaign_dir: Path) -> "dict[str, Any] | None":
         if cand.is_file():
             try:
                 import yaml
+
                 return yaml.safe_load(cand.read_text(encoding="utf-8"))
             except Exception:  # noqa: BLE001
                 return None
@@ -522,7 +513,7 @@ def _render_completeness_page(fig: Any, status: RenderStatus) -> None:
     )
 
 
-def _render_source_page(fig: Any, links: "list[dict[str, str]]", ident: dict[str, Any]) -> None:
+def _render_source_page(fig: Any, links: list[dict[str, str]], ident: dict[str, Any]) -> None:
     """Draw the "Source under test" page: the EXACT code each roofline ran
     (vLLM/SGLang repo + branch + commit + delivery + infr patch), with a GitHub
     URL per entry. A roofline with no traceable source is not reproducible; this
@@ -539,8 +530,9 @@ def _render_source_page(fig: Any, links: "list[dict[str, str]]", ident: dict[str
         deliv = link.get("delivery") or "image"
         lines.append(f"{link['repo'] or '(repo unset)'}   [delivery: {deliv}]")
         if link.get("branch") or link.get("commit"):
-            lines.append(f"  branch: {link.get('branch') or '(default)'}    "
-                         f"commit: {link.get('commit') or '(unpinned)'}")
+            lines.append(
+                f"  branch: {link.get('branch') or '(default)'}    commit: {link.get('commit') or '(unpinned)'}"
+            )
         if link.get("url"):
             lines.append(f"  {link['url']}")
         if link.get("purpose"):
@@ -557,10 +549,17 @@ def _render_source_page(fig: Any, links: "list[dict[str, str]]", ident: dict[str
             "(no experiment_provenance_v1 block. Add source repository, "
             "commit, delivery, and image details to SOURCE.md.)"
         )
-    fig.text(0.5, 0.95, "SOURCE UNDER TEST -- exact code each roofline ran",
-             ha="center", va="top", fontsize=13, color="#1a5276", weight="bold")
-    fig.text(0.04, 0.88, "\n".join(lines), ha="left", va="top", fontsize=9,
-             family="monospace", color="#333333")
+    fig.text(
+        0.5,
+        0.95,
+        "SOURCE UNDER TEST -- exact code each roofline ran",
+        ha="center",
+        va="top",
+        fontsize=13,
+        color="#1a5276",
+        weight="bold",
+    )
+    fig.text(0.04, 0.88, "\n".join(lines), ha="left", va="top", fontsize=9, family="monospace", color="#333333")
 
 
 def build_pdf_provenance(
@@ -578,7 +577,7 @@ def build_pdf_provenance(
     metadata and a page-1 footer) so consumers never have to trust the
     local mtime. All emitted timestamps are UTC.
     """
-    rendered_utc = rendered_at.astimezone(timezone.utc)
+    rendered_utc = rendered_at.astimezone(UTC)
     rendered_iso = rendered_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
     captured = sorted({r.captured_at for r in rows if r.captured_at})
     if not captured:
@@ -594,10 +593,7 @@ def build_pdf_provenance(
     )
     infodict = {
         "Subject": f"perf-report campaign {campaign_id}",
-        "Keywords": (
-            f"campaign={campaign_id} rendered_utc={rendered_iso} "
-            f"bench_window={bench_window}"
-        ),
+        "Keywords": (f"campaign={campaign_id} rendered_utc={rendered_iso} bench_window={bench_window}"),
         "CreationDate": rendered_utc,
         "ModDate": rendered_utc,
     }
@@ -680,7 +676,7 @@ def render_report(
     # UTC provenance stamp (embedded in PDF metadata + a page-1 footer) so the
     # artifact self-documents its canonical UTC instant + run-id, and nobody
     # has to read the local-wall-clock OS file mtime.
-    provenance = build_pdf_provenance(campaign_dir.name, rows, datetime.now(timezone.utc))
+    provenance = build_pdf_provenance(campaign_dir.name, rows, datetime.now(UTC))
 
     # Discover SoL inputs only when page 3 is in scope (page 4 layers on
     # top of page 3's zymtrace per_category data).
@@ -833,9 +829,7 @@ def render_report(
             # category-level points from DCGM per_category_attribution
             # when ncu kernels have all-null AI/tflops (e.g. --set=basic
             # capture).
-            page5 = sol_roofline_scatter.render_page(
-                fig5, cell_ncu, ceilings, hw_key, cell_dcgm=cell_dcgm
-            )
+            page5 = sol_roofline_scatter.render_page(fig5, cell_ncu, ceilings, hw_key, cell_dcgm=cell_dcgm)
             status.rendered_pages.append("ncu SoL scatter (page 5)")
             sol_l4 = True
             pdf.savefig(fig5)
@@ -885,7 +879,11 @@ def render_report(
         roofline_inputs = discover_sol_inputs(campaign_dir, rows)
         if roofline_inputs is None and cell_roofline:
             hwtok = next(iter(cell_roofline.values())).get("hardware")
-            fb = {"B200": "b200_sm100", "GB300": "gb300_nvl72", "H100": "h100_sxm"}.get(hwtok)
+            fb = (
+                {"B200": "b200_sm100", "GB300": "gb300_nvl72", "H100": "h100_sxm"}.get(hwtok)
+                if isinstance(hwtok, str)
+                else None
+            )
             roofline_inputs = discover_sol_inputs(campaign_dir, rows, fallback_hw_key=fb)
         if cell_roofline and roofline_inputs is not None:
             r_ceilings, r_hw = roofline_inputs
@@ -909,7 +907,11 @@ def render_report(
                 champ_ceilings, champ_hw = roofline_inputs
             else:
                 hwtok = champion_payload.get("hardware")
-                fb = {"B200": "b200_sm100", "GB300": "gb300_nvl72", "H100": "h100_sxm"}.get(hwtok)
+                fb = (
+                    {"B200": "b200_sm100", "GB300": "gb300_nvl72", "H100": "h100_sxm"}.get(hwtok)
+                    if isinstance(hwtok, str)
+                    else None
+                )
                 champ_inputs = discover_sol_inputs(campaign_dir, rows, fallback_hw_key=fb)
                 if champ_inputs is not None:
                     champ_ceilings, champ_hw = champ_inputs
@@ -927,6 +929,7 @@ def render_report(
         prov_block = discover_provenance(campaign_dir)
         if prov_block:
             from tools.perf_tune_report import provenance as _prov_mod
+
             links = _prov_mod.source_links(prov_block, discover_source_registry(campaign_dir))
             fig_src = plt.figure(figsize=page_size)
             _render_source_page(fig_src, links, prov_block.get("identity", {}) or {})
@@ -982,9 +985,7 @@ def render_report(
     # proxy-vs-tight distinction is a recorded field, never a publish blocker --
     # a latency-bound/ncu-only/proxy run is a first-class published result.
     status.sol_complete = sol_l1 or sol_l3 or sol_l4
-    status.sol_rigor = (
-        "L4" if sol_l4 else "L3" if sol_l3 else "L1" if sol_l1 else "none"
-    )
+    status.sol_rigor = "L4" if sol_l4 else "L3" if sol_l3 else "L1" if sol_l1 else "none"
 
     # Machine-readable sidecar consumed by publish_to_lake + the CLI.
     status_path = campaign_dir / "report_status.json"

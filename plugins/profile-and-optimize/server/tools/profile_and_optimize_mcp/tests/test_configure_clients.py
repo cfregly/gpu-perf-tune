@@ -39,7 +39,7 @@ class JsonConfigTests(unittest.TestCase):
     def test_antigravity_default_uses_official_global_path(self) -> None:
         home = Path("/tmp/test-antigravity-home")
         with mock.patch.object(configure_clients.Path, "home", return_value=home):
-            args = configure_clients.parse_args([])
+            args = configure_clients.parse_args(["--client", "antigravity"])
         self.assertEqual(
             args.antigravity_config,
             home / ".gemini" / "config" / "mcp_config.json",
@@ -249,9 +249,7 @@ name = "keep-me"
             config = root / "config.toml"
             configure_clients.update_codex_toml(config, make_args(root))
 
-            profile = tomllib.loads(config.read_text(encoding="utf-8"))[
-                "mcp_servers"
-            ]["profile_and_optimize"]
+            profile = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]["profile_and_optimize"]
             self.assertEqual(
                 set(profile["env"]),
                 {"PROFILE_AND_OPTIMIZE_REPO_ROOT"},

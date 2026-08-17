@@ -46,7 +46,7 @@ from __future__ import annotations
 import csv
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -135,9 +135,7 @@ def _parse_aiperf_csv(path: Path) -> dict[str, float] | None:
     if "Time to First Token (ms)" in per_metric_avg:
         out["ttft_avg_ms"] = per_metric_avg["Time to First Token (ms)"]
     if "Output Token Throughput Per User (tokens/sec/user)" in per_metric_avg:
-        out["output_tps_per_user"] = per_metric_avg[
-            "Output Token Throughput Per User (tokens/sec/user)"
-        ]
+        out["output_tps_per_user"] = per_metric_avg["Output Token Throughput Per User (tokens/sec/user)"]
     if "Inter Token Latency (ms)" in per_metric_avg:
         out["itl_avg_ms"] = per_metric_avg["Inter Token Latency (ms)"]
     if "Request Throughput (requests/sec)" in scalar:
@@ -220,9 +218,7 @@ def import_aiperf_bundle(
         raise ValueError(f"import_aiperf: bundle does not exist: {bundle}")
     cells = _enumerate_aiperf_cells(bundle)
     if not cells:
-        raise ValueError(
-            f"import_aiperf: no c<N>/profile_export_aiperf.csv under {bundle}"
-        )
+        raise ValueError(f"import_aiperf: no c<N>/profile_export_aiperf.csv under {bundle}")
     ov = overrides or {}
     model = ov.get("model")
     if not model:
@@ -241,7 +237,7 @@ def import_aiperf_bundle(
     if isinstance(ov.get("expected_reqs"), dict):
         expected.update({int(k): int(v) for k, v in ov["expected_reqs"].items()})
     if captured_at is None:
-        captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     rows: list[AtlasCell] = []
     partial_cells: list[int] = []
@@ -251,9 +247,7 @@ def import_aiperf_bundle(
             continue
         rc = m.get("request_count")
         exp = expected.get(cf.concurrency)
-        cell_partial = (
-            rc is not None and exp is not None and rc < PARTIAL_FRACTION * exp
-        )
+        cell_partial = rc is not None and exp is not None and rc < PARTIAL_FRACTION * exp
         status = STATUS_PARTIAL if cell_partial else STATUS_FULL
         if cell_partial:
             partial_cells.append(cf.concurrency)
@@ -311,15 +305,18 @@ def import_aiperf_bundle(
     normalized_path = cell_dir / "normalized.json"
     if dry_run:
         return AiperfImportResult(
-            campaign_dir=campaign_dir, cell_id=cell_id, cell_dir=cell_dir,
-            normalized_path=normalized_path, bundle_path=bundle,
-            row_count=len(rows), concurrencies=concurrencies,
-            status=overall_status, partial_cells=sorted(partial_cells),
+            campaign_dir=campaign_dir,
+            cell_id=cell_id,
+            cell_dir=cell_dir,
+            normalized_path=normalized_path,
+            bundle_path=bundle,
+            row_count=len(rows),
+            concurrencies=concurrencies,
+            status=overall_status,
+            partial_cells=sorted(partial_cells),
         )
     cell_dir.mkdir(parents=True, exist_ok=True)
-    normalized_path.write_text(
-        json.dumps([r.to_dict() for r in rows], indent=2, sort_keys=True)
-    )
+    normalized_path.write_text(json.dumps([r.to_dict() for r in rows], indent=2, sort_keys=True))
     (cell_dir / "status.txt").write_text(overall_status + "\n")
     (cell_dir / "backend.txt").write_text(BACKEND_AIPERF + "\n")
     (cell_dir / "SOURCE.md").write_text(
@@ -332,8 +329,13 @@ def import_aiperf_bundle(
         f"- partial_cells (low completion): {sorted(partial_cells)}\n"
     )
     return AiperfImportResult(
-        campaign_dir=campaign_dir, cell_id=cell_id, cell_dir=cell_dir,
-        normalized_path=normalized_path, bundle_path=bundle,
-        row_count=len(rows), concurrencies=concurrencies,
-        status=overall_status, partial_cells=sorted(partial_cells),
+        campaign_dir=campaign_dir,
+        cell_id=cell_id,
+        cell_dir=cell_dir,
+        normalized_path=normalized_path,
+        bundle_path=bundle,
+        row_count=len(rows),
+        concurrencies=concurrencies,
+        status=overall_status,
+        partial_cells=sorted(partial_cells),
     )

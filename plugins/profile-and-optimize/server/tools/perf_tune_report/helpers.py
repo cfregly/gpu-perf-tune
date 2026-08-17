@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -103,7 +102,7 @@ def slugify(text: str) -> str:
 
 def utc_timestamp_slug() -> str:
     """``YYYYMMDDTHHMMSSZ`` per the workspace's evidence-bundle-init convention."""
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def emit(payload: dict[str, Any], *, as_json: bool) -> None:

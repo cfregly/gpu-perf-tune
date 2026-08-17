@@ -34,6 +34,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from tools.perf_tune_report.schema import AtlasCell, read_jsonl
 
 SCHEMA_VERSION = "champion_select_v1"
@@ -168,10 +170,14 @@ def _artifact_cell_id(campaign_dir: Path, row: AtlasCell | None, cell_id: str) -
     """
 
     arm = (row.extra or {}).get("arm") if row is not None else None
-    if isinstance(arm, str) and arm and (
-        (campaign_dir / "cells" / arm).is_dir()
-        or (campaign_dir / "cells" / f"{arm}-decode").is_dir()
-        or (campaign_dir / "cells" / f"{arm}-prefill").is_dir()
+    if (
+        isinstance(arm, str)
+        and arm
+        and (
+            (campaign_dir / "cells" / arm).is_dir()
+            or (campaign_dir / "cells" / f"{arm}-decode").is_dir()
+            or (campaign_dir / "cells" / f"{arm}-prefill").is_dir()
+        )
     ):
         return arm
     return cell_id
@@ -245,11 +251,7 @@ def _summarize_sol(campaign_dir: Path, cell_id: str, focus_c: int) -> SolSummary
         s.l4_kernel_count = len(nk["kernels"])
 
     s.sol_rigor = (
-        "L4" if s.l4_present
-        else "L3" if s.l3_present
-        else "L2" if s.l2_present
-        else "L1" if s.l1_present
-        else "none"
+        "L4" if s.l4_present else "L3" if s.l3_present else "L2" if s.l2_present else "L1" if s.l1_present else "none"
     )
     return s
 
@@ -260,17 +262,15 @@ def _load_roofline(campaign_dir: Path, cell_id: str) -> dict[str, Any] | None:
     )
 
 
-def _resolve_baseline(arm_ids: list[str], rows_by_cell: dict[str, dict[int, AtlasCell]],
-                      explicit: str | None) -> str | None:
+def _resolve_baseline(
+    arm_ids: list[str], rows_by_cell: dict[str, dict[int, AtlasCell]], explicit: str | None
+) -> str | None:
     if explicit and explicit in rows_by_cell:
         return explicit
     # heuristic: a *-base / *-baseline cell, preferring vLLM (the incumbent).
     bases = [c for c in arm_ids if c.endswith(("-base", "-baseline"))]
     if bases:
-        vllm_bases = [
-            c for c in bases
-            if any(r.serving_engine != "sglang" for r in rows_by_cell[c].values())
-        ]
+        vllm_bases = [c for c in bases if any(r.serving_engine != "sglang" for r in rows_by_cell[c].values())]
         return sorted(vllm_bases or bases)[0]
     return sorted(arm_ids)[0] if arm_ids else None
 
@@ -283,9 +283,8 @@ def _campaign_focus(campaign_dir: Path) -> str | None:
     yml = campaign_dir / "config.yaml"
     if yml.is_file():
         try:
-            import yaml  # type: ignore
             data = yaml.safe_load(yml.read_text()) or {}
-        except Exception:
+        except (AttributeError, OSError, TypeError, ValueError, yaml.YAMLError):
             data = {}
         focus = (data.get("campaign") or {}).get("focus") or data.get("focus")
         if focus:
@@ -331,9 +330,7 @@ def select(
 ) -> ChampionResult:
     atlas_path = campaign_dir / "atlas.jsonl"
     if not atlas_path.is_file():
-        raise FileNotFoundError(
-            f"atlas.jsonl not found at {atlas_path}; run `perftunereport atlas_aggregate` first."
-        )
+        raise FileNotFoundError(f"atlas.jsonl not found at {atlas_path}; run `perftunereport atlas_aggregate` first.")
     rows = read_jsonl(atlas_path)
     if not rows:
         raise ValueError(f"atlas.jsonl is empty at {atlas_path}")
@@ -357,9 +354,7 @@ def select(
         rows_by_cell.setdefault(r.cell_id, {})[r.concurrency] = r
     arm_ids = sorted(rows_by_cell)
     if not arm_ids:
-        raise ValueError(
-            f"no rankable arm cells in {atlas_path} (only roofline cells found)"
-        )
+        raise ValueError(f"no rankable arm cells in {atlas_path} (only roofline cells found)")
 
     hardware = rows[0].hardware
     tensor_parallel = rows[0].tensor_parallel
@@ -380,10 +375,7 @@ def select(
     base_row = _row_at_c(baseline_cell) if baseline_cell else None
     base_tpot = base_row.tpot_median_ms if base_row else None
     base_metric = _metric_value(base_row)
-    slo_ms = (
-        slo_abs_ms if slo_abs_ms is not None
-        else (base_tpot * slo_rel if base_tpot is not None else None)
-    )
+    slo_ms = slo_abs_ms if slo_abs_ms is not None else (base_tpot * slo_rel if base_tpot is not None else None)
 
     def _slo_verdict(cell: AtlasCell | None, is_base: bool) -> str:
         if is_base:
@@ -415,12 +407,8 @@ def select(
             tpot_median_ms=cell.tpot_median_ms if cell else None,
             pct_win_vs_baseline=0.0 if is_base else _pct_win(val),
             slo_verdict=_slo_verdict(cell, is_base),
-            sol=_summarize_sol(
-                campaign_dir, _artifact_cell_id(campaign_dir, cell, cell_id), resolved_focus_c
-            ),
-            has_roofline=_load_roofline(
-                campaign_dir, _artifact_cell_id(campaign_dir, cell, cell_id)
-            ) is not None,
+            sol=_summarize_sol(campaign_dir, _artifact_cell_id(campaign_dir, cell, cell_id), resolved_focus_c),
+            has_roofline=_load_roofline(campaign_dir, _artifact_cell_id(campaign_dir, cell, cell_id)) is not None,
         )
 
     # Rank the non-baseline arms: SLO-passing first, then by the focus metric
@@ -446,14 +434,11 @@ def select(
     # Recommendation: the best SLO-passing variant that actually beats the
     # baseline on the focus metric; else keep the baseline (no-change).
     champion = next(
-        (v for v in top_rows if v.slo_verdict == "PASS-SLO"
-         and (v.pct_win_vs_baseline or 0) > 0),
+        (v for v in top_rows if v.slo_verdict == "PASS-SLO" and (v.pct_win_vs_baseline or 0) > 0),
         None,
     )
     recommended_cell = champion.cell_id if champion else baseline_cell
-    recommended_engine = champion.engine if champion else (
-        variants[0].engine if variants else None
-    )
+    recommended_engine = champion.engine if champion else (variants[0].engine if variants else None)
 
     # Roofline overlay: baseline + every selected variant that carries a sweep.
     overlay: dict[str, Any] = {}
@@ -516,26 +501,29 @@ def _evaluate_gates(
 
     # Variance: same-node + >=3 trials (the DRAFT->VERDICT rule).
     if trials is None and not same_node:
-        gates.append(GateResult("variance", "unknown",
-                                "trials / same-node not supplied (pass --trials >=3 --same-node)"))
+        gates.append(
+            GateResult("variance", "unknown", "trials / same-node not supplied (pass --trials >=3 --same-node)")
+        )
     elif same_node and (trials or 0) >= 3:
         gates.append(GateResult("variance", "pass", f"same-node, {trials} trials"))
     else:
-        gates.append(GateResult("variance", "fail",
-                                f"need same-node + >=3 trials (got same_node={same_node}, trials={trials})"))
+        gates.append(
+            GateResult("variance", "fail", f"need same-node + >=3 trials (got same_node={same_node}, trials={trials})")
+        )
 
     # Multi-workload coverage.
     if not workloads_present:
-        gates.append(GateResult("multi_workload", "unknown",
-                                "no --workloads-present supplied; cannot confirm the canonical suite"))
+        gates.append(
+            GateResult(
+                "multi_workload", "unknown", "no --workloads-present supplied; cannot confirm the canonical suite"
+            )
+        )
     else:
         missing = [w for w in require_workloads if w not in set(workloads_present)]
         if missing:
-            gates.append(GateResult("multi_workload", "fail",
-                                    f"missing workloads: {','.join(missing)}"))
+            gates.append(GateResult("multi_workload", "fail", f"missing workloads: {','.join(missing)}"))
         else:
-            gates.append(GateResult("multi_workload", "pass",
-                                    f"covered: {','.join(require_workloads)}"))
+            gates.append(GateResult("multi_workload", "pass", f"covered: {','.join(require_workloads)}"))
 
     # Accuracy.
     # Name the measured serving-quality metrics (import_model_eval eval_acc) in the detail so
@@ -554,19 +542,23 @@ def _evaluate_gates(
     elif accuracy_gate == "fail":
         gates.append(GateResult("accuracy", "fail", "accuracy gate FAILED -> do-not-ship" + eval_detail))
     else:
-        gates.append(GateResult(
-            "accuracy", "unknown",
-            "accuracy gate not run (--accuracy-gate / --accuracy-floor)" + eval_detail))
+        gates.append(
+            GateResult(
+                "accuracy", "unknown", "accuracy gate not run (--accuracy-gate / --accuracy-floor)" + eval_detail
+            )
+        )
 
     # DCGM byte-grounding (L3) of the recommended champion.
     if recommended is None:
         gates.append(GateResult("dcgm_grounded", "unknown", "no champion selected"))
     elif recommended.sol.l3_present:
-        gates.append(GateResult("dcgm_grounded", "pass",
-                                f"champion sol_rigor={recommended.sol.sol_rigor}"))
+        gates.append(GateResult("dcgm_grounded", "pass", f"champion sol_rigor={recommended.sol.sol_rigor}"))
     else:
-        gates.append(GateResult("dcgm_grounded", "fail",
-                                "champion has no L3 DCGM byte-grounding (run dcgm_correlate / roofline-sweep)"))
+        gates.append(
+            GateResult(
+                "dcgm_grounded", "fail", "champion has no L3 DCGM byte-grounding (run dcgm_correlate / roofline-sweep)"
+            )
+        )
     return gates
 
 
@@ -584,10 +576,7 @@ def render_markdown(result: ChampionResult, *, title: str | None = None) -> str:
     lines: list[str] = []
     lines.append(f"# {title or 'Champion selection'} -- {result.campaign_id}")
     lines.append("")
-    lines.append(
-        f"**RECOMMENDED FOR PRODUCTION: `{rec}` ({result.recommended_engine or '?'})  "
-        f"[{tier}]**"
-    )
+    lines.append(f"**RECOMMENDED FOR PRODUCTION: `{rec}` ({result.recommended_engine or '?'})  [{tier}]**")
     lines.append("")
     lines.append(
         f"- focus: `{result.focus}`  |  metric: `{metric_label}`  |  "
@@ -608,8 +597,11 @@ def render_markdown(result: ChampionResult, *, title: str | None = None) -> str:
     lines.append("|" + "---|" * 11)
     for v in result.variants:
         tag = " (baseline)" if v.is_baseline else ""
-        win = "--" if v.is_baseline else (f"{v.pct_win_vs_baseline:+.1f}%"
-                                          if v.pct_win_vs_baseline is not None else "n/a")
+        win = (
+            "--"
+            if v.is_baseline
+            else (f"{v.pct_win_vs_baseline:+.1f}%" if v.pct_win_vs_baseline is not None else "n/a")
+        )
         lines.append(
             f"| `{v.cell_id}`{tag} | {v.engine} | {_fmt(v.focus_metric)} | {win} | "
             f"{_fmt(v.tpot_median_ms)} | {v.slo_verdict} | {v.sol.sol_rigor} | "
@@ -639,8 +631,9 @@ def render_markdown(result: ChampionResult, *, title: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def write_outputs(result: ChampionResult, campaign_dir: Path, *,
-                  out_md: Path | None = None, title: str | None = None) -> tuple[Path, Path]:
+def write_outputs(
+    result: ChampionResult, campaign_dir: Path, *, out_md: Path | None = None, title: str | None = None
+) -> tuple[Path, Path]:
     json_path = campaign_dir / "champion_select.json"
     md_path = out_md or (campaign_dir / "CHAMPION.md")
     json_path.write_text(json.dumps(result.to_dict(), indent=2, sort_keys=True) + "\n")

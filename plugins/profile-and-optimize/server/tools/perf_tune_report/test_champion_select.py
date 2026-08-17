@@ -11,7 +11,7 @@ tests assert).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -24,11 +24,20 @@ from tools.perf_tune_report import champion_select as cs
 # --------------------------------------------------------------------------- #
 def _row(cell, eng, c, tput_gpu, tpot):
     return {
-        "cell_id": cell, "model": "org/Model-X", "hardware": "GB300", "quant": "NVFP4",
-        "tensor_parallel": 4, "parallel_strategy": "TP", "mtp": False,
-        "max_num_batched_tokens": 12288, "concurrency": c, "status": "full",
-        "ttft_avg_ms": 120.0, "request_throughput_avg": 5.0,
-        "output_tps_per_gpu": tput_gpu, "tpot_median_ms": tpot,
+        "cell_id": cell,
+        "model": "org/Model-X",
+        "hardware": "GB300",
+        "quant": "NVFP4",
+        "tensor_parallel": 4,
+        "parallel_strategy": "TP",
+        "mtp": False,
+        "max_num_batched_tokens": 12288,
+        "concurrency": c,
+        "status": "full",
+        "ttft_avg_ms": 120.0,
+        "request_throughput_avg": 5.0,
+        "output_tps_per_gpu": tput_gpu,
+        "tpot_median_ms": tpot,
         "backend": "sglang-sweep" if eng == "sglang" else "vllm-sweep",
     }
 
@@ -37,42 +46,71 @@ def _stage_campaign(tmp_path: Path, *, with_sol=True) -> Path:
     camp = tmp_path / "20260607T000000Z-model-x-crossengine"
     (camp / "cells").mkdir(parents=True)
     rows = [
-        _row("mx-v-base", "vllm", 32, 300.0, 40.0),    # baseline (vLLM)
-        _row("mx-v-ep", "vllm", 32, 360.0, 42.0),      # +20% tput, TPOT 42 <= SLO 44 -> PASS
-        _row("mx-v-cg", "vllm", 32, 330.0, 55.0),      # +10% tput but TPOT 55 > SLO -> SLO-FAIL
+        _row("mx-v-base", "vllm", 32, 300.0, 40.0),  # baseline (vLLM)
+        _row("mx-v-ep", "vllm", 32, 360.0, 42.0),  # +20% tput, TPOT 42 <= SLO 44 -> PASS
+        _row("mx-v-cg", "vllm", 32, 330.0, 55.0),  # +10% tput but TPOT 55 > SLO -> SLO-FAIL
         _row("mx-s-base", "sglang", 32, 280.0, 35.0),  # sglang baseline
         _row("mx-s-attn", "sglang", 32, 410.0, 30.0),  # cross-engine champion
     ]
-    (camp / "atlas.jsonl").write_text(
-        "\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n"
-    )
+    (camp / "atlas.jsonl").write_text("\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n")
     if with_sol:
         # 4-layer SoL artifacts for the cross-engine champion (mx-s-attn).
         champ = camp / "cells" / "mx-s-attn"
         champ.mkdir(parents=True)
-        (champ / "kernels.json").write_text(json.dumps({
-            "schema_version": 1, "captured_sources": ["zymtrace"],
-            "top_kernels": [], "per_gpu": [], "top_python_during_cuda": [],
-            "per_category": {"MoE": 5000, "FMHA": 3000, "NCCL": 1000},
-        }))
-        (champ / "dcgm_correlation.json").write_text(json.dumps({
-            "schema_version": 1, "captured_sources": ["dcgm"], "hw_key": "gb300_nvl72", "queries": [],
-            "resources": [
-                {"peak_key": "hbm3e_tbps", "metric": "DCGM_FI_PROF_DRAM_ACTIVE", "sol_pct": 24.2},
-                {"peak_key": "nvfp4_dense_pflops", "metric": "PIPE_TENSOR_ACTIVE", "sol_pct": 3.1},
-            ],
-            "per_category_attribution": [{"category": "MoE", "time_share_pct": 55.0, "sol_pct_bw": 0.2}],
-        }))
-        (champ / "ncu_kernels.json").write_text(json.dumps({
-            "schema_version": 1, "captured_sources": ["ncu"], "hw_key": "gb300_nvl72",
-            "kernels": [{"name": "k0", "sol_pct": 80}],
-        }))
-        (champ / "roofline_sweep.json").write_text(json.dumps({
-            "schema": "roofline_sweep_points_v1", "hardware": "GB300", "tensor_parallel": 4,
-            "quant": "NVFP4", "model": "org/Model-X",
-            "decode": [{"phase": "decode", "c": 32, "tensor_active": 0.031, "dram_active": 0.242, "sm_active": 0.40}],
-            "prefill": [{"phase": "prefill", "isl": 4096, "tensor_active": 0.6, "dram_active": 0.3, "sm_active": 0.8}],
-        }))
+        (champ / "kernels.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "captured_sources": ["zymtrace"],
+                    "top_kernels": [],
+                    "per_gpu": [],
+                    "top_python_during_cuda": [],
+                    "per_category": {"MoE": 5000, "FMHA": 3000, "NCCL": 1000},
+                }
+            )
+        )
+        (champ / "dcgm_correlation.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "captured_sources": ["dcgm"],
+                    "hw_key": "gb300_nvl72",
+                    "queries": [],
+                    "resources": [
+                        {"peak_key": "hbm3e_tbps", "metric": "DCGM_FI_PROF_DRAM_ACTIVE", "sol_pct": 24.2},
+                        {"peak_key": "nvfp4_dense_pflops", "metric": "PIPE_TENSOR_ACTIVE", "sol_pct": 3.1},
+                    ],
+                    "per_category_attribution": [{"category": "MoE", "time_share_pct": 55.0, "sol_pct_bw": 0.2}],
+                }
+            )
+        )
+        (champ / "ncu_kernels.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "captured_sources": ["ncu"],
+                    "hw_key": "gb300_nvl72",
+                    "kernels": [{"name": "k0", "sol_pct": 80}],
+                }
+            )
+        )
+        (champ / "roofline_sweep.json").write_text(
+            json.dumps(
+                {
+                    "schema": "roofline_sweep_points_v1",
+                    "hardware": "GB300",
+                    "tensor_parallel": 4,
+                    "quant": "NVFP4",
+                    "model": "org/Model-X",
+                    "decode": [
+                        {"phase": "decode", "c": 32, "tensor_active": 0.031, "dram_active": 0.242, "sm_active": 0.40}
+                    ],
+                    "prefill": [
+                        {"phase": "prefill", "isl": 4096, "tensor_active": 0.6, "dram_active": 0.3, "sm_active": 0.8}
+                    ],
+                }
+            )
+        )
     return camp
 
 
@@ -85,15 +123,27 @@ def test_accuracy_floor_derives_gate_from_local_eval(tmp_path: Path):
     camp = _stage_campaign(tmp_path)
     atlas = camp / "atlas.jsonl"
     eval_row = {
-        "cell_id": "model-eval", "model": "org/Model-X", "hardware": "GB300", "quant": "NVFP4",
-        "tensor_parallel": 4, "parallel_strategy": "TP", "mtp": False,
-        "max_num_batched_tokens": 0, "concurrency": 1, "status": "full",
-        "extra": {"metric_kind": "eval_acc",
-                  "quality_metrics": {"gpqa_acc": 0.52, "mmlu_pro_acc": 0.90}},
+        "cell_id": "model-eval",
+        "model": "org/Model-X",
+        "hardware": "GB300",
+        "quant": "NVFP4",
+        "tensor_parallel": 4,
+        "parallel_strategy": "TP",
+        "mtp": False,
+        "max_num_batched_tokens": 0,
+        "concurrency": 1,
+        "status": "full",
+        "extra": {"metric_kind": "eval_acc", "quality_metrics": {"gpqa_acc": 0.52, "mmlu_pro_acc": 0.90}},
     }
     atlas.write_text(atlas.read_text() + json.dumps(eval_row, sort_keys=True) + "\n")
-    common = dict(focus="throughput", focus_c=32, top=3, trials=3, same_node=True,
-                  workloads_present=("aa", "sonnet", "sharegpt", "random", "code"))
+    common = dict(
+        focus="throughput",
+        focus_c=32,
+        top=3,
+        trials=3,
+        same_node=True,
+        workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
+    )
     # floor below the worst measured metric (0.52) -> pass
     res = cs.select(camp, accuracy_floor=0.40, **common)
     acc = next(g for g in res.gates if g.name == "accuracy")
@@ -108,12 +158,18 @@ def test_accuracy_floor_derives_gate_from_local_eval(tmp_path: Path):
 
 def test_select_picks_cross_engine_champion(tmp_path: Path):
     camp = _stage_campaign(tmp_path)
-    res = cs.select(camp, focus="throughput", focus_c=32, top=3,
-                    trials=3, same_node=True,
-                    workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
-                    accuracy_gate="pass")
+    res = cs.select(
+        camp,
+        focus="throughput",
+        focus_c=32,
+        top=3,
+        trials=3,
+        same_node=True,
+        workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
+        accuracy_gate="pass",
+    )
     assert res.baseline_cell == "mx-v-base"
-    assert res.recommended_cell == "mx-s-attn"      # cross-engine winner
+    assert res.recommended_cell == "mx-s-attn"  # cross-engine winner
     assert res.recommended_engine == "sglang"
     champ = next(v for v in res.variants if v.cell_id == "mx-s-attn")
     assert champ.pct_win_vs_baseline == pytest.approx(36.7, abs=0.2)
@@ -147,12 +203,21 @@ def test_select_resolves_legacy_arm_artifact_dir(tmp_path: Path):
     (camp / "atlas.jsonl").write_text(json.dumps(row, sort_keys=True) + "\n")
     physical = camp / "cells" / "mx-s-attn"
     physical.mkdir(parents=True)
-    (physical / "roofline_sweep.json").write_text(json.dumps({
-        "schema": "roofline_sweep_points_v1", "hardware": "GB300", "tensor_parallel": 4,
-        "quant": "NVFP4", "model": "org/Model-X",
-        "decode": [{"phase": "decode", "c": 32, "tensor_active": 0.031, "dram_active": 0.242, "sm_active": 0.40}],
-        "prefill": [],
-    }))
+    (physical / "roofline_sweep.json").write_text(
+        json.dumps(
+            {
+                "schema": "roofline_sweep_points_v1",
+                "hardware": "GB300",
+                "tensor_parallel": 4,
+                "quant": "NVFP4",
+                "model": "org/Model-X",
+                "decode": [
+                    {"phase": "decode", "c": 32, "tensor_active": 0.031, "dram_active": 0.242, "sm_active": 0.40}
+                ],
+                "prefill": [],
+            }
+        )
+    )
 
     res = cs.select(camp, focus="throughput", focus_c=32, top=1)
     variant = res.variants[0]
@@ -167,20 +232,32 @@ def test_select_resolves_legacy_arm_artifact_dir(tmp_path: Path):
 # --------------------------------------------------------------------------- #
 def test_verdict_when_all_gates_pass(tmp_path: Path):
     camp = _stage_campaign(tmp_path)
-    res = cs.select(camp, focus="throughput", focus_c=32, top=3,
-                    trials=3, same_node=True,
-                    workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
-                    accuracy_gate="pass")
+    res = cs.select(
+        camp,
+        focus="throughput",
+        focus_c=32,
+        top=3,
+        trials=3,
+        same_node=True,
+        workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
+        accuracy_gate="pass",
+    )
     assert res.tier == "verdict"
     assert all(g.status == "pass" for g in res.gates)
 
 
 def test_draft_when_workloads_missing(tmp_path: Path):
     camp = _stage_campaign(tmp_path)
-    res = cs.select(camp, focus="throughput", focus_c=32, top=3,
-                    trials=3, same_node=True,
-                    workloads_present=("aa", "sonnet"),  # missing sharegpt/random/code
-                    accuracy_gate="pass")
+    res = cs.select(
+        camp,
+        focus="throughput",
+        focus_c=32,
+        top=3,
+        trials=3,
+        same_node=True,
+        workloads_present=("aa", "sonnet"),  # missing sharegpt/random/code
+        accuracy_gate="pass",
+    )
     assert res.tier == "draft"
     mw = next(g for g in res.gates if g.name == "multi_workload")
     assert mw.status == "fail"
@@ -188,18 +265,30 @@ def test_draft_when_workloads_missing(tmp_path: Path):
 
 def test_draft_when_accuracy_unknown(tmp_path: Path):
     camp = _stage_campaign(tmp_path)
-    res = cs.select(camp, focus="throughput", focus_c=32, top=3,
-                    trials=3, same_node=True,
-                    workloads_present=("aa", "sonnet", "sharegpt", "random", "code"))
+    res = cs.select(
+        camp,
+        focus="throughput",
+        focus_c=32,
+        top=3,
+        trials=3,
+        same_node=True,
+        workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
+    )
     assert res.tier == "draft"  # accuracy_gate defaults unknown
 
 
 def test_draft_when_champion_not_byte_grounded(tmp_path: Path):
     camp = _stage_campaign(tmp_path, with_sol=False)  # no dcgm/roofline -> no L3
-    res = cs.select(camp, focus="throughput", focus_c=32, top=3,
-                    trials=3, same_node=True,
-                    workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
-                    accuracy_gate="pass")
+    res = cs.select(
+        camp,
+        focus="throughput",
+        focus_c=32,
+        top=3,
+        trials=3,
+        same_node=True,
+        workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
+        accuracy_gate="pass",
+    )
     assert res.tier == "draft"
     dg = next(g for g in res.gates if g.name == "dcgm_grounded")
     assert dg.status == "fail"
@@ -234,16 +323,22 @@ def test_select_missing_atlas_raises(tmp_path: Path):
 # --------------------------------------------------------------------------- #
 def test_lake_champion_table_and_campaign_fields(tmp_path: Path):
     pytest.importorskip("pyarrow")
-    from tools.perf_tune_report.lake_writer import build_champion_table, build_campaign_row
+    from tools.perf_tune_report.lake_writer import build_campaign_row, build_champion_table
     from tools.perf_tune_report.schema import read_jsonl
 
     camp = _stage_campaign(tmp_path)
-    res = cs.select(camp, focus="throughput", focus_c=32, top=3,
-                    trials=3, same_node=True,
-                    workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
-                    accuracy_gate="pass")
+    res = cs.select(
+        camp,
+        focus="throughput",
+        focus_c=32,
+        top=3,
+        trials=3,
+        same_node=True,
+        workloads_present=("aa", "sonnet", "sharegpt", "random", "code"),
+        accuracy_gate="pass",
+    )
     cs.write_outputs(res, camp)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     ct = build_champion_table(camp, camp.name, captured_at_utc=now, published_at_utc=now)
     recs = {r["cell_id"]: r for r in ct.to_pylist()}
@@ -266,7 +361,7 @@ def test_lake_champion_table_empty_without_champion_json(tmp_path: Path):
     from tools.perf_tune_report.lake_writer import build_champion_table
 
     camp = _stage_campaign(tmp_path)  # no champion_select.json written
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     ct = build_champion_table(camp, camp.name, captured_at_utc=now, published_at_utc=now)
     assert ct.num_rows == 0
 

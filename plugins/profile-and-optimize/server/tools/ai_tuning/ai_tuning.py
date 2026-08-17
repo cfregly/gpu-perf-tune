@@ -24,6 +24,7 @@ EXAMPLE_SPACE = REPO_ROOT / "tuning" / "examples" / "b200-offline.json"
 # through the full tuner CLI. Re-exports preserve backwards compat for
 # callers that still import these names from this module.
 from tools.ai_tuning import helpers as _helpers
+from tools.ai_tuning import safety as _safety
 from tools.ai_tuning.cmd_experiment import (
     command_experiment_collect,
     command_experiment_create,
@@ -44,8 +45,6 @@ from tools.ai_tuning.cmd_proposal import command_proposal_diff, command_proposal
 from tools.ai_tuning.cmd_report import command_report
 from tools.ai_tuning.cmd_space import command_matrix, command_space
 from tools.ai_tuning.cmd_template_patch import command_template_patch_validate
-
-from tools.ai_tuning import safety as _safety
 
 EXPERIMENT_LEDGER_SCHEMA_VERSION = _safety.EXPERIMENT_LEDGER_SCHEMA_VERSION
 EXPERIMENT_STATUSES = _safety.EXPERIMENT_STATUSES
@@ -92,11 +91,20 @@ CONTRACT: dict[str, dict[str, object]] = {
         "safety": "writes_artifacts",
         "required": ("--space",),
         "optional": (
-            "--raw-results-dir", "--raw-benchmark", "--min-runs",
-            "--objective", "--gb300-fabric-dir", "--gb300-fabric-require-clean",
-            "--gb300-node-selection-dir", "--gb300-fabric-localization-dir",
-            "--ledger", "--remaining-limit", "--template-hint-file",
-            "--template-hint-limit", "--error-limit", "--output",
+            "--raw-results-dir",
+            "--raw-benchmark",
+            "--min-runs",
+            "--objective",
+            "--gb300-fabric-dir",
+            "--gb300-fabric-require-clean",
+            "--gb300-node-selection-dir",
+            "--gb300-fabric-localization-dir",
+            "--ledger",
+            "--remaining-limit",
+            "--template-hint-file",
+            "--template-hint-limit",
+            "--error-limit",
+            "--output",
         ),
         "json": True,
         "ack": None,
@@ -288,10 +296,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     proposal_diff = proposal_subparsers.add_parser(
         "diff",
-        help=(
-            "Diff two proposal.json files by added, removed, or changed "
-            "experiment_id_prefix candidates."
-        ),
+        help=("Diff two proposal.json files by added, removed, or changed experiment_id_prefix candidates."),
     )
     proposal_diff.add_argument("before", type=Path, help="earlier proposal.json")
     proposal_diff.add_argument("after", type=Path, help="later proposal.json")
@@ -310,12 +315,8 @@ def build_parser() -> argparse.ArgumentParser:
     proposal_diff.set_defaults(func=command_proposal_diff)
 
     template_patch = subparsers.add_parser("template-patch", help="Template patch helpers")
-    template_patch_subparsers = template_patch.add_subparsers(
-        dest="template_patch_command", required=True
-    )
-    patch_validate = template_patch_subparsers.add_parser(
-        "validate", help="Validate a context-anchored patch"
-    )
+    template_patch_subparsers = template_patch.add_subparsers(dest="template_patch_command", required=True)
+    patch_validate = template_patch_subparsers.add_parser("validate", help="Validate a context-anchored patch")
     patch_validate.add_argument("patch", type=Path)
     patch_validate.add_argument("--apply", action="store_true")
     patch_validate.add_argument("--output-file", type=Path)
@@ -385,9 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
     experiment_submit.add_argument("--output", type=Path)
     experiment_submit.set_defaults(func=command_experiment_submit)
 
-    experiment_poll = experiment_subparsers.add_parser(
-        "poll", help="Poll read-only Slurm status and update the ledger"
-    )
+    experiment_poll = experiment_subparsers.add_parser("poll", help="Poll read-only Slurm status and update the ledger")
     experiment_poll.add_argument("--ledger", type=Path, required=True)
     experiment_poll.add_argument("--status", action="append", default=["submitted", "running"])
     experiment_poll.add_argument("--status-file", type=Path)
@@ -441,9 +440,7 @@ def _ensure_json_flag_on_leaves(parser: argparse.ArgumentParser) -> None:
             for child in nested_action.choices.values():
                 visit(child)
             return
-        existing_options = {
-            opt for action in node._actions for opt in action.option_strings
-        }
+        existing_options = {opt for action in node._actions for opt in action.option_strings}
         if "--json" not in existing_options:
             node.add_argument(
                 "--json",
@@ -469,31 +466,39 @@ def __getattr__(name: str):
         return getattr(_helpers, name)
     raise AttributeError(name)
 
-_EXPORT_DENYLIST = {
-    "Any",
-    "Path",
-    "annotations",
-    "argparse",
-    "contextlib",
-    "dt",
-    "gp_engine",
-    "hashlib",
-    "hyp_format",
-    "hyp_session",
-    "importlib",
-    "io",
-    "itertools",
-    "json",
-    "random",
-    "re",
-    "shutil",
-    "space_module",
-    "statistics",
-    "subprocess",
-    "sys",
-    "tpe_engine",
-}
-__all__ = [name for name in globals() if not name.startswith("_") and name not in _EXPORT_DENYLIST]
+
+__all__ = [
+    "CONTRACT",
+    "EXAMPLE_SPACE",
+    "EXPERIMENT_LEDGER_SCHEMA_VERSION",
+    "EXPERIMENT_STATUSES",
+    "FORBIDDEN_PATCH_PATTERNS",
+    "MCP_DYNAMIC_ACKS",
+    "PROPOSAL_SCHEMA_VERSION",
+    "REPORT_SCHEMA_VERSION",
+    "REPO_ROOT",
+    "TEMPLATE_PATCH_SCHEMA_VERSION",
+    "build_parser",
+    "command_experiment_collect",
+    "command_experiment_create",
+    "command_experiment_poll",
+    "command_experiment_submit",
+    "command_experiment_summary",
+    "command_experiment_update",
+    "command_finalize",
+    "command_matrix",
+    "command_optimizer_compare",
+    "command_optimizer_history",
+    "command_optimizer_import_hyp",
+    "command_optimizer_propose",
+    "command_optimizer_status",
+    "command_proposal_diff",
+    "command_proposal_validate",
+    "command_report",
+    "command_space",
+    "command_template_patch_validate",
+    "main",
+]
 
 if __name__ == "__main__":
     raise SystemExit(main())

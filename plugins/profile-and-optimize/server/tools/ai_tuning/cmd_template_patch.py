@@ -13,14 +13,12 @@ import argparse
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-from tools.shared.jsonutil import load_json
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for
 # callers that still import these names from this module.
-
 from tools.ai_tuning.helpers import default_derived_path, evaluate_template_patch_request, write_json
+from tools.shared.jsonutil import load_json
 
 
 def command_template_patch_validate(args: argparse.Namespace) -> int:

@@ -109,9 +109,7 @@ def detect_stride_lag(
         # Need at least two buckets to compare leader vs lagging.
         return []
 
-    bucket_medians: dict[int, int] = {
-        b: int(median(s.seq_num for s in group)) for b, group in buckets.items()
-    }
+    bucket_medians: dict[int, int] = {b: int(median(s.seq_num for s in group)) for b, group in buckets.items()}
     leader_bucket = max(bucket_medians, key=lambda b: bucket_medians[b])
     leader_median = bucket_medians[leader_bucket]
 

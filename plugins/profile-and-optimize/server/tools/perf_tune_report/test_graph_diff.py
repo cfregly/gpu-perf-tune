@@ -14,7 +14,6 @@ from tools.perf_tune_report.graph_diff import (
     extract_inductor_passes,
 )
 
-
 # ---------------------------------------------------------------------------
 # Synthetic log fixtures
 # ---------------------------------------------------------------------------
@@ -225,6 +224,7 @@ def forward(x): return x
 def test_cli_graph_diff_smoke(tmp_path: Path) -> None:
     """End-to-end via the CLI command handler."""
     import argparse
+
     from tools.perf_tune_report.perf_tune_report_cli import cmd_graph_diff
 
     a, b = _write_logs(tmp_path)

@@ -15,8 +15,6 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-from tools.shared.jsonutil import load_json
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for
@@ -25,6 +23,7 @@ from tools.ai_tuning.helpers import choose_objective, parameter_index, write_jso
 from tools.ai_tuning.safety import (
     PROPOSAL_SCHEMA_VERSION,
 )
+from tools.shared.jsonutil import load_json
 
 
 def command_space(args: argparse.Namespace) -> int:
@@ -50,6 +49,7 @@ def command_space(args: argparse.Namespace) -> int:
     write_json(payload, args.output)
     return 0
 
+
 def command_matrix(args: argparse.Namespace) -> int:
     space = load_json(Path(args.space))
     selected_objective = choose_objective(space)
@@ -73,10 +73,7 @@ def command_matrix(args: argparse.Namespace) -> int:
     for values in itertools.product(*(item["values"] for item in selected)):
         if len(candidates) >= args.limit:
             break
-        parameters = {
-            selected[index]["name"]: values[index]
-            for index in range(len(selected))
-        }
+        parameters = {selected[index]["name"]: values[index] for index in range(len(selected))}
         candidates.append(
             {
                 "parameters": parameters,

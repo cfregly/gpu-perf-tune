@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import yaml
 
 from tools.perf_tune_report import provenance as p
 
@@ -143,11 +144,12 @@ def test_render_block_roundtrips():
 
 def test_malformed_block_raises():
     bad = "```provenance\n: : : not yaml : :\n- [unterminated\n```\n"
-    with pytest.raises(Exception):
+    with pytest.raises(yaml.YAMLError):
         p.parse_text(bad)
 
 
 # --- provenance_match_problems (code-under-test provenance match, rigor principle p) ---
+
 
 def test_match_ok_same_delivery_and_commit():
     refs = [{"delivery": "infr-patch", "commit": "abc123def456"}]
@@ -191,6 +193,4 @@ def test_match_no_false_positive_on_missing_info():
     assert p.provenance_match_problems([{"delivery": "infr-patch"}], None) == []
     assert p.provenance_match_problems([{"delivery": "infr-patch"}], {}) == []
     # campaign provenance carries neither delivery nor commit -> nothing to assert.
-    assert p.provenance_match_problems(
-        [{"delivery": "infr-patch", "commit": "x"}], {"foo": "bar"}
-    ) == []
+    assert p.provenance_match_problems([{"delivery": "infr-patch", "commit": "x"}], {"foo": "bar"}) == []

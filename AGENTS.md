@@ -8,7 +8,8 @@ Client-specific files may point here, but shared policy belongs in this file.
 ```bash
 make demo     # print the tool and skill surface, no GPU needed
 make help     # list operator targets
-make all      # run smoke checks, doc links, skill lint, and pytest
+make quality  # run Ruff, Pyright, and ShellCheck
+make all      # run quality checks, docs, skill lint, MCP smoke, and pytest
 ```
 
 The repository layout, client setup, and methodology live in
@@ -119,8 +120,9 @@ source revisions, or delivery methods.
 
 ## Working in this repository
 
-- Run `make all` before committing. Use `make -j4 all` to run independent
-  targets in parallel.
+- Run `make all` before committing. It includes Python lint and formatting,
+  production type checks, shell lint, repository gates, MCP smoke, and pytest.
+  Use `make -j4 all` to run independent targets in parallel.
 - Skill, tool, and library counts are canonical in
   [`plugins/profile-and-optimize/server/mcp_surface.py`](plugins/profile-and-optimize/server/mcp_surface.py).
   Never hardcode a replacement count without updating and running the count

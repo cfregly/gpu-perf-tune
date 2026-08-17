@@ -7,7 +7,6 @@ render_phase_a_report.py).
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -19,13 +18,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools.perf_tune_report.raw_bench_compare import (
-    BundleSpec,
     RawBenchCompareManifestMalformed,
     _parse_sweep_file,
     load_manifest,
     render_comparison,
 )
-
 
 _SWEEP_TEXT_TEMPLATE = """
 ============ Serving Benchmark Result ============
@@ -49,25 +46,29 @@ P99 TPOT (ms):                           {tpot_p99}
 """
 
 
-def _write_sweep(bundle_dir: Path, c: int, *, output_tps: float, tpot_median: float, ttft_median: float = 200.0) -> Path:
+def _write_sweep(
+    bundle_dir: Path, c: int, *, output_tps: float, tpot_median: float, ttft_median: float = 200.0
+) -> Path:
     """Write a synthetic sweep-c<N>.txt with the vllm bench serve format."""
     raw = bundle_dir / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     path = raw / f"sweep-c{c}.txt"
-    path.write_text(_SWEEP_TEXT_TEMPLATE.format(
-        c=c,
-        successful=c * 32,
-        duration_s=300.0,
-        req_per_s=output_tps / 100.0,
-        output_tps=output_tps,
-        total_tps=output_tps * 1.5,
-        ttft_mean=ttft_median * 1.2,
-        ttft_median=ttft_median,
-        ttft_p99=ttft_median * 1.8,
-        tpot_mean=tpot_median * 1.05,
-        tpot_median=tpot_median,
-        tpot_p99=tpot_median * 1.3,
-    ))
+    path.write_text(
+        _SWEEP_TEXT_TEMPLATE.format(
+            c=c,
+            successful=c * 32,
+            duration_s=300.0,
+            req_per_s=output_tps / 100.0,
+            output_tps=output_tps,
+            total_tps=output_tps * 1.5,
+            ttft_mean=ttft_median * 1.2,
+            ttft_median=ttft_median,
+            ttft_p99=ttft_median * 1.8,
+            tpot_mean=tpot_median * 1.05,
+            tpot_median=tpot_median,
+            tpot_p99=tpot_median * 1.3,
+        )
+    )
     return path
 
 
@@ -192,10 +193,14 @@ def test_load_manifest_raises_on_missing_bundles_key(tmp_path: Path):
 
 def test_load_manifest_raises_on_missing_required_bundle_field(tmp_path: Path):
     p = tmp_path / "incomplete.yaml"
-    p.write_text(_yaml.dump({
-        "schema_version": 1,
-        "bundles": [{"glob": "x", "label": "y"}],  # missing 'short'
-    }))
+    p.write_text(
+        _yaml.dump(
+            {
+                "schema_version": 1,
+                "bundles": [{"glob": "x", "label": "y"}],  # missing 'short'
+            }
+        )
+    )
     with pytest.raises(RawBenchCompareManifestMalformed, match="missing 'short'"):
         load_manifest(p)
 
@@ -205,14 +210,18 @@ def test_load_manifest_resolves_bundles_root_relative_to_manifest(tmp_path: Path
     # Write manifest at sibling location with bundles_root as relative path.
     relative_root = bundles_root.relative_to(tmp_path)
     p = tmp_path / "relative_manifest.yaml"
-    p.write_text(_yaml.dump({
-        "schema_version": 1,
-        "bundles_root": str(relative_root),  # relative
-        "bundles": [
-            {"glob": "model-baseline-*", "label": "B", "short": "b"},
-            {"glob": "model-champion-*", "label": "C", "short": "c"},
-        ],
-    }))
+    p.write_text(
+        _yaml.dump(
+            {
+                "schema_version": 1,
+                "bundles_root": str(relative_root),  # relative
+                "bundles": [
+                    {"glob": "model-baseline-*", "label": "B", "short": "b"},
+                    {"glob": "model-champion-*", "label": "C", "short": "c"},
+                ],
+            }
+        )
+    )
     _, specs = load_manifest(p)
     assert all(s.bundle_path is not None for s in specs)
 
@@ -270,10 +279,14 @@ def test_render_comparison_raises_when_no_bundles_have_data(tmp_path: Path):
     empty_root = tmp_path / "empty"
     empty_root.mkdir()
     p = tmp_path / "empty_manifest.yaml"
-    p.write_text(_yaml.dump({
-        "schema_version": 1,
-        "bundles_root": str(empty_root),
-        "bundles": [{"glob": "missing-*", "label": "x", "short": "x"}],
-    }))
-    with pytest.raises(ValueError, match="no bundles .* yielded parseable rows"):
+    p.write_text(
+        _yaml.dump(
+            {
+                "schema_version": 1,
+                "bundles_root": str(empty_root),
+                "bundles": [{"glob": "missing-*", "label": "x", "short": "x"}],
+            }
+        )
+    )
+    with pytest.raises(ValueError, match=r"no bundles .* yielded parseable rows"):
         render_comparison(p, tmp_path / "out.pdf")

@@ -20,6 +20,7 @@ per-step busy-vs-idle split, a host/kernel/comm hint, and a GREEN/RED verdict.
 Stdlib only (sqlite3, json, gzip). Usage:
   python3 decode_budget.py TRACE [--tpot-ms 6.21] [--tokens-per-step 2]
 """
+
 import argparse
 import collections
 import gzip
@@ -52,30 +53,29 @@ def gap_histogram(merged):
     bsum = collections.Counter()
     for g in gaps:
         gm = g / 1e6  # ns -> ms
-        k = ("<0.5ms" if gm < 0.5 else "0.5-3ms" if gm < 3 else
-             "3-8ms" if gm < 8 else "8-16ms" if gm < 16 else ">16ms")
+        k = "<0.5ms" if gm < 0.5 else "0.5-3ms" if gm < 3 else "3-8ms" if gm < 8 else "8-16ms" if gm < 16 else ">16ms"
         buckets[k] += 1
         bsum[k] += g
     return gaps, buckets, bsum
 
 
-def report(label, span_ns, busy_ns, merged, comm_ns=None, parts=None,
-           tpot_ms=None, tokens_per_step=None):
+def report(label, span_ns, busy_ns, merged, comm_ns=None, parts=None, tpot_ms=None, tokens_per_step=None):
     span_ms = span_ns / 1e6
     busy_ms = busy_ns / 1e6
     idle_ms = span_ms - busy_ms
     print(f"\n=== {label} ===")
     if parts:
-        ps = "  ".join(f"{k}={v/1e6:.0f}ms" for k, v in parts.items())
+        ps = "  ".join(f"{k}={v / 1e6:.0f}ms" for k, v in parts.items())
         print(f"components: {ps}")
-    print(f"span={span_ms:.0f}ms  TRUE-busy={busy_ms:.0f}ms ({100*busy_ms/span_ms:.1f}%)  "
-          f"idle={idle_ms:.0f}ms ({100*idle_ms/span_ms:.1f}%)")
+    print(
+        f"span={span_ms:.0f}ms  TRUE-busy={busy_ms:.0f}ms ({100 * busy_ms / span_ms:.1f}%)  "
+        f"idle={idle_ms:.0f}ms ({100 * idle_ms / span_ms:.1f}%)"
+    )
     if comm_ns is not None and busy_ns:
-        print(f"comm (allreduce/allgather) = {comm_ns/1e6:.0f}ms ({100*comm_ns/busy_ns:.1f}% of busy)")
+        print(f"comm (allreduce/allgather) = {comm_ns / 1e6:.0f}ms ({100 * comm_ns / busy_ns:.1f}% of busy)")
 
     gaps, buckets, bsum = gap_histogram(merged)
-    print("idle-gap buckets (count, total_ms):",
-          {k: (buckets[k], round(bsum[k] / 1e6, 1)) for k in buckets})
+    print("idle-gap buckets (count, total_ms):", {k: (buckets[k], round(bsum[k] / 1e6, 1)) for k in buckets})
 
     # Gate 4: repeating decode-step pattern -> a dominant 3-16ms inter-step bucket
     stepgaps = [g for g in gaps if 3e6 <= g <= 16e6]
@@ -93,18 +93,23 @@ def report(label, span_ns, busy_ns, merged, comm_ns=None, parts=None,
         per_busy_us = busy_ns / 1e3 / max(n, 1)
         per_idle_us = sum(stepgaps) / 1e3 / max(n, 1)
         step_ms = med_gap + per_busy_us / 1e3
-        print(f"decode steps~{n}  inter-step idle med={med_gap:.2f}ms  "
-              f"per-step: busy~{per_busy_us:.0f}us idle~{per_idle_us:.0f}us  cadence~{step_ms:.2f}ms/step")
-        verdict = ("HOST-BOUND" if per_busy_us / 1e3 < 0.5 * med_gap else
-                   "BALANCED/KERNEL-BOUND")
-        print(f"classification hint: {verdict} (GPU-busy {per_busy_us:.0f}us vs host-idle {per_idle_us:.0f}us per step)")
+        print(
+            f"decode steps~{n}  inter-step idle med={med_gap:.2f}ms  "
+            f"per-step: busy~{per_busy_us:.0f}us idle~{per_idle_us:.0f}us  cadence~{step_ms:.2f}ms/step"
+        )
+        verdict = "HOST-BOUND" if per_busy_us / 1e3 < 0.5 * med_gap else "BALANCED/KERNEL-BOUND"
+        print(
+            f"classification hint: {verdict} (GPU-busy {per_busy_us:.0f}us vs host-idle {per_idle_us:.0f}us per step)"
+        )
         # Gate 3: TPOT reconciliation
         if tpot_ms:
             tps = tokens_per_step or 1
             modeled = step_ms / tps
             ok = abs(modeled - tpot_ms) / tpot_ms <= 0.15
-            print(f"Gate 3 reconcile: step {step_ms:.2f}ms / {tps} tok = {modeled:.2f} ms/tok "
-                  f"vs driver TPOT {tpot_ms:.2f} ms/tok -> {'OK' if ok else 'MISMATCH (capture suspect)'}")
+            print(
+                f"Gate 3 reconcile: step {step_ms:.2f}ms / {tps} tok = {modeled:.2f} ms/tok "
+                f"vs driver TPOT {tpot_ms:.2f} ms/tok -> {'OK' if ok else 'MISMATCH (capture suspect)'}"
+            )
             if not ok:
                 quality = "RED"
                 notes.append("TPOT reconciliation mismatch >15%")
@@ -125,9 +130,11 @@ def analyze_nsys(path, tpot_ms, tokens_per_step):
     KERNEL = "CUPTI_ACTIVITY_KIND_KERNEL"
     if KERNEL not in tabs:
         print("RED: sqlite has no CUPTI_ACTIVITY_KIND_KERNEL (no CUDA-kernel data).")
-        print("     Gate 0: on GB300 <org-id> this is usually the CUDA 12.x-image vs 13.x-driver "
-              "CUPTI skew (CUPTI_ERROR_INVALID_DEVICE), NOT capture hygiene -- grep the kineto/nsys "
-              "log for 'CUDA versions. CUPTI/Runtime/Driver'; fix = CUDA-13 image or zymtrace.")
+        print(
+            "     Gate 0: on GB300 <org-id> this is usually the CUDA 12.x-image vs 13.x-driver "
+            "CUPTI skew (CUPTI_ERROR_INVALID_DEVICE), NOT capture hygiene -- grep the kineto/nsys "
+            "log for 'CUDA versions. CUPTI/Runtime/Driver'; fix = CUDA-13 image or zymtrace."
+        )
         return "RED"
     GRAPH = "CUPTI_ACTIVITY_KIND_GRAPH_TRACE" if "CUPTI_ACTIVITY_KIND_GRAPH_TRACE" in tabs else None
     MEMCPY = "CUPTI_ACTIVITY_KIND_MEMCPY" if "CUPTI_ACTIVITY_KIND_MEMCPY" in tabs else None
@@ -139,34 +146,50 @@ def analyze_nsys(path, tpot_ms, tokens_per_step):
             SUM(CASE WHEN s.value LIKE '%cudaLaunchKernel%' THEN 1 ELSE 0 END)
             FROM CUPTI_ACTIVITY_KIND_RUNTIME r JOIN StringIds s ON r.nameId=s.id""")
         gl, kl = cur.fetchone()
-        print(f"[graphs] cudaGraphLaunch={gl or 0} cudaLaunchKernel={kl or 0} "
-              f"-> {'CUDA graphs IN PLAY (GRAPH_TRACE counted below)' if (gl or 0) else 'no graphs'}")
+        print(
+            f"[graphs] cudaGraphLaunch={gl or 0} cudaLaunchKernel={kl or 0} "
+            f"-> {'CUDA graphs IN PLAY (GRAPH_TRACE counted below)' if (gl or 0) else 'no graphs'}"
+        )
 
     cur.execute(f"SELECT DISTINCT deviceId FROM {KERNEL} ORDER BY deviceId")
     devs = [r[0] for r in cur.fetchall()]
     overall = "GREEN"
     rep_dev = devs[0] if devs else None
     for dev in devs:
-        def grab(tbl):
+
+        def grab(tbl, device_id=dev):
             if not tbl:
                 return []
-            cur.execute(f"SELECT start,end FROM {tbl} WHERE deviceId=?", (dev,))
+            cur.execute(f"SELECT start,end FROM {tbl} WHERE deviceId=?", (device_id,))
             return cur.fetchall()
-        k = grab(KERNEL); g = grab(GRAPH); mc = grab(MEMCPY)
-        kb, _ = union_busy(k); gb, _ = union_busy(g)
+
+        k = grab(KERNEL)
+        g = grab(GRAPH)
+        mc = grab(MEMCPY)
+        kb, _ = union_busy(k)
+        gb, _ = union_busy(g)
         allb, merged = union_busy(k + g + mc)
         span = merged[-1][1] - merged[0][0]
         # comm = allreduce/allgather eager kernels
-        cur.execute(f"""SELECT SUM(x.e-x.s) FROM (SELECT k.start s,k.end e FROM {KERNEL} k
+        cur.execute(
+            f"""SELECT SUM(x.e-x.s) FROM (SELECT k.start s,k.end e FROM {KERNEL} k
             JOIN StringIds s ON k.shortName=s.id WHERE k.deviceId=? AND
             (s.value LIKE '%allreduce%' OR s.value LIKE '%ncclDevKernel%'
-             OR s.value LIKE '%all_reduce%' OR s.value LIKE '%cross_device_reduce%')) x""", (dev,))
+             OR s.value LIKE '%all_reduce%' OR s.value LIKE '%cross_device_reduce%')) x""",
+            (dev,),
+        )
         comm = cur.fetchone()[0] or 0
-        only_rep = (dev == rep_dev)
-        q = report(f"nsys dev{dev}", span, allb, merged, comm_ns=comm,
-                   parts={"KERNEL": kb, "GRAPH": gb},
-                   tpot_ms=tpot_ms if only_rep else None,
-                   tokens_per_step=tokens_per_step)
+        only_rep = dev == rep_dev
+        q = report(
+            f"nsys dev{dev}",
+            span,
+            allb,
+            merged,
+            comm_ns=comm,
+            parts={"KERNEL": kb, "GRAPH": gb},
+            tpot_ms=tpot_ms if only_rep else None,
+            tokens_per_step=tokens_per_step,
+        )
         if q == "RED":
             overall = "RED"
     return overall
@@ -181,20 +204,33 @@ def analyze_kineto(source, compressed, tpot_ms, tokens_per_step):
         trace = json.load(source)
     ev = trace.get("traceEvents", trace if isinstance(trace, list) else [])
     GPU_CATS = {"kernel", "gpu_memcpy", "gpu_memset"}
-    gpu = [(int(e["ts"] * 1000), int((e["ts"] + e.get("dur", 0)) * 1000))  # us -> ns
-           for e in ev if e.get("ph") == "X" and e.get("cat") in GPU_CATS and "ts" in e]
+    gpu = [
+        (int(e["ts"] * 1000), int((e["ts"] + e.get("dur", 0)) * 1000))  # us -> ns
+        for e in ev
+        if e.get("ph") == "X" and e.get("cat") in GPU_CATS and "ts" in e
+    ]
     if not gpu:
         print("RED: kineto trace has no GPU kernel/memcpy events (no CUDA-kernel data).")
         return "RED"
     graph_launches = sum(1 for e in ev if "cudaGraphLaunch" in (e.get("name") or ""))
     kern_launches = sum(1 for e in ev if "cudaLaunchKernel" in (e.get("name") or ""))
-    print(f"[graphs] cudaGraphLaunch={graph_launches} cudaLaunchKernel={kern_launches} "
-          f"-> {'graphs in play (kineto attributes graph kernels as events)' if graph_launches else 'no graphs'}")
-    comm = sum(e1 - s1 for s1, e1 in
-               [(int(e["ts"] * 1000), int((e["ts"] + e.get("dur", 0)) * 1000))
-                for e in ev if e.get("ph") == "X" and e.get("cat") in GPU_CATS
-                and any(x in (e.get("name") or "").lower()
-                        for x in ("allreduce", "nccl", "all_reduce", "reduce_scatter", "all_gather", "allgather"))])
+    print(
+        f"[graphs] cudaGraphLaunch={graph_launches} cudaLaunchKernel={kern_launches} "
+        f"-> {'graphs in play (kineto attributes graph kernels as events)' if graph_launches else 'no graphs'}"
+    )
+    comm = sum(
+        e1 - s1
+        for s1, e1 in [
+            (int(e["ts"] * 1000), int((e["ts"] + e.get("dur", 0)) * 1000))
+            for e in ev
+            if e.get("ph") == "X"
+            and e.get("cat") in GPU_CATS
+            and any(
+                x in (e.get("name") or "").lower()
+                for x in ("allreduce", "nccl", "all_reduce", "reduce_scatter", "all_gather", "allgather")
+            )
+        ]
+    )
     print("\n[!] KINETO OVERHEAD CAVEAT: the torch profiler slows decode (~6x on")
     print("    TP=8 NVFP4+graph deploys) and inflates kernel durations, so the")
     print("    ABSOLUTE GPU-busy% below is NOT trustworthy (reads high vs reality).")
@@ -203,17 +239,26 @@ def analyze_kineto(source, compressed, tpot_ms, tokens_per_step):
     print("    backend (--profiler-config.profiler=cuda + nsys). See the skill.")
     busy, merged = union_busy(gpu)
     span = merged[-1][1] - merged[0][0]
-    return report("kineto (GPU stream union; busy% overhead-distorted)", span, busy,
-                  merged, comm_ns=comm, tpot_ms=tpot_ms, tokens_per_step=tokens_per_step)
+    return report(
+        "kineto (GPU stream union; busy% overhead-distorted)",
+        span,
+        busy,
+        merged,
+        comm_ns=comm,
+        tpot_ms=tpot_ms,
+        tokens_per_step=tokens_per_step,
+    )
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("trace", help="nsys .sqlite or kineto .json[.gz]")
-    ap.add_argument("--tpot-ms", type=float, default=None,
-                    help="driver-measured TPOT (ms/tok) for the reconciliation gate")
-    ap.add_argument("--tokens-per-step", type=float, default=1,
-                    help="tokens emitted per decode step (MTP accept_len; ~2 for K=1)")
+    ap.add_argument(
+        "--tpot-ms", type=float, default=None, help="driver-measured TPOT (ms/tok) for the reconciliation gate"
+    )
+    ap.add_argument(
+        "--tokens-per-step", type=float, default=1, help="tokens emitted per decode step (MTP accept_len; ~2 for K=1)"
+    )
     a = ap.parse_args()
     p = a.trace
     try:
@@ -226,8 +271,9 @@ def main():
         elif p.endswith(".json") or p.endswith(".json.gz"):
             q = analyze_kineto(source, p.endswith(".gz"), a.tpot_ms, a.tokens_per_step)
         else:
-            sys.exit("unknown trace type (want .sqlite or .json[.gz]). For nsys: "
-                     "`nsys export --type sqlite <rep>` first.")
+            sys.exit(
+                "unknown trace type (want .sqlite or .json[.gz]). For nsys: `nsys export --type sqlite <rep>` first."
+            )
     finally:
         stdin_buffer = getattr(sys.stdin, "buffer", sys.stdin)
         if source is not stdin_buffer:

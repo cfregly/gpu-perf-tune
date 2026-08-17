@@ -19,6 +19,9 @@
 
 set -euo pipefail
 
+# Single-quoted awk code and backticked command examples below are literal.
+# shellcheck disable=SC2016
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
@@ -43,6 +46,8 @@ CACHE_FILE="${CACHE_DIR}/plugin-validate-${SHA}.ok"
 
 if [[ -f "${CACHE_FILE}" ]]; then
   TS="$(head -1 "${CACHE_FILE}" 2>/dev/null || echo 'unknown')"
+  # The backticks are literal command formatting in the status line.
+  # shellcheck disable=SC2016
   printf '[cached] claude plugin validate (manifest sha=%s; validated at %s; bypass with `make validate-uncached`)\n' \
     "${SHA}" "${TS}"
   exit 0
@@ -72,8 +77,11 @@ elif command -v claude >/dev/null 2>&1; then
     exit "${exit_code}"
   fi
 else
+  # The backticks are literal command formatting in these instructions.
+  # shellcheck disable=SC2016
   printf 'FATAL: `claude` CLI not on PATH and CLAUDE_PLUGIN_VALIDATE_CMD unset.\n' >&2
   printf '       Install Claude Code or export CLAUDE_PLUGIN_VALIDATE_CMD to a substitute (e.g.\n' >&2
+  # shellcheck disable=SC2016
   printf '       `python3 -m json.tool < %s/.claude-plugin/plugin.json`).\n' "${PLUGIN_DIR}" >&2
   exit 2
 fi

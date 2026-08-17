@@ -141,9 +141,12 @@ class ServerSmokeTest(unittest.TestCase):
                     "slurm_drain",
                     {
                         "args": [
-                            "--nodes", "test-node",
-                            "--ns", "test-namespace",
-                            "--bundle", bundle,
+                            "--nodes",
+                            "test-node",
+                            "--ns",
+                            "test-namespace",
+                            "--bundle",
+                            bundle,
                         ],
                         "i_understand_this_substitutes_nodes": True,
                     },
@@ -379,9 +382,12 @@ class ServerSmokeTest(unittest.TestCase):
             (
                 "perf_tune_report_cell_run",
                 [
-                    "--campaign", "/tmp/not-used",
-                    "--cell", "cell1",
-                    "--backend", "vllm-sweep",
+                    "--campaign",
+                    "/tmp/not-used",
+                    "--cell",
+                    "cell1",
+                    "--backend",
+                    "vllm-sweep",
                     "--dry-run",
                 ],
                 "--i-understand-this-submits-jobs",
@@ -389,8 +395,10 @@ class ServerSmokeTest(unittest.TestCase):
             (
                 "perf_tune_report_campaign_run",
                 [
-                    "--config", "/tmp/not-used.yaml",
-                    "--campaign", "/tmp/not-used",
+                    "--config",
+                    "/tmp/not-used.yaml",
+                    "--campaign",
+                    "/tmp/not-used",
                     "--dry-run",
                 ],
                 "--i-understand-this-mutates-cluster",
@@ -417,7 +425,9 @@ class ServerSmokeTest(unittest.TestCase):
         with contextlib.redirect_stdout(buffer):
             rc = mcp_surface.main(["--json", "list"])
         self.assertEqual(rc, 0)
-        self.assertEqual(set(tool_names()), {tool["name"] for tool in __import__("json").loads(buffer.getvalue())["tools"]})
+        self.assertEqual(
+            set(tool_names()), {tool["name"] for tool in __import__("json").loads(buffer.getvalue())["tools"]}
+        )
 
     def test_search_tools_return_standard_envelope(self) -> None:
         result = _search("search_runbooks", ["runbooks", "docs"], "performance", limit=3)
@@ -511,9 +521,7 @@ class ServerSmokeTest(unittest.TestCase):
             limit=5,
         )
         self.assertEqual(result["returncode"], 0)
-        self.assertTrue(
-            any("docs/performance-hints.md" in match for match in result["json"]["matches"])
-        )
+        self.assertTrue(any("docs/performance-hints.md" in match for match in result["json"]["matches"]))
 
     def test_runtime_traps_systemexit_from_argparse_help(self) -> None:
         """Regression test: argparse `--help` raises SystemExit which would
@@ -603,9 +611,7 @@ class ServerSmokeTest(unittest.TestCase):
                     break
             self.assertIsNotNone(verb_parser, msg=f"{spec.name}: top-level subparser missing")
             for leaf in collect_leaves(verb_parser):
-                option_strings = {
-                    opt for action in leaf._actions for opt in action.option_strings
-                }
+                option_strings = {opt for action in leaf._actions for opt in action.option_strings}
                 with self.subTest(name=spec.name, leaf=leaf.prog):
                     self.assertIn(
                         "--json",
@@ -635,11 +641,7 @@ class ServerSmokeTest(unittest.TestCase):
         def collect_leaves(parser: argparse.ArgumentParser) -> list[argparse.ArgumentParser]:
             for action in parser._actions:
                 if isinstance(action, argparse._SubParsersAction):
-                    return [
-                        leaf
-                        for child in action.choices.values()
-                        for leaf in collect_leaves(child)
-                    ]
+                    return [leaf for child in action.choices.values() for leaf in collect_leaves(child)]
             return [parser]
 
         for spec in mcp_surface.derive_tool_specs():
@@ -657,11 +659,7 @@ class ServerSmokeTest(unittest.TestCase):
             )
             self.assertIsNotNone(verb_parser, spec.name)
             for leaf in collect_leaves(verb_parser):
-                options = {
-                    option
-                    for action in leaf._actions
-                    for option in action.option_strings
-                }
+                options = {option for action in leaf._actions for option in action.option_strings}
                 with self.subTest(name=spec.name, leaf=leaf.prog):
                     self.assertFalse(
                         options & write_options,

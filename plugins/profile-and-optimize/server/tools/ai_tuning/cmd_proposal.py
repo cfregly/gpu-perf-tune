@@ -14,8 +14,6 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-from tools.shared.jsonutil import load_json
-
 # Safety constants live in a small sibling module so reviewers can audit
 # the forbidden-pattern table and ledger-status enum without paging
 # through the full tuner CLI. Re-exports preserve backwards compat for
@@ -44,6 +42,7 @@ from tools.ai_tuning.helpers import (
 from tools.ai_tuning.safety import (
     PROPOSAL_SCHEMA_VERSION,
 )
+from tools.shared.jsonutil import load_json
 
 
 def command_proposal_diff(args: argparse.Namespace) -> int:
@@ -62,6 +61,7 @@ def command_proposal_diff(args: argparse.Namespace) -> int:
         args.output.write_text(rendered, encoding="utf-8")
     return 0
 
+
 def command_proposal_validate(args: argparse.Namespace) -> int:
     space = load_json(Path(args.space))
     proposal = load_json(Path(args.proposal))
@@ -75,11 +75,7 @@ def command_proposal_validate(args: argparse.Namespace) -> int:
 
     schema_version = proposal.get("schema_version", 1)
     candidates = proposal.get("candidates", [])
-    if (
-        schema_version != PROPOSAL_SCHEMA_VERSION
-        or not isinstance(candidates, list)
-        or not candidates
-    ):
+    if schema_version != PROPOSAL_SCHEMA_VERSION or not isinstance(candidates, list) or not candidates:
         report = {
             "schema_version": PROPOSAL_SCHEMA_VERSION,
             "valid_count": 0,
@@ -89,9 +85,7 @@ def command_proposal_validate(args: argparse.Namespace) -> int:
                     "index": 0,
                     "valid": False,
                     "error_codes": ["invalid_proposal_schema"],
-                    "errors": [
-                        "proposal must use schema_version 1 and candidates must be a non-empty list"
-                    ],
+                    "errors": ["proposal must use schema_version 1 and candidates must be a non-empty list"],
                     "warning_codes": [],
                     "warnings": [],
                 }
@@ -226,9 +220,7 @@ def command_proposal_validate(args: argparse.Namespace) -> int:
                 result["valid"] = False
                 result["error_codes"].append("missing_config_patch")
                 result["errors"].append(f"{name}: config mutation requires a config_patches entry")
-            elif required["method"] == "template_patch" and not (
-                patch.get("patch_file") or patch.get("changes")
-            ):
+            elif required["method"] == "template_patch" and not (patch.get("patch_file") or patch.get("changes")):
                 result["valid"] = False
                 result["error_codes"].append("invalid_config_patch_contract")
                 result["errors"].append(f"{name}: template_patch contract requires patch_file or inline changes")

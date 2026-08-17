@@ -84,10 +84,12 @@ def build_command(
         # Honor the cell's K so the SERVED config matches the RECORDED num_speculative_tokens
         # (was hardcoded to 1, which silently served K=1 even when the cell asked for K=2/3).
         _spx_spec = (cell.extras.get("serve_params_extra", {}) or {}).get("speculative_config") or {}
-        _k = (_spx_spec.get("num_speculative_tokens")
-              or cell.extras.get("num_speculative_tokens")
-              or cell.extras.get("spec_decode_k")
-              or 1)
+        _k = (
+            _spx_spec.get("num_speculative_tokens")
+            or cell.extras.get("num_speculative_tokens")
+            or cell.extras.get("spec_decode_k")
+            or 1
+        )
         serve_params[0]["speculative_config"] = {"method": "mtp", "num_speculative_tokens": int(_k)}
     output_dir.mkdir(parents=True, exist_ok=True)
     serve_params_file.write_text(json.dumps(serve_params, indent=2) + "\n")
@@ -180,11 +182,7 @@ def normalize_outputs(cell: CellConfig, raw_dir: Path, cell_dir: Path) -> tuple[
             # Be lenient about the upstream schema -- different vLLM versions
             # emit slightly different field sets. We only need 5 fields.
             try:
-                concurrency = int(
-                    data.get("max_concurrency")
-                    or data.get("max_concurrent_requests")
-                    or 0
-                )
+                concurrency = int(data.get("max_concurrency") or data.get("max_concurrent_requests") or 0)
             except (TypeError, ValueError):
                 concurrency = 0
             if concurrency <= 0:
@@ -230,9 +228,7 @@ def normalize_outputs(cell: CellConfig, raw_dir: Path, cell_dir: Path) -> tuple[
     else:
         status = STATUS_FULL
     # Stamp the resolved status onto each row.
-    rows = [
-        AtlasCell(**{**r.to_dict(), "status": status}) for r in rows
-    ]
+    rows = [AtlasCell(**{**r.to_dict(), "status": status}) for r in rows]
     return rows, status
 
 
@@ -250,14 +246,10 @@ def run_cell(
     cell_dir.mkdir(parents=True, exist_ok=True)
     write_backend_file(cell_dir, BACKEND_VLLM_SWEEP)
 
-    cmd = build_command(
-        cell, bench_cmd=bench_cmd, serve_cmd=serve_cmd, output_dir=cell_dir
-    )
+    cmd = build_command(cell, bench_cmd=bench_cmd, serve_cmd=serve_cmd, output_dir=cell_dir)
 
     (cell_dir / "commands").mkdir(exist_ok=True)
-    (cell_dir / "commands" / "vllm-sweep.cmd").write_text(
-        shlex.join(cmd) + "\n"
-    )
+    (cell_dir / "commands" / "vllm-sweep.cmd").write_text(shlex.join(cmd) + "\n")
 
     if dry_run:
         write_status_file(cell_dir, STATUS_FAILED)  # not yet run

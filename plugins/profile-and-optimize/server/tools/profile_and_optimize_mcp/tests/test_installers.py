@@ -9,13 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[6]
 SERVER_ROOT = REPO_ROOT / "plugins" / "profile-and-optimize" / "server"
 SERVER_INSTALLER = SERVER_ROOT / "install.sh"
-MCP_INSTALLER = (
-    SERVER_ROOT
-    / "tools"
-    / "profile_and_optimize_mcp"
-    / "scripts"
-    / "install_profile_and_optimize_mcp.sh"
-)
+MCP_INSTALLER = SERVER_ROOT / "tools" / "profile_and_optimize_mcp" / "scripts" / "install_profile_and_optimize_mcp.sh"
 AGENT_SKILL_INSTALLER = REPO_ROOT / "scripts" / "install-agent-skills.sh"
 CURSOR_SKILL_INSTALLER = REPO_ROOT / "scripts" / "install-skills-into-cursor.sh"
 SOURCE_SKILLS = REPO_ROOT / "plugins" / "profile-and-optimize" / "skills"
@@ -241,11 +235,33 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(venv.exists())
             self.assertIn("invalid client", result.stderr)
 
+    def test_mcp_installer_requires_an_explicit_client(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            venv = root / "venv"
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(MCP_INSTALLER),
+                    "--venv",
+                    str(venv),
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                env={**os.environ, "HOME": str(root / "home")},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse(venv.exists())
+            self.assertIn("missing required --client", result.stderr)
+
     def test_agent_skill_installer_is_idempotent_for_codex_and_cursor(self) -> None:
         expected_names = {
-            path.name
-            for path in SOURCE_SKILLS.iterdir()
-            if path.is_dir() and (path / "SKILL.md").is_file()
+            path.name for path in SOURCE_SKILLS.iterdir() if path.is_dir() and (path / "SKILL.md").is_file()
         }
         for client in ("codex", "cursor"):
             with self.subTest(client=client), tempfile.TemporaryDirectory() as temporary_directory:
@@ -287,9 +303,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_agent_skill_installer_preserves_conflicts_for_codex_and_cursor(self) -> None:
         skill_name = min(
-            path.name
-            for path in SOURCE_SKILLS.iterdir()
-            if path.is_dir() and (path / "SKILL.md").is_file()
+            path.name for path in SOURCE_SKILLS.iterdir() if path.is_dir() and (path / "SKILL.md").is_file()
         )
         for client in ("codex", "cursor"):
             with self.subTest(client=client), tempfile.TemporaryDirectory() as temporary_directory:

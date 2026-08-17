@@ -67,11 +67,10 @@ from __future__ import annotations
 import difflib
 import json
 import re
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Log-parsing regexes
@@ -240,7 +239,8 @@ def _diff_one_graph(
     b_lines = side_b_text.splitlines()
     diff_text = "\n".join(
         difflib.unified_diff(
-            a_lines, b_lines,
+            a_lines,
+            b_lines,
             fromfile=str(a_path.name),
             tofile=str(b_path.name),
             lineterm="",
@@ -307,7 +307,7 @@ def diff_graph_logs(
         raise ValueError(f"graph_diff: side-B log does not exist: {side_b_log}")
 
     if captured_at is None:
-        captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     a_summary, a_graphs = _summarize_side(side_a_label, side_a_log)
     b_summary, b_graphs = _summarize_side(side_b_label, side_b_log)
@@ -382,9 +382,7 @@ def diff_graph_logs(
         pass_summary = "; ".join(pass_summary_parts)
     else:
         pass_summary = "no compile-pass changes"
-    delta_label = (
-        f"{delta_pct:+.1f}%" if delta_pct is not None else "n/a"
-    )
+    delta_label = f"{delta_pct:+.1f}%" if delta_pct is not None else "n/a"
     summary = (
         f"{n_pairs} graph(s) diffed; {pass_summary}; "
         f"node-count delta: {delta_label} "
@@ -412,8 +410,6 @@ def diff_graph_logs(
     )
 
     if not dry_run:
-        graph_diff_json_path.write_text(
-            json.dumps(result.to_dict(), indent=2, sort_keys=True)
-        )
+        graph_diff_json_path.write_text(json.dumps(result.to_dict(), indent=2, sort_keys=True))
 
     return result

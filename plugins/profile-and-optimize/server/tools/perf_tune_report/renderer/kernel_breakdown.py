@@ -29,8 +29,7 @@ aborts before drawing anything.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any, Sequence
-
+from typing import Any
 
 # Display order for the stacked bar's categories. Mirrors the bucketing
 # in the capture query and in
@@ -51,7 +50,7 @@ def _truncate(s: str, n: int) -> str:
     return s if len(s) <= n else s[: n - 1] + "\u2026"
 
 
-def render_page(fig, cell_kernels: "OrderedDict[str, dict[str, Any]]") -> None:
+def render_page(fig, cell_kernels: OrderedDict[str, dict[str, Any]]) -> None:
     """Draw the kernel-breakdown page onto a matplotlib Figure.
 
     Args:
@@ -63,7 +62,6 @@ def render_page(fig, cell_kernels: "OrderedDict[str, dict[str, Any]]") -> None:
     if not cell_kernels:
         raise ValueError("kernel_breakdown.render_page: cell_kernels is empty")
 
-    import matplotlib.pyplot as plt
     from matplotlib import gridspec
 
     # 3 vertical zones: header (small), upper plot, lower table block.
@@ -91,8 +89,7 @@ def render_page(fig, cell_kernels: "OrderedDict[str, dict[str, Any]]") -> None:
     ax_header.text(
         0.5,
         0.15,
-        f"{len(cell_kernels)} variant(s) with kernels.json; "
-        "samples from zymtrace_profiling.events JOIN interp_funcs",
+        f"{len(cell_kernels)} variant(s) with kernels.json; samples from zymtrace_profiling.events JOIN interp_funcs",
         ha="center",
         va="center",
         fontsize=8,
@@ -102,9 +99,7 @@ def render_page(fig, cell_kernels: "OrderedDict[str, dict[str, Any]]") -> None:
     # Zone 2: per-category stacked bar across variants.
     ax_cat = fig.add_subplot(gs[1, :])
     variant_ids = list(cell_kernels.keys())
-    cat_totals_per_variant: dict[str, list[float]] = {
-        cat: [] for cat in CATEGORY_DISPLAY_ORDER
-    }
+    cat_totals_per_variant: dict[str, list[float]] = {cat: [] for cat in CATEGORY_DISPLAY_ORDER}
     for vid in variant_ids:
         cats = cell_kernels[vid].get("per_category", {})
         for cat in CATEGORY_DISPLAY_ORDER:
@@ -123,7 +118,7 @@ def render_page(fig, cell_kernels: "OrderedDict[str, dict[str, Any]]") -> None:
             edgecolor="white",
             linewidth=0.4,
         )
-        bottom = [b + v for b, v in zip(bottom, vals)]
+        bottom = [b + v for b, v in zip(bottom, vals, strict=True)]
     ax_cat.set_title("Per-Category CUDA Sample Share by Variant", fontsize=10)
     ax_cat.set_ylabel("samples", fontsize=8)
     ax_cat.tick_params(axis="x", rotation=20, labelsize=7)
@@ -143,9 +138,7 @@ def render_page(fig, cell_kernels: "OrderedDict[str, dict[str, Any]]") -> None:
 
     ax_table = fig.add_subplot(gs[2, :])
     ax_table.axis("off")
-    ax_table.set_title(
-        f"Top-20 Kernels (variant: {first_vid})", fontsize=10, loc="left"
-    )
+    ax_table.set_title(f"Top-20 Kernels (variant: {first_vid})", fontsize=10, loc="left")
     if top_kernels:
         cell_text = [
             [
@@ -194,10 +187,7 @@ def render_page(fig, cell_kernels: "OrderedDict[str, dict[str, Any]]") -> None:
     top_py = first.get("top_python_during_cuda", [])[:10]
     if top_py:
         tbl_py = ax_py.table(
-            cellText=[
-                [_truncate(p["frame"], 70), f"{int(p['samples']):,}"]
-                for p in top_py
-            ],
+            cellText=[[_truncate(p["frame"], 70), f"{int(p['samples']):,}"] for p in top_py],
             colLabels=["python frame", "samples"],
             colWidths=[0.82, 0.18],
             cellLoc="left",

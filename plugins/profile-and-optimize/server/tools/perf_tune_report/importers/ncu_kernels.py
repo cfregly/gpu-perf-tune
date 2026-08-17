@@ -87,9 +87,16 @@ _PROFILES_SUBDIR = "ncu-profiles"
 # name), so a unit-unaware sum is off by 1e3/1e6/1e9. This maps the unit to a
 # byte multiplier (ncu uses decimal SI prefixes; binary Ki/Mi/Gi handled too).
 _BYTE_UNIT_SCALE: dict[str, float] = {
-    "byte": 1.0, "bytes": 1.0,
-    "kbyte": 1e3, "mbyte": 1e6, "gbyte": 1e9, "tbyte": 1e12,
-    "kib": 1024.0, "mib": 1024.0**2, "gib": 1024.0**3, "tib": 1024.0**4,
+    "byte": 1.0,
+    "bytes": 1.0,
+    "kbyte": 1e3,
+    "mbyte": 1e6,
+    "gbyte": 1e9,
+    "tbyte": 1e12,
+    "kib": 1024.0,
+    "mib": 1024.0**2,
+    "gib": 1024.0**3,
+    "tib": 1024.0**4,
 }
 
 # Tensor-core "ops" -> FLOPs. ncu's sm__ops_path_tensor_*.sum counts each math
@@ -115,10 +122,17 @@ def _byte_scale(unit: str | None) -> float:
 # a correct FLOPS-rate denominator. The SoL-section Duration is normalised
 # separately by _duration_ns; this covers the no-SoL path.
 _TIME_UNIT_SCALE: dict[str, float] = {
-    "ns": 1.0, "nsecond": 1.0, "nanosecond": 1.0,
-    "us": 1e3, "usecond": 1e3, "microsecond": 1e3,
-    "ms": 1e6, "msecond": 1e6, "millisecond": 1e6,
-    "s": 1e9, "second": 1e9,
+    "ns": 1.0,
+    "nsecond": 1.0,
+    "nanosecond": 1.0,
+    "us": 1e3,
+    "usecond": 1e3,
+    "microsecond": 1e3,
+    "ms": 1e6,
+    "msecond": 1e6,
+    "millisecond": 1e6,
+    "s": 1e9,
+    "second": 1e9,
 }
 
 
@@ -169,9 +183,7 @@ class NcuImportResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "bundle": str(self.bundle),
-            "ncu_kernels_json_path": (
-                str(self.ncu_kernels_json_path) if self.ncu_kernels_json_path else None
-            ),
+            "ncu_kernels_json_path": (str(self.ncu_kernels_json_path) if self.ncu_kernels_json_path else None),
             "skipped_reason": self.skipped_reason,
             "kernel_count": self.kernel_count,
         }
@@ -207,7 +219,7 @@ def _pivot_long_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     lookups match. Rows with an empty Metric Name (ncu's per-section rule
     rows, e.g. ``SOLBottleneck``) are skipped.
     """
-    wide: "OrderedDict[tuple[str, str], dict[str, str]]" = OrderedDict()
+    wide: OrderedDict[tuple[str, str], dict[str, str]] = OrderedDict()
     for r in rows:
         name = (r.get("Kernel Name") or "").strip()
         metric = (r.get("Metric Name") or "").strip()
@@ -266,9 +278,7 @@ def _read_ncu_csv(path: Path) -> tuple[list[dict[str, str]], dict[str, str]]:
             header_idx = i
             break
     if header_idx is None:
-        raise NcuCsvMalformed(
-            path, reason="no header row with 'Kernel Name' column"
-        )
+        raise NcuCsvMalformed(path, reason="no header row with 'Kernel Name' column")
 
     reader = csv.DictReader(lines[header_idx:])
     fieldnames = reader.fieldnames or []
@@ -279,10 +289,9 @@ def _read_ncu_csv(path: Path) -> tuple[list[dict[str, str]], dict[str, str]]:
     if "Metric Name" in fieldnames and "Metric Value" in fieldnames:
         pivoted = _pivot_long_rows(rows)
         if not pivoted:
-            raise NcuCsvMalformed(
-                path, reason="long-format CSV has no (kernel, metric) rows"
-            )
+            raise NcuCsvMalformed(path, reason="long-format CSV has no (kernel, metric) rows")
         return pivoted, {}
+
     # ncu 2026.1.1 emits a units-row between the header and the first data
     # row (e.g. dram bytes column shows "Mbyte" instead of a numeric value,
     # Kernel Name column is empty). Capture that units row (keyed by column)
@@ -401,32 +410,22 @@ def _aggregate_per_kernel(
     for r in sol_rows:
         name = r.get("Kernel Name") or r.get("kernel_name") or r.get("ID")
         if not name:
-            raise NcuCsvMalformed(
-                Path("<sol-csv>"), reason=f"row missing 'Kernel Name': {list(r.keys())[:5]}"
-            )
+            raise NcuCsvMalformed(Path("<sol-csv>"), reason=f"row missing 'Kernel Name': {list(r.keys())[:5]}")
         sol_by_kernel.setdefault(name, []).append(r)
 
     raw_by_kernel: dict[str, list[dict[str, str]]] = {}
     for r in raw_rows:
         name = r.get("Kernel Name") or r.get("kernel_name") or r.get("ID")
         if not name:
-            raise NcuCsvMalformed(
-                Path("<raw-csv>"), reason=f"row missing 'Kernel Name': {list(r.keys())[:5]}"
-            )
+            raise NcuCsvMalformed(Path("<raw-csv>"), reason=f"row missing 'Kernel Name': {list(r.keys())[:5]}")
         raw_by_kernel.setdefault(name, []).append(r)
 
     out: list[dict[str, Any]] = []
     for name, sol_group in sol_by_kernel.items():
         # Mean across launches for percentages.
-        dram_pct = _mean_optional([
-            _parse_float(_find_column(r, "DRAM Throughput", "%")) for r in sol_group
-        ])
-        sm_pct = _mean_optional([
-            _parse_float(_find_column(r, "Compute (SM) Throughput", "%")) for r in sol_group
-        ])
-        occupancy = _mean_optional([
-            _parse_float(_find_column(r, "Achieved Occupancy")) for r in sol_group
-        ])
+        dram_pct = _mean_optional([_parse_float(_find_column(r, "DRAM Throughput", "%")) for r in sol_group])
+        sm_pct = _mean_optional([_parse_float(_find_column(r, "Compute (SM) Throughput", "%")) for r in sol_group])
+        occupancy = _mean_optional([_parse_float(_find_column(r, "Achieved Occupancy")) for r in sol_group])
         # SoL Duration (normalised to ns); preferred over the raw-page time
         # below because it carries an explicit unit. None when the SoL
         # section / Duration metric is absent.
@@ -444,12 +443,10 @@ def _aggregate_per_kernel(
         # "Achieved Occupancy"; the raw page carries the equivalent
         # sm__warps_active.avg.pct_of_peak_sustained_active.
         if occupancy is None:
-            occupancy = _mean_optional([
-                _parse_float(
-                    _find_column(r, "sm__warps_active.avg.pct_of_peak_sustained_active")
-                )
-                for r in raw_group
-            ])
+            occupancy = _mean_optional(
+                [_parse_float(_find_column(r, "sm__warps_active.avg.pct_of_peak_sustained_active")) for r in raw_group]
+            )
+
         # DRAM bytes, unit-scaled to bytes (the units row gave e.g. "Mbyte").
         # ncu expands a requested counter into .avg/.max/.min/.sum columns; the
         # per-kernel TOTAL is the .sum column. Match that specifically -- a naive
@@ -509,9 +506,7 @@ def _aggregate_per_kernel(
             if had_tensor:
                 tensor_per_launch.append(tensor)
         sm_flops_total = sum(scalar_per_launch) if scalar_per_launch else None
-        tensor_flops_total = (
-            sum(tensor_per_launch) * _TENSOR_OP_TO_FLOP if tensor_per_launch else None
-        )
+        tensor_flops_total = sum(tensor_per_launch) * _TENSOR_OP_TO_FLOP if tensor_per_launch else None
 
         # Wall-clock time. Two distinct quantities:
         #  - time_ns_sum: active time SUMMED across launches -- the correct
@@ -538,9 +533,7 @@ def _aggregate_per_kernel(
         # version-dependent unit (often usecond) that the raw page does NOT
         # unit-convert, so using it directly would inflate the rate ~1000x.
         n_launch = len(raw_group) or len(sol_group) or 1
-        rate_time_ns = (
-            sol_time_ns * n_launch if sol_time_ns is not None else time_ns_sum
-        )
+        rate_time_ns = sol_time_ns * n_launch if sol_time_ns is not None else time_ns_sum
 
         # Total FLOPs = scalar (CUDA-core) + tensor (MMA). Either may be None;
         # combine the present ones. For a tensor-core kernel this is dominated
@@ -562,21 +555,23 @@ def _aggregate_per_kernel(
         # kept under "name_full" for traceability.
         short_name = re.split(r"[<(]", name, maxsplit=1)[0]
 
-        out.append({
-            "name": short_name,
-            "name_full": name,
-            "category": _categorize(name),
-            "kernel_time_ns": time_ns,
-            "dram_bytes_total": dram_bytes,
-            "sm_flops_total": sm_flops_total,
-            "tensor_flops_total": tensor_flops_total,
-            "arithmetic_intensity_flops_per_byte": ai,
-            "achieved_dram_pct_peak": dram_pct,
-            "achieved_sm_pct_peak": sm_pct,
-            "achieved_occupancy_pct": occupancy,
-            "block_limit_factor": block_limit,
-            "achieved_tflops": achieved_tflops,
-        })
+        out.append(
+            {
+                "name": short_name,
+                "name_full": name,
+                "category": _categorize(name),
+                "kernel_time_ns": time_ns,
+                "dram_bytes_total": dram_bytes,
+                "sm_flops_total": sm_flops_total,
+                "tensor_flops_total": tensor_flops_total,
+                "arithmetic_intensity_flops_per_byte": ai,
+                "achieved_dram_pct_peak": dram_pct,
+                "achieved_sm_pct_peak": sm_pct,
+                "achieved_occupancy_pct": occupancy,
+                "block_limit_factor": block_limit,
+                "achieved_tflops": achieved_tflops,
+            }
+        )
 
     return out
 

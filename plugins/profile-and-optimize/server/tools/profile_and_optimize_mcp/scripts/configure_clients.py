@@ -95,7 +95,7 @@ def update_json_mcp(
 
     servers = data.setdefault("mcpServers", {})
     if not isinstance(servers, dict):
-        raise ValueError(f"{path}: mcpServers must be a JSON object")  # noqa: TRY004
+        raise ValueError(f"{path}: mcpServers must be a JSON object")
     servers[SERVER_NAME] = server_block(args, client=client)
 
     full_text = json.dumps(data, indent=2, sort_keys=False) + "\n"
@@ -245,8 +245,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--client",
         action="append",
         choices=(*CLIENTS, "all"),
-        default=[],
-        help="Client to configure. May be passed multiple times. Default: cursor.",
+        required=True,
+        help="Client to configure. May be passed multiple times.",
     )
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument(
@@ -295,11 +295,7 @@ def _file_config_path(client: str, args: argparse.Namespace) -> Path:
 
 
 def configure_client(client: str, args: argparse.Namespace) -> None:
-    if (
-        args.registration == "auto"
-        and client in CLI_CLIENTS
-        and try_official_cli(client, args)
-    ):
+    if args.registration == "auto" and client in CLI_CLIENTS and try_official_cli(client, args):
         return
 
     config_path = _file_config_path(client, args)
@@ -311,7 +307,7 @@ def configure_client(client: str, args: argparse.Namespace) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    clients = args.client or ["cursor"]
+    clients = args.client
     if "all" in clients:
         clients = list(CLIENTS)
     else:

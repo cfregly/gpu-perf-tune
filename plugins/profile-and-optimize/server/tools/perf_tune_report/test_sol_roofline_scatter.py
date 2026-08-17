@@ -41,7 +41,6 @@ from tools.perf_tune_report.renderer.sol_roofline_scatter import (
 )
 from tools.perf_tune_report.schema import BACKEND_VLLM_SWEEP, STATUS_FULL, AtlasCell
 
-
 # ---------------------------------------------------------------------------
 # Fixtures (re-derived from test_sol_roofline.py to avoid coupling)
 # ---------------------------------------------------------------------------
@@ -201,6 +200,7 @@ def test_peak_bandwidth_falls_back_to_hbm3():
 
 def test_render_page_raises_when_empty(tmp_path):
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -214,6 +214,7 @@ def test_render_page_raises_when_empty(tmp_path):
 
 def test_render_page_raises_when_hw_key_missing(tmp_path):
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -394,16 +395,18 @@ def test_renderer_full_stack_5_pages_with_zymtrace_and_ncu(tmp_path, monkeypatch
     # Both zymtrace kernels.json AND ncu_kernels.json under same cell dir.
     cell_dir = campaign / "cells" / "cell-1"
     cell_dir.mkdir(parents=True)
-    (cell_dir / "kernels.json").write_text(json.dumps({
-        "schema_version": 1,
-        "captured_sources": ["zymtrace"],
-        "top_kernels": [
-            {"name": "multimem_all_reduce_kernel", "samples": 1000, "category": "NCCL"}
-        ],
-        "per_gpu": [{"gpu_name": "B200", "gpu_uuid": "u1", "samples": 1000}],
-        "per_category": {"NCCL": 500, "BMM-NVFP4": 500},
-        "top_python_during_cuda": [{"frame": "f", "samples": 1}],
-    }))
+    (cell_dir / "kernels.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "captured_sources": ["zymtrace"],
+                "top_kernels": [{"name": "multimem_all_reduce_kernel", "samples": 1000, "category": "NCCL"}],
+                "per_gpu": [{"gpu_name": "B200", "gpu_uuid": "u1", "samples": 1000}],
+                "per_category": {"NCCL": 500, "BMM-NVFP4": 500},
+                "top_python_during_cuda": [{"frame": "f", "samples": 1}],
+            }
+        )
+    )
     (cell_dir / "ncu_kernels.json").write_text(json.dumps(_NCU_PAYLOAD))
     atlas = _mk_atlas(campaign, "cell-1", hardware="B200")
 
@@ -477,6 +480,7 @@ _DCGM_PAYLOAD_WITH_ATTRIBUTION = {
 def test_render_page_dcgm_fallback_plots_when_ncu_all_null():
     """When all ncu kernels have null AI/tflops, DCGM fallback fires."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -503,6 +507,7 @@ def test_render_page_dcgm_fallback_plots_when_ncu_all_null():
 def test_render_page_empty_state_message_when_no_data():
     """When neither ncu kernels nor DCGM fallback have data, render an empty state."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -530,6 +535,7 @@ def test_render_page_empty_state_message_when_no_data():
 def test_render_page_dcgm_fallback_skipped_when_attribution_empty():
     """A DCGM payload without per_category_attribution renders an empty state."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -585,6 +591,7 @@ def test_render_page_sol_only_kernel_plotted_at_category_ceiling():
     empty-state message, AI never fabricated.
     """
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -603,12 +610,7 @@ def test_render_page_sol_only_kernel_plotted_at_category_ceiling():
         axes_with_scatter = [a for a in fig.axes if a.collections]
         assert axes_with_scatter, "expected the SoL-only point to be plotted"
         # Exactly one point, at y ~= 0.746 * 2250 = 1678.5 TFLOPS.
-        ys = [
-            float(c.get_offsets()[0][1])
-            for a in axes_with_scatter
-            for c in a.collections
-            if len(c.get_offsets())
-        ]
+        ys = [float(c.get_offsets()[0][1]) for a in axes_with_scatter for c in a.collections if len(c.get_offsets())]
         assert any(abs(y - 1678.5) < 1.0 for y in ys), f"expected ~1678.5 TFLOPS, got {ys}"
         all_text = " ".join(t.get_text() for ax in fig.axes for t in ax.texts)
         # Honest dynamic title + loud banner with how-to-fix.
@@ -624,14 +626,13 @@ def test_render_page_sol_only_kernel_plotted_at_category_ceiling():
 def test_render_page_status_full_for_real_ncu():
     """Real ncu AI points -> partial=False + the 'byte+FLOP measured' title."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig = plt.figure(figsize=(8, 11))
     try:
-        status = sol_roofline_scatter.render_page(
-            fig, OrderedDict([("c1", _NCU_PAYLOAD)]), _MIN_CEILINGS, "b200_sm100"
-        )
+        status = sol_roofline_scatter.render_page(fig, OrderedDict([("c1", _NCU_PAYLOAD)]), _MIN_CEILINGS, "b200_sm100")
         assert status.partial is False
         assert status.reason == ""
         all_text = " ".join(t.get_text() for ax in fig.axes for t in ax.texts)
@@ -644,14 +645,18 @@ def test_render_page_status_full_for_real_ncu():
 def test_render_page_status_empty_is_partial():
     """All-null ncu + no DCGM -> partial=True, reason ncu_scatter_empty."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig = plt.figure(figsize=(8, 11))
     try:
         status = sol_roofline_scatter.render_page(
-            fig, OrderedDict([("c1", _NCU_PAYLOAD_ALL_NULL)]), _MIN_CEILINGS,
-            "b200_sm100", cell_dcgm=None,
+            fig,
+            OrderedDict([("c1", _NCU_PAYLOAD_ALL_NULL)]),
+            _MIN_CEILINGS,
+            "b200_sm100",
+            cell_dcgm=None,
         )
         assert status.partial is True
         assert status.reason == "ncu_scatter_empty"
@@ -662,6 +667,7 @@ def test_render_page_status_empty_is_partial():
 def test_render_page_status_dcgm_fallback_not_partial():
     """A measured DCGM workload-level fallback is NOT partial."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -681,13 +687,9 @@ def test_render_page_status_dcgm_fallback_not_partial():
 
 def test_sol_only_helper_returns_none_for_bandwidth_category():
     """Bandwidth-bound categories have no compute ceiling for the SoL-only y."""
-    assert sol_roofline_scatter._category_compute_ceiling_tflops(
-        "FMHA", _MIN_CEILINGS, "b200_sm100"
-    ) is None
+    assert sol_roofline_scatter._category_compute_ceiling_tflops("FMHA", _MIN_CEILINGS, "b200_sm100") is None
     # Compute-bound Triton-fused -> bf16 2.25 PFLOPS -> 2250 TFLOPS.
-    assert sol_roofline_scatter._category_compute_ceiling_tflops(
-        "Triton-fused", _MIN_CEILINGS, "b200_sm100"
-    ) == 2250.0
+    assert sol_roofline_scatter._category_compute_ceiling_tflops("Triton-fused", _MIN_CEILINGS, "b200_sm100") == 2250.0
 
 
 def test_report_status_records_partial_page5_solonly(tmp_path, monkeypatch):
@@ -716,6 +718,7 @@ def test_report_status_records_partial_page5_solonly(tmp_path, monkeypatch):
 def test_render_page_real_ncu_kernels_skip_dcgm_fallback():
     """When ncu kernels have real AI/tflops, do not use the DCGM fallback."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 

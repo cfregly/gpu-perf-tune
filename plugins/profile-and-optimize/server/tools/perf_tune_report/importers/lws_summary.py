@@ -53,7 +53,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -62,7 +62,6 @@ from tools.perf_tune_report.schema import (
     STATUS_FULL,
     AtlasCell,
 )
-
 
 _KNOB_MBT_RE = re.compile(r"mbt=(\d+)")
 
@@ -168,27 +167,19 @@ def import_lws_summary_bundle(
     overrides = overrides or {}
 
     if not bundle.is_dir():
-        raise ValueError(
-            f"import_lws_summary: bundle directory does not exist: {bundle}"
-        )
+        raise ValueError(f"import_lws_summary: bundle directory does not exist: {bundle}")
     summary_path = bundle / "summary.json"
     if not summary_path.is_file():
-        raise ValueError(
-            f"import_lws_summary: summary.json not found at {summary_path}"
-        )
+        raise ValueError(f"import_lws_summary: summary.json not found at {summary_path}")
 
     try:
         summary = json.loads(summary_path.read_text())
     except json.JSONDecodeError as e:
-        raise ValueError(
-            f"import_lws_summary: summary.json malformed at {summary_path}: {e}"
-        ) from e
+        raise ValueError(f"import_lws_summary: summary.json malformed at {summary_path}: {e}") from e
 
     variants = summary.get("variants")
     if not isinstance(variants, list) or not variants:
-        raise ValueError(
-            f"import_lws_summary: summary.json at {summary_path} has no variants[]"
-        )
+        raise ValueError(f"import_lws_summary: summary.json at {summary_path} has no variants[]")
 
     # Resolve overrides + defaults.
     model = overrides.get("model", "zai-org/GLM-5.1")
@@ -233,6 +224,8 @@ def import_lws_summary_bundle(
             if not isinstance(m, dict):
                 continue
             c_raw = m.get("concurrency", m.get("c"))
+            if c_raw is None:
+                continue
             try:
                 c = int(c_raw)
             except (TypeError, ValueError):

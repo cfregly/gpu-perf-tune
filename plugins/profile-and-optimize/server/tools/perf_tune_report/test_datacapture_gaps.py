@@ -9,25 +9,45 @@ surface as first-class atlas_v1 columns.
 from __future__ import annotations
 
 from tools.perf_tune_report.lake_writer import build_atlas_table
-from tools.perf_tune_report.schema import AtlasCell, STATUS_FULL, read_jsonl, write_jsonl
+from tools.perf_tune_report.schema import STATUS_FULL, AtlasCell, read_jsonl, write_jsonl
 
 
 def _cell_with_gaps() -> AtlasCell:
     return AtlasCell(
-        cell_id="kvr-reuse10", model="GLM-5.1", hardware="GB300", quant="NVFP4",
-        tensor_parallel=4, parallel_strategy="EP", mtp=False,
-        max_num_batched_tokens=8192, concurrency=64, status=STATUS_FULL,
-        router_policy="prefix-affinity", prefix_reuse=10.0, per_replica_cache_hit=0.83,
-        acceptance_length=1.955, kv_cache_tokens=524288, ep_mode="deepep-ll",
-        dcgm_sm_active=0.41, dcgm_dram_active=0.28, dcgm_tensor_active=0.12,
+        cell_id="kvr-reuse10",
+        model="GLM-5.1",
+        hardware="GB300",
+        quant="NVFP4",
+        tensor_parallel=4,
+        parallel_strategy="EP",
+        mtp=False,
+        max_num_batched_tokens=8192,
+        concurrency=64,
+        status=STATUS_FULL,
+        router_policy="prefix-affinity",
+        prefix_reuse=10.0,
+        per_replica_cache_hit=0.83,
+        acceptance_length=1.955,
+        kv_cache_tokens=524288,
+        ep_mode="deepep-ll",
+        dcgm_sm_active=0.41,
+        dcgm_dram_active=0.28,
+        dcgm_tensor_active=0.12,
     )
 
 
 def test_datacapture_gap_fields_default_safely():
     c = AtlasCell(
-        cell_id="x", model="m", hardware="GB300", quant="NVFP4",
-        tensor_parallel=4, parallel_strategy="TP", mtp=False,
-        max_num_batched_tokens=1024, concurrency=1, status=STATUS_FULL,
+        cell_id="x",
+        model="m",
+        hardware="GB300",
+        quant="NVFP4",
+        tensor_parallel=4,
+        parallel_strategy="TP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrency=1,
+        status=STATUS_FULL,
     )
     assert c.router_policy == "" and c.ep_mode == ""
     assert c.prefix_reuse is None and c.per_replica_cache_hit is None
@@ -54,8 +74,15 @@ def test_datacapture_gap_fields_in_atlas_table():
     table = build_atlas_table([_cell_with_gaps()], campaign_id="kvr-20260607T000000Z")
     names = set(table.schema.names)
     for col in (
-        "router_policy", "prefix_reuse", "per_replica_cache_hit", "acceptance_length",
-        "kv_cache_tokens", "ep_mode", "dcgm_sm_active", "dcgm_dram_active", "dcgm_tensor_active",
+        "router_policy",
+        "prefix_reuse",
+        "per_replica_cache_hit",
+        "acceptance_length",
+        "kv_cache_tokens",
+        "ep_mode",
+        "dcgm_sm_active",
+        "dcgm_dram_active",
+        "dcgm_tensor_active",
     ):
         assert col in names, f"{col} missing from atlas_v1 schema"
     d = table.to_pydict()
@@ -69,9 +96,16 @@ def test_datacapture_gap_fields_in_atlas_table():
 def test_datacapture_gap_minimal_cell_atlas_table_defaults():
     # A cell that does not set the gap fields still builds a valid table (defaults).
     minimal = AtlasCell(
-        cell_id="x", model="m", hardware="GB300", quant="NVFP4",
-        tensor_parallel=4, parallel_strategy="TP", mtp=False,
-        max_num_batched_tokens=1024, concurrency=1, status=STATUS_FULL,
+        cell_id="x",
+        model="m",
+        hardware="GB300",
+        quant="NVFP4",
+        tensor_parallel=4,
+        parallel_strategy="TP",
+        mtp=False,
+        max_num_batched_tokens=1024,
+        concurrency=1,
+        status=STATUS_FULL,
     )
     d = build_atlas_table([minimal], campaign_id="c-20260607T000000Z").to_pydict()
     assert d["router_policy"][0] == "" and d["ep_mode"][0] == ""

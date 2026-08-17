@@ -27,14 +27,8 @@ def main() -> int:
         and run.get("headBranch") == "main"
         and run.get("headSha") == sha
     ]
-    if not any(
-        run.get("status") == "completed" and run.get("conclusion") == "success"
-        for run in matching
-    ):
-        states = ", ".join(
-            f"{run.get('status')}/{run.get('conclusion')}"
-            for run in matching
-        ) or "missing"
+    if not any(run.get("status") == "completed" and run.get("conclusion") == "success" for run in matching):
+        states = ", ".join(f"{run.get('status')}/{run.get('conclusion')}" for run in matching) or "missing"
         print(
             f"release: no successful ci push workflow run for {sha} ({states})",
             file=sys.stderr,

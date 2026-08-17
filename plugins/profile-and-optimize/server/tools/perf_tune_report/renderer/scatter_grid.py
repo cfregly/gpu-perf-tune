@@ -15,7 +15,8 @@ matches the source GLM-5.1 PDF.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Sequence
+from collections.abc import Sequence
+from typing import Literal
 
 from tools.perf_tune_report.coverage import CoverageSummary
 from tools.perf_tune_report.renderer.style import (
@@ -143,9 +144,7 @@ def render_page(
     note = coverage.note_line()
     if note:
         header_lines.append(note)
-    header_lines.append(
-        "TTFT vs Request Throughput   |   Interactivity vs Throughput per GPU"
-    )
+    header_lines.append("TTFT vs Request Throughput   |   Interactivity vs Throughput per GPU")
     header_lines.append(
         "Point labels show selected profiling concurrencies "
         f"({', '.join(str(c) for c in LABEL_CONCURRENCIES)}). "
@@ -169,6 +168,7 @@ def render_page(
     handles = []
     for cell in legend_groups:
         style = style_for(cell)
+        linestyle: Literal[":", "-"] = ":" if cell.parallel_strategy == "TP" else "-"
         handles.append(
             Line2D(
                 [0],
@@ -177,7 +177,7 @@ def render_page(
                 marker=style.marker,
                 markerfacecolor=style.markerfacecolor,
                 markeredgecolor=style.color,
-                linestyle=style.linestyle,
+                linestyle=linestyle,
                 linewidth=1.1,
                 markersize=6,
                 label=style.label,
@@ -206,9 +206,7 @@ def render_page(
             x_label="Request throughput avg (req/s)",
             y_label="TTFT avg (ms)",
         )
-        ax_left.set_title(
-            f"max_num_batched_tokens {mbt}", fontsize=7.5, loc="left", pad=2
-        )
+        ax_left.set_title(f"max_num_batched_tokens {mbt}", fontsize=7.5, loc="left", pad=2)
 
         ax_right = fig.add_subplot(gs[r, 1])
         _plot_pane(
@@ -219,6 +217,4 @@ def render_page(
             x_label="Output throughput/GPU avg (tok/s/GPU)",
             y_label="Output throughput/user avg (tok/s/user)",
         )
-        ax_right.set_title(
-            f"max_num_batched_tokens {mbt}", fontsize=7.5, loc="left", pad=2
-        )
+        ax_right.set_title(f"max_num_batched_tokens {mbt}", fontsize=7.5, loc="left", pad=2)

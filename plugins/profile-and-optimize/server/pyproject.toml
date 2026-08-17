@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "profile-and-optimize-server"
-version = "0.3.1"
+version = "0.4.0"
 description = "GPU inference profiling and optimization server. Ships 8 CLI libraries and 53 MCP tools total, including 51 contract-driven tools and 2 auxiliary tools."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,10 +45,11 @@ dev = [
   "boto3>=1.34",
   "tiktoken>=0.7",
   "pre-commit>=4.0",
-  "pyright>=1.1",
+  "pyright>=1.1.411,<1.2",
   "pytest>=8.0,<10",
   "pytest-xdist>=3.6",
-  "ruff>=0.8",
+  "ruff>=0.16.3,<0.17",
+  "shellcheck-py==0.11.0.1",
   "skills-ref @ git+https://github.com/agentskills/agentskills.git@69ef37e9424c0a7ea9dd2293b559e43ec8176379#subdirectory=skills-ref",
 ]
 
@@ -80,14 +81,41 @@ exclude = [
 namespaces = true
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py311"
 line-length = 120
 extend-exclude = [
   "experiments",
   "__pycache__",
   ".pytest_cache",
-  "tools/profile_and_optimize_mcp",
 ]
+
+[tool.ruff.lint]
+# Keep the enforced set explicit so a Ruff upgrade cannot silently change the
+# repository gate. These rules cover syntax, imports, common correctness bugs,
+# modern Python, exception handling, and Ruff-specific correctness checks.
+select = [
+  "E4",
+  "E7",
+  "E9",
+  "F",
+  "I",
+  "B",
+  "BLE",
+  "UP",
+  "RUF",
+  "S110",
+  "S112",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# These entry points adjust sys.path before importing sibling command modules.
+"**/tools/ai_tuning/*.py" = ["E402"]
+"**/tools/perf_tune_report/importers/inference_drive_load.py" = ["E402"]
+"**/tools/perf_tune_report/importers/zymtrace_kernels.py" = ["E402"]
+# Several direct tests do the same to exercise the installed and source-tree
+# entry points. Runtime behavior remains covered by pytest.
+"**/test_*.py" = ["E402"]
+"**/tests/*.py" = ["E402"]
 
 [tool.pytest.ini_options]
 # The canonical `make pytest` target covers every checked-in offline Python

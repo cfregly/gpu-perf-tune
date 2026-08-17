@@ -173,9 +173,7 @@ class Space:
 
     def decode(self, vector: list[float]) -> dict[str, str]:
         if len(vector) != len(self.dimensions):
-            raise ValueError(
-                f"decode expected {len(self.dimensions)} values, got {len(vector)}"
-            )
+            raise ValueError(f"decode expected {len(self.dimensions)} values, got {len(vector)}")
         return {dim.name: dim.decode(vector[index]) for index, dim in enumerate(self.dimensions)}
 
     def random(self, rng) -> dict[str, str]:
@@ -192,7 +190,7 @@ class Space:
         return total
 
     def euclidean(self, a: list[float], b: list[float]) -> float:
-        return math.sqrt(sum((ai - bi) ** 2 for ai, bi in zip(a, b)))
+        return math.sqrt(sum((ai - bi) ** 2 for ai, bi in zip(a, b, strict=True)))
 
 
 __all__ = ["Dimension", "Space", "dimension_from_param"]

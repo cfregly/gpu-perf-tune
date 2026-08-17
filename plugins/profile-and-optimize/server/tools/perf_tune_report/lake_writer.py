@@ -23,14 +23,18 @@ from __future__ import annotations
 import getpass
 import hashlib
 import json
+import logging
 import os
 import re
 import socket
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
+import yaml
 
 from tools.perf_tune_report.capture_signature import variant_key_for
 from tools.perf_tune_report.helpers import resolve_operator_path
@@ -40,7 +44,6 @@ from tools.perf_tune_report.schema import (
     engine_for_backend,
     read_jsonl,
 )
-
 
 S3_ENV_ENDPOINT = "PERFLAKE_LAKE_S3_ENDPOINT"
 S3_ENV_BUCKET = "PERFLAKE_LAKE_S3_BUCKET"
@@ -113,6 +116,7 @@ IF_EXISTS_FAIL = "fail"
 IF_EXISTS_SKIP = "skip"
 IF_EXISTS_OVERWRITE = "overwrite"
 IF_EXISTS_CHOICES = (IF_EXISTS_FAIL, IF_EXISTS_SKIP, IF_EXISTS_OVERWRITE)
+logger = logging.getLogger(__name__)
 
 
 class CampaignIncompleteError(RuntimeError):
@@ -124,6 +128,7 @@ class CampaignIncompleteError(RuntimeError):
     message names what is missing + how to populate it, mirroring the
     renderer's report_status.json.
     """
+
 
 # Matches the campaign-dir UTC timestamp token anywhere in the name (no
 # anchor): handles both the canonical campaign_init layout
@@ -205,8 +210,7 @@ def parse_campaign_utc(campaign_id: str) -> datetime:
     match = _CAMPAIGN_UTC_RE.search(campaign_id)
     if not match:
         raise ValueError(
-            f"FATAL: campaign_id {campaign_id!r} does not end with "
-            f"YYYYMMDDTHHMMSSZ; cannot derive captured_at_utc."
+            f"FATAL: campaign_id {campaign_id!r} does not end with YYYYMMDDTHHMMSSZ; cannot derive captured_at_utc."
         )
     return datetime(
         int(match["y"]),
@@ -215,7 +219,7 @@ def parse_campaign_utc(campaign_id: str) -> datetime:
         int(match["H"]),
         int(match["M"]),
         int(match["S"]),
-        tzinfo=timezone.utc,
+        tzinfo=UTC,
     )
 
 
@@ -293,7 +297,10 @@ def read_render_status(campaign_dir: Path) -> RenderStatusSummary:
     status_path = campaign_dir / "report_status.json"
     if not status_path.is_file():
         return RenderStatusSummary(
-            rendered=False, sol_complete=False, plot_ready_points=0, omitted_pages="",
+            rendered=False,
+            sol_complete=False,
+            plot_ready_points=0,
+            omitted_pages="",
             dcgm_grounded=False,
         )
     data = json.loads(status_path.read_text(encoding="utf-8"))
@@ -328,9 +335,9 @@ class VerdictSummary:
     tier: str = "draft"
     trials: int = 0
     same_node: bool = False
-    decode_metric: str = ""          # tpot | itl | throughput | ""
+    decode_metric: str = ""  # tpot | itl | throughput | ""
     baseline_named: bool = False
-    latency_claim: bool = False      # campaign makes a decode-latency claim
+    latency_claim: bool = False  # campaign makes a decode-latency claim
     per_kernel_ref: bool = False
     which_kernel_claim: bool = False  # campaign makes a which-kernel attribution
 
@@ -359,14 +366,10 @@ def verdict_problems(v: VerdictSummary) -> list[str]:
         return []
     p: list[str] = []
     if v.trials < 3:
-        p.append(
-            f"verdict_tier=verdict needs >=3 trials (got {v.trials}) -- run a "
-            "repeated-trial controlled A/B"
-        )
+        p.append(f"verdict_tier=verdict needs >=3 trials (got {v.trials}) -- run a repeated-trial controlled A/B")
     if not v.same_node:
         p.append(
-            "verdict_tier=verdict needs same_node=true (pin both arms to one node) "
-            "-- a cross-node delta is a DRAFT"
+            "verdict_tier=verdict needs same_node=true (pin both arms to one node) -- a cross-node delta is a DRAFT"
         )
     if v.latency_claim and v.decode_metric not in ("tpot", "itl"):
         p.append(
@@ -374,10 +377,7 @@ def verdict_problems(v: VerdictSummary) -> list[str]:
             f"{v.decode_metric!r}) -- output tok/s at small num_prompts is TTFT-noisy"
         )
     if not v.baseline_named:
-        p.append(
-            "verdict_tier=verdict needs baseline_named=true (name the "
-            "production-representative baseline)"
-        )
+        p.append("verdict_tier=verdict needs baseline_named=true (name the production-representative baseline)")
     if v.which_kernel_claim and not v.per_kernel_ref:
         p.append(
             "which-kernel verdict needs per_kernel_ref=true (nsys/ncu per-kernel "
@@ -409,14 +409,12 @@ def read_next_lever(campaign_dir: Path) -> str:
     config_path = campaign_dir / "config.yaml"
     if config_path.is_file():
         try:
-            import yaml  # lazy: keep the publish path import-light
-
             cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
             nl = str(cfg.get("next_lever", "") or "").strip()
             if nl:
                 return nl
-        except Exception:  # noqa: BLE001 - a malformed config must never crash publish
-            pass
+        except (AttributeError, OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+            logger.debug("Ignoring malformed campaign config %s: %s", config_path, exc)
     return str(parse_source_md(campaign_dir / "SOURCE.md").get("next_lever", "") or "").strip()
 
 
@@ -448,14 +446,12 @@ def read_close_reason(campaign_dir: Path) -> str:
     config_path = campaign_dir / "config.yaml"
     if config_path.is_file():
         try:
-            import yaml  # lazy: keep the publish path import-light
-
             cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
             cr = str(cfg.get("close_reason", "") or "").strip()
             if cr:
                 return cr
-        except Exception:  # noqa: BLE001 - a malformed config must never crash publish
-            pass
+        except (AttributeError, OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+            logger.debug("Ignoring malformed campaign config %s: %s", config_path, exc)
     return str(parse_source_md(campaign_dir / "SOURCE.md").get("close_reason", "") or "").strip()
 
 
@@ -506,13 +502,7 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
     if not measured:
         return []
     p: list[str] = []
-    unlabeled = sorted(
-        {
-            r.cell_id
-            for r in measured
-            if (getattr(r, "cache_mode", "unknown") or "unknown") == "unknown"
-        }
-    )
+    unlabeled = sorted({r.cell_id for r in measured if (getattr(r, "cache_mode", "unknown") or "unknown") == "unknown"})
     if unlabeled:
         p.append(
             "warm/cold label missing (cache_mode=unknown) on measured cell(s): "
@@ -521,19 +511,13 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
             "sweep-tail) or cold (fresh / single-shot) via the importer "
             "--cache-mode (AGENTS.md 'Benchmark methodology hygiene')"
         )
-    no_shape = sorted(
-        {
-            r.cell_id
-            for r in measured
-            if int(getattr(r, "max_num_batched_tokens", 0) or 0) <= 0
-        }
-    )
+    no_shape = sorted({r.cell_id for r in measured if int(getattr(r, "max_num_batched_tokens", 0) or 0) <= 0})
     if no_shape:
         p.append(
             "shape provenance missing (max_num_batched_tokens<=0) on measured "
-            "cell(s): " + ", ".join(no_shape)
-            + " -- the bench shape must be recorded, not inferred from a label"
+            "cell(s): " + ", ".join(no_shape) + " -- the bench shape must be recorded, not inferred from a label"
         )
+
     # ISL/OSL shape precision -- the PER-ROW half of "per-number exact shape (no smoothing)"
     # (added 2026-06-08, docs/METHODOLOGY.md "Full-context reporting" and AGENTS.md exact
     # shape"). Each measured cell carries its OWN ISL/OSL; a number is NEVER smoothed to one
@@ -566,7 +550,8 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
     if no_isl_osl:
         p.append(
             "shape provenance missing (mean_input_tokens/mean_output_tokens<=0 on a "
-            "vllm-bench dataset) on measured cell(s): " + ", ".join(no_isl_osl)
+            "vllm-bench dataset) on measured cell(s): "
+            + ", ".join(no_isl_osl)
             + " -- record the workload ISL/OSL the number was measured at (AGENTS.md "
             "'Benchmark methodology hygiene'). aiperf/drive_load/aa-* "
             "are exempt (shape defined by the dataset name)"
@@ -576,13 +561,7 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
     # defect without its descriptor. Flag any measured row whose str descriptor field is
     # still "unknown", or whose gpu_memory_utilization is unset.
     for fld in REQUIRED_CONTEXT_STR_FIELDS:
-        missing = sorted(
-            {
-                r.cell_id
-                for r in measured
-                if (str(getattr(r, fld, "unknown") or "unknown")) == "unknown"
-            }
-        )
+        missing = sorted({r.cell_id for r in measured if (str(getattr(r, fld, "unknown") or "unknown")) == "unknown"})
         if missing:
             p.append(
                 f"full-context descriptor missing ({fld}=unknown) on measured cell(s): "
@@ -590,18 +569,11 @@ def methodology_problems(rows: list[AtlasCell]) -> list[str]:
                 + f" -- set {fld} via the importer/runner override or bundle metadata "
                 "(AGENTS.md 'Benchmark methodology hygiene')"
             )
-    no_gmu = sorted(
-        {
-            r.cell_id
-            for r in measured
-            if getattr(r, "gpu_memory_utilization", None) is None
-        }
-    )
+    no_gmu = sorted({r.cell_id for r in measured if getattr(r, "gpu_memory_utilization", None) is None})
     if no_gmu:
         p.append(
             "full-context descriptor missing (gpu_memory_utilization unset) on measured "
-            "cell(s): " + ", ".join(no_gmu)
-            + " -- record the gpu-memory-utilization the number was measured at"
+            "cell(s): " + ", ".join(no_gmu) + " -- record the gpu-memory-utilization the number was measured at"
         )
     return p
 
@@ -615,10 +587,10 @@ def _read_krhpa(campaign_dir: Path) -> dict[str, Any] | None:
     if not cfg_path.is_file():
         return None
     try:
-        import yaml  # lazy: keep the module import light for the publish path
-
         data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    except Exception:
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        return None
+    if not isinstance(data, dict):
         return None
     blk = data.get("krhpa")
     return blk if isinstance(blk, dict) else None
@@ -630,10 +602,10 @@ def _read_krhpa_exempt_reason(campaign_dir: Path) -> str:
     if not cfg_path.is_file():
         return ""
     try:
-        import yaml  # lazy: keep the module import light for the publish path
-
         data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    except Exception:
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        return ""
+    if not isinstance(data, dict):
         return ""
     reason = data.get("krhpa_exempt_reason")
     return str(reason).strip() if reason else ""
@@ -686,24 +658,20 @@ def _read_provenance(campaign_dir: Path) -> dict[str, Any] | None:
     cfg_path = campaign_dir / "config.yaml"
     if cfg_path.is_file():
         try:
-            import yaml  # lazy: keep the publish path import-light
-
             data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
             blk = data.get("provenance")
             if isinstance(blk, dict):
                 return blk
-        except Exception:
-            pass
+        except (AttributeError, OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+            logger.debug("Ignoring malformed provenance config %s: %s", cfg_path, exc)
     js = campaign_dir / "provenance.json"
     if js.is_file():
         try:
-            import json
-
             blk = json.loads(js.read_text(encoding="utf-8"))
             if isinstance(blk, dict):
                 return blk
-        except Exception:
-            pass
+        except (OSError, TypeError, ValueError) as exc:
+            logger.debug("Ignoring malformed provenance sidecar %s: %s", js, exc)
     return None
 
 
@@ -768,9 +736,7 @@ def read_roofline_gap_arms(campaign_dir: Path) -> dict[str, str]:
     return {}
 
 
-def per_arm_roofline_problems(
-    render_status: RenderStatusSummary, campaign_dir: Path
-) -> list[str]:
+def per_arm_roofline_problems(render_status: RenderStatusSummary, campaign_dir: Path) -> list[str]:
     """Per-arm roofline gate. ``roofline_problems`` above refuses
     only when page 7 is ENTIRELY absent (campaign-level "no arm has a roofline").
     This refuses when SOME arm lacks a roofline -- the "baseline + EACH variant
@@ -1018,18 +984,15 @@ def build_atlas_table(rows: list[AtlasCell], campaign_id: str) -> Any:
                 _vk = ""
         columns["variant_key"].append(_vk)
         columns["backend"].append(row.backend or "")
-        columns["serving_engine"].append(
-            getattr(row, "serving_engine", "") or engine_for_backend(row.backend or "")
-        )
+        columns["serving_engine"].append(getattr(row, "serving_engine", "") or engine_for_backend(row.backend or ""))
         # Ledger-to-atlas data-capture gaps (added 2026-06-07).
         columns["router_policy"].append(getattr(row, "router_policy", "") or "")
         columns["prefix_reuse"].append(getattr(row, "prefix_reuse", None))
         columns["per_replica_cache_hit"].append(getattr(row, "per_replica_cache_hit", None))
         columns["acceptance_length"].append(getattr(row, "acceptance_length", None))
         columns["spec_accept_rate"].append(getattr(row, "spec_accept_rate", None))
-        columns["kv_cache_tokens"].append(
-            int(row.kv_cache_tokens) if getattr(row, "kv_cache_tokens", None) is not None else None
-        )
+        kv_cache_tokens = row.kv_cache_tokens
+        columns["kv_cache_tokens"].append(int(kv_cache_tokens) if kv_cache_tokens is not None else None)
         columns["ep_mode"].append(getattr(row, "ep_mode", "") or "")
         columns["dcgm_sm_active"].append(getattr(row, "dcgm_sm_active", None))
         columns["dcgm_dram_active"].append(getattr(row, "dcgm_dram_active", None))
@@ -1234,7 +1197,7 @@ def build_campaign_row(
         ]
     )
     champion = _read_champion_select(campaign_dir) or {}
-    published_at = published_at_utc or datetime.now(timezone.utc)
+    published_at = published_at_utc or datetime.now(UTC)
     publisher_op = publisher_operator or os.environ.get(PUBLISHER_ENV) or getpass.getuser()
     publisher_h = publisher_host or socket.gethostname()
 
@@ -1299,7 +1262,7 @@ def build_campaign_row(
     return pa.table(columns, schema=schema)
 
 
-def _walk_cell_artifacts(campaign_dir: Path, filename: str) -> "list[tuple[str, Path, dict[str, Any]]]":
+def _walk_cell_artifacts(campaign_dir: Path, filename: str) -> list[tuple[str, Path, dict[str, Any]]]:
     """Walk ``<campaign_dir>/cells/*/<filename>`` and load each JSON.
 
     Returns a list of ``(cell_id, path, payload)`` ordered by cell dir name.
@@ -1325,7 +1288,7 @@ def _walk_cell_artifacts(campaign_dir: Path, filename: str) -> "list[tuple[str, 
     return out
 
 
-def _resolve_sol_ceilings(campaign_dir: Path, rows: list[AtlasCell]) -> "tuple[dict[str, Any] | None, str | None, str]":
+def _resolve_sol_ceilings(campaign_dir: Path, rows: list[AtlasCell]) -> tuple[dict[str, Any] | None, str | None, str]:
     """Find + load sol-ceilings.yaml and pick the hardware key.
 
     Mirrors ``render_report.discover_sol_inputs`` but without importing the
@@ -1347,8 +1310,7 @@ def _resolve_sol_ceilings(campaign_dir: Path, rows: list[AtlasCell]) -> "tuple[d
         # Canonical bundle name first, then a name-agnostic bundle-root fallback
         # (<bundle>/configs/sol-ceilings.yaml) so a future submodule rename needs
         # no code edit; the campaign's own bundle root is reached first.
-        relcands = (Path("perf-tune-report") / "configs" / "sol-ceilings.yaml",
-                    Path("configs") / "sol-ceilings.yaml")
+        relcands = (Path("perf-tune-report") / "configs" / "sol-ceilings.yaml", Path("configs") / "sol-ceilings.yaml")
         for parent in [cur, *cur.parents]:
             for rel in relcands:
                 cand = parent / rel
@@ -1446,6 +1408,7 @@ def build_sol_table(
 
     # L1 -- zymtrace per-category sample-share + ceiling
     from tools.perf_tune_report.renderer import sol_roofline  # stdlib-only
+
     for cell_id, path, payload in _walk_cell_artifacts(campaign_dir, "kernels.json"):
         sha = _sha256_of(path)
         if ceilings is not None and hw_key is not None:
@@ -1453,15 +1416,25 @@ def build_sol_table(
             cat_map = ceilings.get("category_ceiling_map", {})
             for r in sol_roofline.compute_category_sol(payload, hw_data, cat_map):
                 emit(
-                    cell_id=cell_id, category=r["category"], sol_level="L1",
-                    gpu_time_share_pct=r["time_share_pct"], pct_sol=None,
-                    bound=r["bound"], ceiling_key=r["ceiling_metric"],
-                    ceiling_value=r["ceiling_value"], ceiling_units=r["ceiling_units"],
-                    measured_value=None, measured_units=None,
-                    attributed_bytes_total=None, attributed_flops_total=None,
-                    arithmetic_intensity_flops_per_byte=None, kernel_name=None,
-                    hw_key=hw_key, source_artifact="kernels.json",
-                    source_artifact_sha256=sha, sol_ceilings_yaml_sha256=yaml_sha,
+                    cell_id=cell_id,
+                    category=r["category"],
+                    sol_level="L1",
+                    gpu_time_share_pct=r["time_share_pct"],
+                    pct_sol=None,
+                    bound=r["bound"],
+                    ceiling_key=r["ceiling_metric"],
+                    ceiling_value=r["ceiling_value"],
+                    ceiling_units=r["ceiling_units"],
+                    measured_value=None,
+                    measured_units=None,
+                    attributed_bytes_total=None,
+                    attributed_flops_total=None,
+                    arithmetic_intensity_flops_per_byte=None,
+                    kernel_name=None,
+                    hw_key=hw_key,
+                    source_artifact="kernels.json",
+                    source_artifact_sha256=sha,
+                    sol_ceilings_yaml_sha256=yaml_sha,
                 )
         else:
             # No ceilings resolvable: still record per-category time-share.
@@ -1471,14 +1444,25 @@ def build_sol_table(
                 if int(samples) == 0:
                     continue
                 emit(
-                    cell_id=cell_id, category=cat, sol_level="L1",
-                    gpu_time_share_pct=100.0 * int(samples) / total, pct_sol=None,
-                    bound=None, ceiling_key=None, ceiling_value=None, ceiling_units=None,
-                    measured_value=None, measured_units=None,
-                    attributed_bytes_total=None, attributed_flops_total=None,
-                    arithmetic_intensity_flops_per_byte=None, kernel_name=None,
-                    hw_key=hw_key, source_artifact="kernels.json",
-                    source_artifact_sha256=sha, sol_ceilings_yaml_sha256=yaml_sha,
+                    cell_id=cell_id,
+                    category=cat,
+                    sol_level="L1",
+                    gpu_time_share_pct=100.0 * int(samples) / total,
+                    pct_sol=None,
+                    bound=None,
+                    ceiling_key=None,
+                    ceiling_value=None,
+                    ceiling_units=None,
+                    measured_value=None,
+                    measured_units=None,
+                    attributed_bytes_total=None,
+                    attributed_flops_total=None,
+                    arithmetic_intensity_flops_per_byte=None,
+                    kernel_name=None,
+                    hw_key=hw_key,
+                    source_artifact="kernels.json",
+                    source_artifact_sha256=sha,
+                    sol_ceilings_yaml_sha256=yaml_sha,
                 )
 
     # L2 + L3 -- DCGM cross-attribution + workload resources
@@ -1495,16 +1479,25 @@ def build_sol_table(
                 pct = c.get("sol_pct_bw") if c.get("sol_pct_bw") is not None else c.get("sol_pct_compute")
                 meas = munits = None
             emit(
-                cell_id=cell_id, category=c.get("category"), sol_level="L2",
-                gpu_time_share_pct=c.get("time_share_pct"), pct_sol=pct,
-                bound=bound, ceiling_key=c.get("ceiling_metric"),
-                ceiling_value=None, ceiling_units=None,
-                measured_value=meas, measured_units=munits,
+                cell_id=cell_id,
+                category=c.get("category"),
+                sol_level="L2",
+                gpu_time_share_pct=c.get("time_share_pct"),
+                pct_sol=pct,
+                bound=bound,
+                ceiling_key=c.get("ceiling_metric"),
+                ceiling_value=None,
+                ceiling_units=None,
+                measured_value=meas,
+                measured_units=munits,
                 attributed_bytes_total=c.get("attributed_bytes_total"),
                 attributed_flops_total=c.get("attributed_flops_total"),
-                arithmetic_intensity_flops_per_byte=None, kernel_name=None,
-                hw_key=cell_hw, source_artifact="dcgm_correlation.json",
-                source_artifact_sha256=sha, sol_ceilings_yaml_sha256=yaml_sha,
+                arithmetic_intensity_flops_per_byte=None,
+                kernel_name=None,
+                hw_key=cell_hw,
+                source_artifact="dcgm_correlation.json",
+                source_artifact_sha256=sha,
+                sol_ceilings_yaml_sha256=yaml_sha,
             )
         for res in payload.get("resources", []) or []:
             bytes_ps, tflops = res.get("measured_bytes_per_s"), res.get("measured_tflops_avg")
@@ -1515,16 +1508,25 @@ def build_sol_table(
             else:
                 meas, munits = None, None
             emit(
-                cell_id=cell_id, category=res.get("peak_key"), sol_level="L3",
-                gpu_time_share_pct=None, pct_sol=res.get("sol_pct"),
-                bound=None, ceiling_key=res.get("peak_key"),
-                ceiling_value=res.get("peak_per_gpu"), ceiling_units=res.get("peak_per_gpu_units"),
-                measured_value=meas, measured_units=munits,
+                cell_id=cell_id,
+                category=res.get("peak_key"),
+                sol_level="L3",
+                gpu_time_share_pct=None,
+                pct_sol=res.get("sol_pct"),
+                bound=None,
+                ceiling_key=res.get("peak_key"),
+                ceiling_value=res.get("peak_per_gpu"),
+                ceiling_units=res.get("peak_per_gpu_units"),
+                measured_value=meas,
+                measured_units=munits,
                 attributed_bytes_total=res.get("measured_bytes_total"),
                 attributed_flops_total=None,
-                arithmetic_intensity_flops_per_byte=None, kernel_name=None,
-                hw_key=cell_hw, source_artifact="dcgm_correlation.json",
-                source_artifact_sha256=sha, sol_ceilings_yaml_sha256=yaml_sha,
+                arithmetic_intensity_flops_per_byte=None,
+                kernel_name=None,
+                hw_key=cell_hw,
+                source_artifact="dcgm_correlation.json",
+                source_artifact_sha256=sha,
+                sol_ceilings_yaml_sha256=yaml_sha,
             )
 
     # L4 -- ncu per-kernel arithmetic intensity
@@ -1536,16 +1538,25 @@ def build_sol_table(
             if pct is None:
                 pct = k.get("achieved_sm_pct_peak")
             emit(
-                cell_id=cell_id, category=k.get("category") or "Other", sol_level="L4",
-                gpu_time_share_pct=None, pct_sol=pct, bound=None,
-                ceiling_key=None, ceiling_value=None, ceiling_units=None,
-                measured_value=k.get("achieved_tflops"), measured_units="TFLOPS",
+                cell_id=cell_id,
+                category=k.get("category") or "Other",
+                sol_level="L4",
+                gpu_time_share_pct=None,
+                pct_sol=pct,
+                bound=None,
+                ceiling_key=None,
+                ceiling_value=None,
+                ceiling_units=None,
+                measured_value=k.get("achieved_tflops"),
+                measured_units="TFLOPS",
                 attributed_bytes_total=k.get("dram_bytes_total"),
                 attributed_flops_total=k.get("sm_flops_total"),
                 arithmetic_intensity_flops_per_byte=k.get("arithmetic_intensity_flops_per_byte"),
                 kernel_name=k.get("name"),
-                hw_key=cell_hw, source_artifact="ncu_kernels.json",
-                source_artifact_sha256=sha, sol_ceilings_yaml_sha256=yaml_sha,
+                hw_key=cell_hw,
+                source_artifact="ncu_kernels.json",
+                source_artifact_sha256=sha,
+                sol_ceilings_yaml_sha256=yaml_sha,
             )
 
     return pa.table(columns, schema=schema)
@@ -1720,11 +1731,7 @@ def build_cost_table(
             if point is None:
                 continue
             power = _cell_power_watts_per_gpu(campaign_dir, point.cell_id)
-            tokens_per_watt = (
-                point.output_tps_per_gpu / power
-                if power is not None and power > 0
-                else None
-            )
+            tokens_per_watt = point.output_tps_per_gpu / power if power is not None and power > 0 else None
             columns["campaign_id"].append(campaign_id)
             columns["model"].append(g.model)
             columns["hardware"].append(g.hardware)
@@ -1760,9 +1767,7 @@ def _quality_metrics(extra: dict[str, Any]) -> dict[str, float]:
     canonical = extra.get("quality_metrics")
     if isinstance(canonical, dict):
         return {
-            str(k): float(v)
-            for k, v in canonical.items()
-            if isinstance(v, (int, float)) and not isinstance(v, bool)
+            str(k): float(v) for k, v in canonical.items() if isinstance(v, (int, float)) and not isinstance(v, bool)
         }
     out: dict[str, float] = {}
     for k, v in extra.items():
@@ -1920,7 +1925,7 @@ def build_champion_table(
 _HW_TOKEN_TO_KEY = {"B200": "b200_sm100", "GB300": "gb300_nvl72", "H100": "h100_sxm"}
 
 
-def _peak_for(ceilings: dict[str, Any] | None, hw_token: str, quant: str) -> "tuple[float | None, float | None]":
+def _peak_for(ceilings: dict[str, Any] | None, hw_token: str, quant: str) -> tuple[float | None, float | None]:
     """(compute_peak_pflops_per_gpu, hbm_peak_tbps_per_gpu) from sol-ceilings,
     keyed by the roofline payload's bare hardware token + quant. (None, None)
     when ceilings are unavailable -> the %-of-peak columns are left null."""
@@ -1970,8 +1975,8 @@ def build_roofline_table(
             pa.field("quant", pa.string(), nullable=False),
             pa.field("kv_dtype", pa.string(), nullable=False),
             pa.field("tensor_parallel", pa.int64(), nullable=False),
-            pa.field("phase", pa.string(), nullable=False),          # decode | prefill
-            pa.field("concurrency", pa.int64(), nullable=True),       # decode C (null for prefill)
+            pa.field("phase", pa.string(), nullable=False),  # decode | prefill
+            pa.field("concurrency", pa.int64(), nullable=True),  # decode C (null for prefill)
             pa.field("isl", pa.int64(), nullable=True),
             pa.field("osl", pa.int64(), nullable=True),
             pa.field("median_tpot_ms", pa.float64(), nullable=True),
@@ -1981,9 +1986,9 @@ def build_roofline_table(
             pa.field("arithmetic_intensity", pa.float64(), nullable=True),
             pa.field("achieved_tflops_per_gpu", pa.float64(), nullable=True),
             pa.field("hbm_delivered_Bps_per_gpu", pa.float64(), nullable=True),
-            pa.field("hbm_delivered_pct", pa.float64(), nullable=True),   # delivered / peak * 100
+            pa.field("hbm_delivered_pct", pa.float64(), nullable=True),  # delivered / peak * 100
             # measured DCGM active fractions (the utilization-vs-C curves)
-            pa.field("dram_active_pct", pa.float64(), nullable=True),     # DRAM_ACTIVE * 100 (proxy)
+            pa.field("dram_active_pct", pa.float64(), nullable=True),  # DRAM_ACTIVE * 100 (proxy)
             pa.field("tensor_active_pct", pa.float64(), nullable=True),
             pa.field("sm_active_pct", pa.float64(), nullable=True),
             # per-GPU ceilings + ridge (so the roofline line is queryable)
@@ -1996,13 +2001,13 @@ def build_roofline_table(
     )
     from tools.perf_tune_report import roofline_math  # pure module (no matplotlib)
 
-    def _shape_for(payload: dict[str, Any]) -> "roofline_math.ModelShape | None":
+    def _shape_for(payload: dict[str, Any]) -> roofline_math.ModelShape | None:
         emb = payload.get("analytical_shape")
         if isinstance(emb, dict) and emb.get("hidden_size"):
             try:
                 return roofline_math.shape_from_dict(emb)
-            except Exception:  # noqa: BLE001
-                pass
+            except TypeError:
+                return roofline_math.shape_for_model(payload.get("model", ""))
         return roofline_math.shape_for_model(payload.get("model", ""))
 
     def _coords(pt: dict[str, Any], phase: str, shape, quant: str, tp: int, kvd: str):
@@ -2020,8 +2025,7 @@ def build_roofline_table(
                 return None, None, None
             ctx = int((pt.get("isl") or 256) + (pt.get("osl") or 512) // 2)
             ai = shape.decode_arithmetic_intensity(c, ctx, quant, kvd)
-            union = (min(shape.n_routed_experts, shape.n_experts_per_tok * c)
-                     if shape.is_moe else 0)
+            union = min(shape.n_routed_experts, shape.n_experts_per_tok * c) if shape.is_moe else 0
             bpt = shape.active_weight_bytes(union, quant) / c + shape.kv_bytes_per_token(ctx, kvd)
         else:
             isl, inp, dur = pt.get("isl"), pt.get("total_input_tokens"), pt.get("duration")
@@ -2105,10 +2109,7 @@ def s3_key_for(table_name: str, campaign_id: str, captured_at: datetime) -> str:
     key. The downstream Spark MERGE INTO can then key on campaign_id.
     """
     dt = captured_at.strftime("%Y-%m-%d")
-    return (
-        f"{S3_PREFIX}/{table_name}/"
-        f"dt={dt}/campaign={campaign_id}/part-0.parquet"
-    )
+    return f"{S3_PREFIX}/{table_name}/dt={dt}/campaign={campaign_id}/part-0.parquet"
 
 
 def _make_s3_client(cfg: S3Config) -> Any:
@@ -2193,7 +2194,7 @@ def upload_to_s3(
     try:
         client.head_object(Bucket=bucket, Key=key)
         exists = True
-    except Exception as error:  # noqa: BLE001 - boto3 exposes service errors at runtime
+    except Exception as error:
         if not _is_s3_not_found(error):
             raise
 
@@ -2209,7 +2210,7 @@ def upload_to_s3(
     try:
         with local_path.open("rb") as body:
             client.put_object(Body=body, **put_kwargs)
-    except Exception as error:  # noqa: BLE001 - boto3 exposes service errors at runtime
+    except Exception as error:
         if if_exists == IF_EXISTS_FAIL and _is_s3_precondition_failed(error):
             raise _object_exists_error(bucket, key) from error
         raise
@@ -2296,9 +2297,7 @@ def publish(
     Returns a ``PublishResult`` with per-table outcomes.
     """
     if if_exists not in IF_EXISTS_CHOICES:
-        raise ValueError(
-            f"if_exists must be one of {IF_EXISTS_CHOICES}; got {if_exists!r}"
-        )
+        raise ValueError(f"if_exists must be one of {IF_EXISTS_CHOICES}; got {if_exists!r}")
 
     campaign_dir = campaign_dir.resolve()
     if not campaign_dir.is_dir():
@@ -2355,8 +2354,7 @@ def publish(
     if problems:
         if strict:
             raise CampaignIncompleteError(
-                f"--strict: refusing to publish incomplete campaign "
-                f"{campaign_id!r}: " + "; ".join(problems)
+                f"--strict: refusing to publish incomplete campaign {campaign_id!r}: " + "; ".join(problems)
             )
         print(
             f"WARNING: publishing campaign {campaign_id!r} with recorded gaps "
@@ -2399,7 +2397,7 @@ def publish(
             file=sys.stderr,
         )
 
-    published_at = published_at_utc or datetime.now(timezone.utc)
+    published_at = published_at_utc or datetime.now(UTC)
     atlas_table = build_atlas_table(rows, campaign_id)
     campaign_table = build_campaign_row(
         campaign_dir,

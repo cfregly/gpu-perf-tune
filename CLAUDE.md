@@ -9,3 +9,10 @@ in that adapter. Keep shared project policy in `AGENTS.md`.
 
 The shared value bar is that every promoted result must be
 adversarially-confirmed to add value.
+
+## Health Stack
+
+- typecheck: make typecheck
+- lint: make lint
+- test: make pytest
+- shell: make lint-shell

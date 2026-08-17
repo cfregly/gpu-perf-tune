@@ -18,7 +18,6 @@ from tools.perf_tune_report.importers.inference_drive_load import (
     import_drive_load_bundle,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixture helpers
 # ---------------------------------------------------------------------------
@@ -94,9 +93,7 @@ def _make_multi_c_bundle(tmp_path: Path, *, with_meta: bool = True) -> Path:
         # ok-rate scales inversely with concurrency to mimic a stress sweep
         n_ok = {15: 60, 30: 40, 60: 30}[c]
         n_fail = {15: 0, 30: 4, 60: 6}[c]
-        (sub / "load.jsonl").write_text(
-            _make_jsonl_lines(n_ok, n_fail, sweep_offset=c * 100.0)
-        )
+        (sub / "load.jsonl").write_text(_make_jsonl_lines(n_ok, n_fail, sweep_offset=c * 100.0))
     if with_meta:
         (bundle / "inference_perfbench_v1.json").write_text(json.dumps(_BUNDLE_META))
     return bundle
@@ -340,9 +337,7 @@ def test_import_dry_run_writes_nothing(tmp_path: Path) -> None:
 def test_import_single_c_with_override(tmp_path: Path) -> None:
     bundle = _make_single_c_bundle(tmp_path)
     campaign = _make_campaign(tmp_path)
-    result = import_drive_load_bundle(
-        bundle, campaign, concurrency_override=15
-    )
+    result = import_drive_load_bundle(bundle, campaign, concurrency_override=15)
     assert result.concurrencies == [15]
     rows = json.loads(result.normalized_path.read_text())
     assert len(rows) == 1
@@ -354,7 +349,9 @@ def test_import_drive_load_isl_osl_total_and_cache_mode(tmp_path: Path) -> None:
     bundle = _make_single_c_bundle(tmp_path)
     campaign = _make_campaign(tmp_path)
     result = import_drive_load_bundle(
-        bundle, campaign, concurrency_override=15,
+        bundle,
+        campaign,
+        concurrency_override=15,
         overrides={"cache_mode": "cold", "tensor_parallel": 8},
     )
     row = json.loads(result.normalized_path.read_text())[0]

@@ -1,6 +1,7 @@
 """Unit tests for the TP right-size resolver (single source of truth for the energy/OPEX right-size).
 
 Cases are anchored on the FLEET-ENERGY-AUDIT measured fleet (GB300, NVFP4, 2026-06-09)."""
+
 from tools.tp_rightsize_advisor import render_md, resolve
 
 

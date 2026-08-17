@@ -30,19 +30,11 @@ import json
 import re
 import statistics
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from tools.perf_tune_report.helpers import resolve_cell_dir
-
-from tools.perf_tune_report.schema import (
-    BACKEND_SGLANG_SWEEP,
-    BACKEND_VLLM_SWEEP,
-    STATUS_FULL,
-    STATUS_PARTIAL,
-    AtlasCell,
-)
 from tools.perf_tune_report.importers.inference_perf_bench import (
     _CellIdentity,
     _check_plot_ready,
@@ -50,6 +42,13 @@ from tools.perf_tune_report.importers.inference_perf_bench import (
     _row_from_metrics,
 )
 from tools.perf_tune_report.importers.zymtrace_kernels import import_zymtrace_kernels
+from tools.perf_tune_report.schema import (
+    BACKEND_SGLANG_SWEEP,
+    BACKEND_VLLM_SWEEP,
+    STATUS_FULL,
+    STATUS_PARTIAL,
+    AtlasCell,
+)
 
 # A raw per-trial file: ``c<concurrency>-t<trial>.txt``.
 _TRIAL_RE = re.compile(r"^c(\d+)-t(\d+)\.txt$")
@@ -147,9 +146,7 @@ def _avg_metrics(trial_files: list[Path]) -> dict[str, float | int] | None:
     return avg
 
 
-def _arm_identity(
-    arm: Path, overrides: dict[str, Any]
-) -> _CellIdentity:
+def _arm_identity(arm: Path, overrides: dict[str, Any]) -> _CellIdentity:
     res: dict[str, Any] = {}
     rj = arm / "result.json"
     if rj.is_file():
@@ -157,6 +154,7 @@ def _arm_identity(
             res = json.loads(rj.read_text())
         except json.JSONDecodeError:
             res = {}
+
     def pick(*keys: str, default: Any = None) -> Any:
         for key in keys:
             if key in overrides and overrides[key] is not None:
@@ -168,27 +166,24 @@ def _arm_identity(
 
     model = pick("model")
     if not model:
-        raise ValueError(
-            "import_perf_bench (variant_ab): --model is required "
-            "(arm result.json carries no model)"
-        )
+        raise ValueError("import_perf_bench (variant_ab): --model is required (arm result.json carries no model)")
     hw = pick("hardware", default="B200")
     hardware = hw.split(" ")[0] if isinstance(hw, str) else hw
     tp = int(pick("tensor_parallel", "tp", default=8))
     warm = res.get("warm")
     cache_mode = (
-        "warm" if warm is True
-        else "cold" if warm is False
-        else (pick("cache_mode", default="unknown") or "unknown")
+        "warm" if warm is True else "cold" if warm is False else (pick("cache_mode", default="unknown") or "unknown")
     )
     if cache_mode not in ("warm", "cold", "unknown"):
         cache_mode = "unknown"
     mtp = (
-        bool(overrides["mtp"]) if overrides.get("mtp") is not None
-        else bool(res["mtp"]) if res.get("mtp") is not None
+        bool(overrides["mtp"])
+        if overrides.get("mtp") is not None
+        else bool(res["mtp"])
+        if res.get("mtp") is not None
         else "mtp" in arm.name.lower()
     )
-        # Engine (cross-engine A/B): result.json "engine" from the producer.
+    # Engine (cross-engine A/B): result.json "engine" from the producer.
     # wins; else CLI override; else infer from the arm name (the "-s-" / "sgl" naming
     # convention); else default vllm.
     engine = (
@@ -202,11 +197,7 @@ def _arm_identity(
         cudagraph_mode = "eager"
     gmu = pick("gpu_memory_utilization", "gpu_memory_util")
     pchr = pick("prefix_cache_hit_rate", "gpu_prefix_cache_hit_rate")
-    variant_extra = {
-        k: res[k]
-        for k in _VARIANT_EXTRA_KEYS
-        if k in res and res[k] not in (None, "", "unknown")
-    }
+    variant_extra = {k: res[k] for k in _VARIANT_EXTRA_KEYS if k in res and res[k] not in (None, "", "unknown")}
     extra_block = res.get("extra")
     if isinstance(extra_block, dict):
         for k, v in extra_block.items():
@@ -259,12 +250,10 @@ def import_variant_ab_bundle(
         raise ValueError(f"import_perf_bench (variant_ab): bundle does not exist: {bundle}")
     arms = _arm_dirs(bundle)
     if not arms:
-        raise ValueError(
-            f"import_perf_bench (variant_ab): no <arm>/c<C>-t<T>.txt dirs in {bundle}"
-        )
+        raise ValueError(f"import_perf_bench (variant_ab): no <arm>/c<C>-t<T>.txt dirs in {bundle}")
     overrides = overrides or {}
     if captured_at is None:
-        captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     cells: list[str] = []
     total_rows = 0
@@ -332,14 +321,11 @@ def import_variant_ab_bundle(
             f"- captured_at:   {captured_at}\n"
             f"- concurrencies: {sorted(by_c)}\n"
             f"- trials/conc:   {{c: len(files)}} averaged\n"
-            f"- row_count:     {len(rows)}\n"
-            + kernels_line
+            f"- row_count:     {len(rows)}\n" + kernels_line
         )
 
     if not cells:
-        raise ValueError(
-            f"import_perf_bench (variant_ab): no arm produced rows in {bundle}"
-        )
+        raise ValueError(f"import_perf_bench (variant_ab): no arm produced rows in {bundle}")
     return VariantAbImportResult(
         campaign_dir=campaign_dir,
         bundle_path=bundle,

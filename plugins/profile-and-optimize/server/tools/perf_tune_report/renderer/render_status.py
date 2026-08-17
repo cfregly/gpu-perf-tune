@@ -98,8 +98,7 @@ OMISSION_REASONS: dict[str, OmissionReason] = {
     "tpm_table": OmissionReason(
         page="TPM supported across hardware types",
         why=(
-            "No atlas row carries output_tps_per_gpu, so per-hardware "
-            "tokens-per-minute capacity cannot be rolled up."
+            "No atlas row carries output_tps_per_gpu, so per-hardware tokens-per-minute capacity cannot be rolled up."
         ),
         how_to_fix=(
             "Ensure the bench output includes 'Output token throughput "
@@ -179,8 +178,7 @@ PARTIAL_REASONS: dict[str, OmissionReason] = {
             "dcgm_correlation.json with per_category_attribution was found."
         ),
         how_to_fix=(
-            "Re-capture ncu with --roofline-min or --set full, or add DCGM per_category "
-            "attribution, then re-render."
+            "Re-capture ncu with --roofline-min or --set full, or add DCGM per_category attribution, then re-render."
         ),
     ),
 }

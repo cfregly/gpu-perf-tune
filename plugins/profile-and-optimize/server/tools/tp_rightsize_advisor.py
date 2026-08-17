@@ -22,6 +22,7 @@ Confidence: MEASURED for small-total (<= ~40B) small-active (<= ~4B) MoE; EXTRAP
 models (they fit a low TP by memory, but prefill compute / KV may still favor higher TP -- verify with
 a same-node TP A/B before shipping). Pure-Python, no cluster calls (the decision is structural).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,9 +33,9 @@ from pathlib import Path
 
 VALID_TP = [1, 2, 4, 8]
 BYTES_PER_PARAM = {"nvfp4": 0.5, "fp4": 0.5, "mxfp4": 0.5, "fp8": 1.0, "bf16": 2.0, "fp16": 2.0}
-TARGET_ACTIVE_PER_GPU_B = 3.0   # >= this = a loaded GPU (from the measured Qwen3-30B TP1 = 3B/GPU @ 820W)
-SAFE_ACTIVE_PER_GPU_B = 6.0     # right-size target (loaded but headroom); active/rec_tp ~ this
-WEIGHT_FRAC_OF_USABLE = 0.55    # weights must fit in this fraction of usable mem (rest = KV + activations)
+TARGET_ACTIVE_PER_GPU_B = 3.0  # >= this = a loaded GPU (from the measured Qwen3-30B TP1 = 3B/GPU @ 820W)
+SAFE_ACTIVE_PER_GPU_B = 6.0  # right-size target (loaded but headroom); active/rec_tp ~ this
+WEIGHT_FRAC_OF_USABLE = 0.55  # weights must fit in this fraction of usable mem (rest = KV + activations)
 GPU_HOURLY_USD = 8.6
 
 
@@ -78,7 +79,7 @@ def resolve(
     total_params_b: float,
     active_params_b: float,
     dtype: str = "nvfp4",
-    gpu_mem_gb: float = 284.0,   # GB300
+    gpu_mem_gb: float = 284.0,  # GB300
     gmu: float = 0.9,
     current_tp: int | None = None,
 ) -> TpResult:
@@ -87,14 +88,20 @@ def resolve(
     min_tp_mem = min_tp_for_memory(weights_gb, gpu_mem_gb, gmu)
 
     active_cur = (active_params_b / current_tp) if current_tp else None
-    over = bool(current_tp and current_tp > min_tp_mem and active_cur is not None and active_cur < TARGET_ACTIVE_PER_GPU_B)
+    over = bool(
+        current_tp and current_tp > min_tp_mem and active_cur is not None and active_cur < TARGET_ACTIVE_PER_GPU_B
+    )
 
     if over:
+        assert current_tp is not None
+        assert active_cur is not None
         # right-size: lowest TP that fits memory + keeps active/GPU loaded (~SAFE target)
         rec = max(min_tp_mem, _nearest_valid_tp_le(active_params_b / SAFE_ACTIVE_PER_GPU_B))
         rec = min(rec, current_tp)  # never recommend MORE TP than current when reducing
     else:
-        rec = current_tp if current_tp else max(min_tp_mem, _nearest_valid_tp_le(active_params_b / SAFE_ACTIVE_PER_GPU_B))
+        rec = (
+            current_tp if current_tp else max(min_tp_mem, _nearest_valid_tp_le(active_params_b / SAFE_ACTIVE_PER_GPU_B))
+        )
 
     active_rec = active_params_b / rec
     reduction = (current_tp / rec) if (current_tp and rec) else None
@@ -104,34 +111,55 @@ def resolve(
     confidence = "measured" if (total_params_b <= 40 and active_params_b <= 4) else "extrapolated"
 
     gates = [
-        Gate("memory_fit", "info", f"{weights_gb:.0f} GB weights ({dtype}) fit at min TP={min_tp_mem} "
-                                   f"({gpu_mem_gb:.0f} GB/GPU, gmu={gmu}, weights<= {WEIGHT_FRAC_OF_USABLE:.0%} usable)"),
-        Gate("active_density", "warn" if over else "pass",
-             (f"active {active_params_b:.1f}B / current TP{current_tp} = {active_cur:.2f}B/GPU "
-              f"< {TARGET_ACTIVE_PER_GPU_B:.0f}B target -> GPUs underfilled" if over
-              else (f"active {active_params_b:.1f}B / TP{current_tp} = {active_cur:.2f}B/GPU (loaded)" if current_tp
-                    else f"active {active_params_b:.1f}B; recommend TP keeps >= {TARGET_ACTIVE_PER_GPU_B:.0f}B/GPU"))),
+        Gate(
+            "memory_fit",
+            "info",
+            f"{weights_gb:.0f} GB weights ({dtype}) fit at min TP={min_tp_mem} "
+            f"({gpu_mem_gb:.0f} GB/GPU, gmu={gmu}, weights<= {WEIGHT_FRAC_OF_USABLE:.0%} usable)",
+        ),
+        Gate(
+            "active_density",
+            "warn" if over else "pass",
+            (
+                f"active {active_params_b:.1f}B / current TP{current_tp} = {active_cur:.2f}B/GPU "
+                f"< {TARGET_ACTIVE_PER_GPU_B:.0f}B target -> GPUs underfilled"
+                if over
+                else (
+                    f"active {active_params_b:.1f}B / TP{current_tp} = {active_cur:.2f}B/GPU (loaded)"
+                    if current_tp
+                    else f"active {active_params_b:.1f}B; recommend TP keeps >= {TARGET_ACTIVE_PER_GPU_B:.0f}B/GPU"
+                )
+            ),
+        ),
     ]
     reasons: list[str] = []
     if over:
         reasons.append(
             f"OVER-PROVISIONED: {active_params_b:.1f}B active across TP{current_tp} = {active_cur:.2f}B/GPU "
             f"(< {TARGET_ACTIVE_PER_GPU_B:.0f}B). The small active-param MoE does not benefit from {current_tp}-way "
-            f"sharding -> near-idle GPUs + worse per-GPU throughput (measured 2.73x on the 30B-A3B class).")
+            f"sharding -> near-idle GPUs + worse per-GPU throughput (measured 2.73x on the 30B-A3B class)."
+        )
         reasons.append(
             f"RIGHT-SIZE to TP{rec} (active {active_rec:.1f}B/GPU): ~{reduction:.1f}x fewer GPUs at matched "
-            f"throughput" + (f", ~${monthly:,.0f}/standing-replica/month at ${GPU_HOURLY_USD}/GPU-hr." if monthly else "."))
+            f"throughput"
+            + (f", ~${monthly:,.0f}/standing-replica/month at ${GPU_HOURLY_USD}/GPU-hr." if monthly else ".")
+        )
         if confidence == "extrapolated":
             reasons.append(
                 "CONFIDENCE=extrapolated: total params > ~40B, so the low-TP weights fit but prefill compute / "
-                "KV may still favor a higher TP -- verify with a same-node TP A/B before shipping.")
+                "KV may still favor a higher TP -- verify with a same-node TP A/B before shipping."
+            )
     else:
         if current_tp:
-            reasons.append(f"TP{current_tp} is right-sized: active {active_cur:.2f}B/GPU >= {TARGET_ACTIVE_PER_GPU_B:.0f}B "
-                           f"(loaded). No change.")
+            reasons.append(
+                f"TP{current_tp} is right-sized: active {active_cur:.2f}B/GPU >= {TARGET_ACTIVE_PER_GPU_B:.0f}B "
+                f"(loaded). No change."
+            )
         else:
             reasons.append(f"Recommend TP{rec} (active {active_rec:.1f}B/GPU; min TP for memory = {min_tp_mem}).")
-    return TpResult(rec, over, current_tp, min_tp_mem, active_cur, active_rec, reduction, monthly, confidence, gates, reasons)
+    return TpResult(
+        rec, over, current_tp, min_tp_mem, active_cur, active_rec, reduction, monthly, confidence, gates, reasons
+    )
 
 
 def render_md(r: TpResult) -> str:
@@ -154,7 +182,9 @@ def render_md(r: TpResult) -> str:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Recommend TP + flag over-provisioning (energy/OPEX right-size).")
     p.add_argument("--total-params-b", type=float, required=True, help="total params in billions")
-    p.add_argument("--active-params-b", type=float, required=True, help="active params/token in billions (=total for dense)")
+    p.add_argument(
+        "--active-params-b", type=float, required=True, help="active params/token in billions (=total for dense)"
+    )
     p.add_argument("--dtype", default="nvfp4", choices=sorted(set(BYTES_PER_PARAM)))
     p.add_argument("--gpu-mem-gb", type=float, default=284.0, help="per-GPU memory (GB300=284)")
     p.add_argument("--gmu", type=float, default=0.9)
@@ -163,15 +193,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--print-tp", action="store_true", help="print only the recommended TP and exit")
     args = p.parse_args(argv)
 
-    r = resolve(total_params_b=args.total_params_b, active_params_b=args.active_params_b, dtype=args.dtype,
-                gpu_mem_gb=args.gpu_mem_gb, gmu=args.gmu, current_tp=args.current_tp)
+    r = resolve(
+        total_params_b=args.total_params_b,
+        active_params_b=args.active_params_b,
+        dtype=args.dtype,
+        gpu_mem_gb=args.gpu_mem_gb,
+        gmu=args.gmu,
+        current_tp=args.current_tp,
+    )
     if args.print_tp:
         print(r.recommended_tp)
         return 1 if r.over_provisioned else 0
     md = render_md(r)
     sys.stdout.write(md)
     if args.emit:
-        d = Path(args.emit); d.mkdir(parents=True, exist_ok=True)
+        d = Path(args.emit)
+        d.mkdir(parents=True, exist_ok=True)
         (d / "tp_rightsize.json").write_text(json.dumps(dataclasses.asdict(r), indent=2) + "\n")
         (d / "TP-RIGHTSIZE.md").write_text(md)
         sys.stdout.write(f"\nwrote {d / 'tp_rightsize.json'} + {d / 'TP-RIGHTSIZE.md'}\n")

@@ -11,6 +11,7 @@ Reads LOCAL campaigns by default (dependency-light, like ``fleet_leaderboard``);
 grouping applies to a published-lake parquet pull (lake rows carry ``variant_key`` +
 ``captured_at`` + ``image`` directly), so this is the local-first longitudinal view.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -78,7 +79,8 @@ def read_lake_rows(lake_dir: Path, *, hardware_filter: str | None = None) -> lis
             if hardware_filter and rec.get("hardware") != hardware_filter:
                 continue
             rec = dict(rec)
-            commit = commit_by_campaign.get(rec.get("campaign_id"), "")
+            campaign_id = rec.get("campaign_id")
+            commit = commit_by_campaign.get(campaign_id, "") if isinstance(campaign_id, str) else ""
             if commit:  # prefer the joined commit for the engine-version axis
                 rec["image"] = commit
             rows.append(SimpleNamespace(**rec))
@@ -110,11 +112,13 @@ def build_trends(
         if not vk:
             continue
         key = (canon_model(r.model), vk, int(r.concurrency))
-        groups.setdefault(key, []).append({
-            "captured_at": r.captured_at or "",
-            "value": float(val),
-            "image": getattr(r, "image", "") or "",
-        })
+        groups.setdefault(key, []).append(
+            {
+                "captured_at": r.captured_at or "",
+                "value": float(val),
+                "image": getattr(r, "image", "") or "",
+            }
+        )
 
     trends: list[dict[str, Any]] = []
     for (model, vk, conc), pts in groups.items():
@@ -125,20 +129,22 @@ def build_trends(
         if len(pts) >= 2 and first["value"]:
             delta_pct = round((last["value"] / first["value"] - 1) * 100, 1)
             regression = (delta_pct >= regression_pct) if lower_better else (delta_pct <= -regression_pct)
-        trends.append({
-            "model": model,
-            "variant_key": vk[:12],
-            "concurrency": conc,
-            "n_points": len(pts),
-            "first_value": first["value"],
-            "last_value": last["value"],
-            "delta_pct": delta_pct,
-            "regression": regression,
-            "first_captured_at": first["captured_at"],
-            "last_captured_at": last["captured_at"],
-            "images": sorted({p["image"] for p in pts if p["image"]}),
-            "points": pts,
-        })
+        trends.append(
+            {
+                "model": model,
+                "variant_key": vk[:12],
+                "concurrency": conc,
+                "n_points": len(pts),
+                "first_value": first["value"],
+                "last_value": last["value"],
+                "delta_pct": delta_pct,
+                "regression": regression,
+                "first_captured_at": first["captured_at"],
+                "last_captured_at": last["captured_at"],
+                "images": sorted({p["image"] for p in pts if p["image"]}),
+                "points": pts,
+            }
+        )
     # Regressions first, then most-tracked (most points) first, then model.
     trends.sort(key=lambda t: (not t["regression"], -t["n_points"], t["model"]))
     return {
@@ -174,7 +180,8 @@ def render_markdown(view: dict[str, Any], *, title: str = "Perf/quality trend ov
         dpct = f"{t['delta_pct']:+.1f}%" if t["delta_pct"] is not None else "-"
         window = (
             f"{t['first_captured_at'][:10]}..{t['last_captured_at'][:10]}"
-            if t["n_points"] >= 2 else (t["last_captured_at"][:10] or "-")
+            if t["n_points"] >= 2
+            else (t["last_captured_at"][:10] or "-")
         )
         imgs = ", ".join(i.split(":")[-1] for i in t["images"]) or "-"
         lines.append(

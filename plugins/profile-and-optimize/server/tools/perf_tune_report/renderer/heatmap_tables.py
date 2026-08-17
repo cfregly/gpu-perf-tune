@@ -14,7 +14,7 @@ Cell rendering follows the PDF convention:
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from tools.perf_tune_report.renderer.style import legend_groups_in_order, style_for
 from tools.perf_tune_report.schema import (
@@ -51,6 +51,7 @@ def _metrics_for(rows: Sequence[AtlasCell]) -> tuple[tuple[str, str, str], ...]:
             metrics.append((field, label, fmt))
     return tuple(metrics)
 
+
 GRAY_CELL_BG = "#dddddd"
 HEADER_BG = "#f3f3f3"
 
@@ -69,8 +70,13 @@ def _index_atlas(rows: Sequence[AtlasCell]):
 
 
 def _cell_text_and_color(
-    by_lkc: dict, cell_status: dict, legend_key: tuple, mbt: int, concurrency: int,
-    metric: str, fmt: str,
+    by_lkc: dict,
+    cell_status: dict,
+    legend_key: tuple,
+    mbt: int,
+    concurrency: int,
+    metric: str,
+    fmt: str,
 ) -> tuple[str, str]:
     """Return (display_text, background_color) for one heatmap cell."""
     row = by_lkc.get((legend_key, mbt, concurrency))
@@ -147,8 +153,13 @@ def render_page(fig, rows: Sequence[AtlasCell]) -> None:
                 row_col = ["white"]
                 for mbt in mbt_values:
                     text, bg = _cell_text_and_color(
-                        by_lkc, cell_status, variant_cell.legend_key, mbt, c,
-                        metric, fmt,
+                        by_lkc,
+                        cell_status,
+                        variant_cell.legend_key,
+                        mbt,
+                        c,
+                        metric,
+                        fmt,
                     )
                     row_text.append(text)
                     row_col.append(bg)

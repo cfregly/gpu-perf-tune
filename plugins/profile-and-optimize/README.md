@@ -1,6 +1,6 @@
 # profile-and-optimize skills and Claude Code adapter
 
-**Version v0.3.1**
+**Version v0.4.0**
 
 This package contains 32 GPU inference profiling and optimization Agent Skills,
 the bundled `profile_and_optimize` MCP server, and the Claude Code marketplace

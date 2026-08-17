@@ -40,20 +40,28 @@ import argparse
 import contextlib
 import io
 import json
+import logging
 import math
 import subprocess
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+
+import yaml
 
 from tools.perf_tune_report.helpers import resolve_operator_path
+from tools.perf_tune_report.importers.zymtrace_kernels import (
+    ZymtraceTSVMalformed,
+    ZymtraceTSVMissing,
+)
 from tools.perf_tune_report.orchestrator.campaign_run import CellPlan, StepFns
-
 
 _CMD_TIMEOUT_S = 120
 _WARMUP_TIMEOUT_S = 60
 _WARMUP_POLL_INTERVAL_S = 5
 _SERVER_ROOT = Path(__file__).resolve().parents[3]
+logger = logging.getLogger(__name__)
 
 _BASELINE_METRICS: dict[str, tuple[str, str, str]] = {
     "output_tps_per_gpu": ("higher-is-better", "max", "tokens/s/GPU"),
@@ -72,9 +80,7 @@ _BASELINE_METRICS: dict[str, tuple[str, str, str]] = {
 def _run_cmd(cmd: list[str], *, timeout: int = _CMD_TIMEOUT_S) -> bool:
     """Run a command, returning True on exit 0, False on any failure."""
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
         return result.returncode == 0
     except subprocess.TimeoutExpired:
         return False
@@ -118,8 +124,13 @@ def step_helm_upgrade(
     ``overrides["set"]``.
     """
     cmd = [
-        "helm", "upgrade", "--install", release, str(chart_dir),
-        "--namespace", namespace,
+        "helm",
+        "upgrade",
+        "--install",
+        release,
+        str(chart_dir),
+        "--namespace",
+        namespace,
     ]
     if "path" in overrides:
         cmd.extend(["-f", str(overrides["path"])])
@@ -133,9 +144,15 @@ def step_warmup(namespace: str, release: str, cell_id: str) -> bool:
     deadline = time.monotonic() + _WARMUP_TIMEOUT_S
     while time.monotonic() < deadline:
         cmd = [
-            "kubectl", "-n", namespace,
-            "exec", f"deploy/{release}",
-            "--", "curl", "-sf", "http://localhost:8000/v1/models",
+            "kubectl",
+            "-n",
+            namespace,
+            "exec",
+            f"deploy/{release}",
+            "--",
+            "curl",
+            "-sf",
+            "http://localhost:8000/v1/models",
         ]
         if _run_cmd(cmd, timeout=10):
             return True
@@ -184,28 +201,32 @@ def step_bench(campaign_dir: Path, cell: CellPlan) -> bool:
     try:
         if cell.backend == "vllm-sweep":
             from tools.perf_tune_report.runners.vllm_sweep import run_cell as run_vllm
+
             cfg = _cell_config_from_plan(cell)
-            serve_cmd = cell.backend_config.get(
-                "serve_cmd", cell.helm_overrides.get("serve_cmd", "")
-            )
-            bench_cmd = cell.backend_config.get(
-                "bench_cmd", cell.helm_overrides.get("bench_cmd", "")
-            )
+            serve_cmd = cell.backend_config.get("serve_cmd", cell.helm_overrides.get("serve_cmd", ""))
+            bench_cmd = cell.backend_config.get("bench_cmd", cell.helm_overrides.get("bench_cmd", ""))
             if not serve_cmd or not bench_cmd:
                 return False
             res = run_vllm(
-                cfg, campaign_dir,
-                serve_cmd=serve_cmd, bench_cmd=bench_cmd, dry_run=False,
+                cfg,
+                campaign_dir,
+                serve_cmd=serve_cmd,
+                bench_cmd=bench_cmd,
+                dry_run=False,
             )
             return res.row_count > 0
         if cell.backend == "aiperf":
             # Replay mooncake-trace replay against an existing endpoint URL.
             # Config comes from the cell's ``aiperf:`` block (cell.backend_config).
             from tools.perf_tune_report.runners.aiperf_bench import run_cell as run_aiperf
+
             cfgd = cell.backend_config
             required = (
-                "namespace", "bench_pod", "kube_context",
-                "endpoint_url", "served_model",
+                "namespace",
+                "bench_pod",
+                "kube_context",
+                "endpoint_url",
+                "served_model",
             )
             if any(not cfgd.get(k) for k in required):
                 return False
@@ -226,7 +247,9 @@ def step_bench(campaign_dir: Path, cell: CellPlan) -> bool:
             # Artificial-Analysis synthetic fixed-shape (or dataset-replay) via
             # AIPerf against an endpoint URL. Config from the ``aa:`` block.
             import os
+
             from tools.perf_tune_report.runners.aa_bench import run_cell as run_aa
+
             cfgd = cell.backend_config
             model = cfgd.get("model")
             url = cfgd.get("url")
@@ -253,9 +276,7 @@ def step_bench(campaign_dir: Path, cell: CellPlan) -> bool:
                 endpoint_type=cfgd.get("endpoint_type", "chat"),
                 api_key=api_key,
                 tokenizer=cfgd.get("tokenizer"),
-                tokenizer_trust_remote_code=bool(
-                    cfgd.get("tokenizer_trust_remote_code", True)
-                ),
+                tokenizer_trust_remote_code=bool(cfgd.get("tokenizer_trust_remote_code", True)),
                 mode=cfgd.get("mode", "synthetic"),
                 request_count=int(cfgd.get("request_count", 10)),
                 custom_dataset_type=cfgd.get("custom_dataset_type", "mooncake_trace"),
@@ -269,7 +290,17 @@ def step_bench(campaign_dir: Path, cell: CellPlan) -> bool:
             return res.row_count > 0
         if cell.backend == "trtllm":
             return False
-    except Exception:
+    except (
+        ImportError,
+        KeyError,
+        NotImplementedError,
+        OSError,
+        RuntimeError,
+        subprocess.SubprocessError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        logger.debug("Benchmark step failed for cell %s: %s", cell.id, exc)
         return False
     return False
 
@@ -291,6 +322,7 @@ def step_import(cell_dir: Path, campaign_dir: Path, cell_id: str) -> bool:
     """Wrap ``import_bundle_auto`` so it adheres to the StepFns signature."""
     try:
         from tools.perf_tune_report.importers import import_bundle_auto
+
         # The cell_dir IS the bundle dir under the new pipeline (where the
         # bench output lands). For backward compat, accept either layout:
         # cell_dir/raw or cell_dir/bench-c<NNN>.
@@ -301,16 +333,19 @@ def step_import(cell_dir: Path, campaign_dir: Path, cell_id: str) -> bool:
             dry_run=False,
         )
         return True
-    except Exception:
+    except (ImportError, OSError, TypeError, ValueError, ZymtraceTSVMalformed, ZymtraceTSVMissing) as exc:
+        logger.debug("Import step failed for cell %s: %s", cell_id, exc)
         return False
 
 
 def step_aggregate(campaign_dir: Path) -> bool:
     try:
         from tools.perf_tune_report.aggregator import aggregate
+
         aggregate(campaign_dir)
         return True
-    except Exception:
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        logger.debug("Aggregate step failed for %s: %s", campaign_dir, exc)
         return False
 
 
@@ -345,13 +380,16 @@ def step_dcgm_correlate(campaign_dir: Path, cell_id: str) -> bool:
     YAML -> returns False (loud-skip via the caller's note), does NOT abort.
     """
     try:
-        import yaml as _yaml
-
         from tools.perf_tune_report.dcgm_correlate import (
+            FrozenYamlMalformed,
             correlate_from_frozen,
             write_correlation,
         )
+    except ImportError as exc:
+        logger.debug("DCGM correlation imports failed for cell %s: %s", cell_id, exc)
+        return False
 
+    try:
         cell_dir = campaign_dir / "cells" / cell_id
         frozen = cell_dir / "dcgm-frozen.yaml"
         if not frozen.is_file():
@@ -359,7 +397,7 @@ def step_dcgm_correlate(campaign_dir: Path, cell_id: str) -> bool:
         ceilings_path = _discover_ceilings_yaml(campaign_dir)
         if ceilings_path is None:
             return False
-        ceilings = _yaml.safe_load(ceilings_path.read_text())
+        ceilings = yaml.safe_load(ceilings_path.read_text())
         kernels = cell_dir / "kernels.json"
         result = correlate_from_frozen(
             frozen,
@@ -369,19 +407,56 @@ def step_dcgm_correlate(campaign_dir: Path, cell_id: str) -> bool:
         )
         write_correlation(result, cell_dir)
         return True
-    except Exception:
+    except (
+        FrozenYamlMalformed,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+        yaml.YAMLError,
+    ) as exc:
+        logger.debug("DCGM correlation step failed for cell %s: %s", cell_id, exc)
         return False
 
 
 def step_render(campaign_dir: Path, out_pdf: Path) -> bool:
     try:
-        from tools.perf_tune_report.renderer.render_report import render_report
+        from tools.perf_tune_report.renderer.champion_select import (
+            ChampionSelectJsonMalformed,
+        )
+        from tools.perf_tune_report.renderer.prefill_decode_roofline import (
+            RooflineSweepJsonMalformed,
+        )
+        from tools.perf_tune_report.renderer.render_report import (
+            DcgmCorrelationJsonMalformed,
+            KernelsJsonMalformed,
+            NcuKernelsJsonMalformed,
+            render_report,
+        )
+        from tools.perf_tune_report.renderer.sol_roofline import SoLCeilingsMalformed
+    except ImportError as exc:
+        logger.debug("Render imports failed for %s: %s", campaign_dir, exc)
+        return False
+
+    try:
         atlas = campaign_dir / "atlas.jsonl"
         if not atlas.is_file():
             return False
         render_report(atlas, out_pdf, title=f"campaign {campaign_dir.name}")
         return True
-    except Exception:
+    except (
+        ChampionSelectJsonMalformed,
+        DcgmCorrelationJsonMalformed,
+        KernelsJsonMalformed,
+        NcuKernelsJsonMalformed,
+        OSError,
+        RooflineSweepJsonMalformed,
+        RuntimeError,
+        SoLCeilingsMalformed,
+        TypeError,
+        ValueError,
+    ) as exc:
+        logger.debug("Render step failed for %s: %s", campaign_dir, exc)
         return False
 
 
@@ -390,17 +465,11 @@ def _baseline_repo_root() -> Path:
     import os
 
     override = os.environ.get("PROFILE_AND_OPTIMIZE_REPO_ROOT")
-    return (
-        resolve_operator_path(override, label="PROFILE_AND_OPTIMIZE_REPO_ROOT")
-        if override
-        else _SERVER_ROOT
-    )
+    return resolve_operator_path(override, label="PROFILE_AND_OPTIMIZE_REPO_ROOT") if override else _SERVER_ROOT
 
 
 def _cell_headline(campaign_dir: Path, cell_id: str) -> dict[str, Any] | None:
     """Materialize one comparable scalar headline for a campaign cell."""
-    import yaml
-
     config_path = campaign_dir / "config.yaml"
     atlas_path = campaign_dir / "atlas.jsonl"
     if not config_path.is_file() or not atlas_path.is_file():
@@ -423,9 +492,7 @@ def _cell_headline(campaign_dir: Path, cell_id: str) -> dict[str, Any] | None:
     if metric not in _BASELINE_METRICS:
         return None
     direction, reduction, unit = _BASELINE_METRICS[metric]
-    requested_concurrency = campaign_config.get(
-        "baseline_concurrency", config.get("baseline_concurrency")
-    )
+    requested_concurrency = campaign_config.get("baseline_concurrency", config.get("baseline_concurrency"))
 
     candidates: list[tuple[float, int | None]] = []
     try:
@@ -477,6 +544,7 @@ def step_baseline_record(campaign_dir: Path, cell_id: str) -> bool:
     """Register one directional scalar headline for the campaign cell."""
     try:
         from tools.perf_baseline.perf_baseline_cli import cmd_record
+
         headline = _cell_headline(campaign_dir, cell_id)
         if headline is None:
             return False
@@ -496,7 +564,8 @@ def step_baseline_record(campaign_dir: Path, cell_id: str) -> bool:
             return cmd_record(ns) == 0
     except SystemExit:
         return False
-    except Exception:
+    except (ImportError, KeyError, OSError, RuntimeError, TypeError, ValueError, yaml.YAMLError) as exc:
+        logger.debug("Baseline record step failed for cell %s: %s", cell_id, exc)
         return False
 
 
@@ -513,6 +582,7 @@ def step_baseline_diff(campaign_dir: Path, cell_id: str, comparator: str) -> str
         return "RED"
     try:
         from tools.perf_baseline.perf_baseline_cli import cmd_diff
+
         headline = _cell_headline(campaign_dir, cell_id)
         if headline is None:
             return "RED"
@@ -540,7 +610,8 @@ def step_baseline_diff(campaign_dir: Path, cell_id: str, comparator: str) -> str
         return verdict if verdict in {"GREEN", "YELLOW", "RED"} else "RED"
     except SystemExit:
         return "RED"
-    except Exception:
+    except (ImportError, KeyError, OSError, RuntimeError, TypeError, ValueError, yaml.YAMLError) as exc:
+        logger.debug("Baseline diff step failed for cell %s: %s", cell_id, exc)
         return "RED"
 
 

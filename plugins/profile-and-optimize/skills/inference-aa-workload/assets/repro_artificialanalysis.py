@@ -46,7 +46,6 @@ AA_SHAPES: dict[str, tuple[int, int]] = {
 }
 AA_SHAPE_ORDER = ("aa-1k", "aa-10k", "aa-100k")
 REDACTED_API_KEY = "<redacted>"
-API_KEY_ENV = "OPENAI_API_KEY"
 API_KEY_FLAG_ERROR = (
     "custom AIPerf commands must not include --api-key. "
     "Use --api-key or set API_KEY or WANDB_INFERENCE_API_KEY instead."
@@ -253,7 +252,7 @@ def build_auth_config(cfg: argparse.Namespace, shape: str) -> dict:
                 "url": cfg.url,
                 "type": cfg.endpoint_type,
                 "path": cfg.endpoint,
-                "api_key": f"${{{API_KEY_ENV}}}",
+                "api_key": "${OPENAI_API_KEY}",
                 "streaming": True,
                 "extra": extra,
             },
@@ -430,7 +429,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     child_env = os.environ.copy()
     if cfg.api_key:
-        child_env[API_KEY_ENV] = cfg.api_key
+        child_env["OPENAI_API_KEY"] = cfg.api_key
 
     rc = 0
     for s in shapes:

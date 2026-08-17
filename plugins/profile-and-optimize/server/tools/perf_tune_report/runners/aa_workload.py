@@ -66,7 +66,6 @@ MODES = (MODE_SYNTHETIC, MODE_DATASET_REPLAY)
 
 # Command receipts preserve the invocation shape without exposing credentials.
 REDACTED_API_KEY = "<redacted>"
-API_KEY_ENV = "OPENAI_API_KEY"
 API_KEY_FLAG_ERROR = (
     "custom AIPerf commands must not include --api-key. "
     "Use the managed API-key option or its configured environment variable."
@@ -160,7 +159,7 @@ def build_aiperf_auth_config(
                 "url": url,
                 "type": endpoint_type,
                 "path": endpoint,
-                "api_key": f"${{{API_KEY_ENV}}}",
+                "api_key": "${OPENAI_API_KEY}",
                 "streaming": True,
                 "extra": extra,
             },

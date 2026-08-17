@@ -26,7 +26,6 @@ from pathlib import Path
 
 from tools.perf_tune_report.runners.aa_workload import (
     AA_SHAPES,
-    API_KEY_ENV,
     DEFAULT_CUSTOM_DATASET_TYPE,
     MODE_DATASET_REPLAY,
     MODE_SYNTHETIC,
@@ -99,7 +98,7 @@ def _wrap_kube_with_stdin_auth_config(inner: list[str], kube: dict) -> list[str]
         (
             'umask 077; cfg=$(mktemp "${TMPDIR:-/tmp}/aiperf-auth.XXXXXX.json") || exit 1; '
             "trap 'rm -f \"$cfg\"' EXIT; "
-            f"IFS= read -r {API_KEY_ENV} || exit 2; export {API_KEY_ENV}; "
+            "IFS= read -r OPENAI_API_KEY || exit 2; export OPENAI_API_KEY; "
             'cat > "$cfg" || exit 1; "$@" --config "$cfg"'
         ),
         "sh",
@@ -246,7 +245,7 @@ def run_cell(
         if api_key:
             if kube is None:
                 child_env = os.environ.copy()
-                child_env[API_KEY_ENV] = api_key
+                child_env["OPENAI_API_KEY"] = api_key
                 kwargs["env"] = child_env
             else:
                 if auth_config is None:

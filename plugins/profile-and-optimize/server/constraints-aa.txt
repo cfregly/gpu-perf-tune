@@ -9,7 +9,7 @@
 #   pip install -e ".[perf_tune_report]" -c constraints-aa.txt
 #
 # Closure of tiktoken 0.13.0 as resolved on the validating venv (Python 3.14).
-tiktoken==0.13.0
+tiktoken==0.14.0
 regex==2026.7.19
 charset-normalizer==3.5.0
 requests==2.34.2
